@@ -2,7 +2,7 @@
 metric 用于统计应用程序的各种指标，这些指标被用于系统见识和警报，常见的指标类型有四种：Counter、Gauge、Histogram和Summary，这些指标遵循[Prometheus](https://hulining.gitbook.io/prometheus/introduction)的数据格式。yalantinglibs提供了一系列高性能且线程安全的统计工具。
 
 metric 包括4种指标类型：
-- couter：只会增加的指标；
+- counter：只会增加的指标；
 - gauge：可以增加或减少的指标，它派生于counter；
 - histogram：直方图，初始化的时候需要设置桶(bucket)；
 - summary：分位数指标，初始化的时候需要设置桶和误差；

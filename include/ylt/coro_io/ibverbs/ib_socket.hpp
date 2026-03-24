@@ -39,6 +39,7 @@
 #include "async_simple/Signal.h"
 #include "async_simple/coro/FutureAwaiter.h"
 #include "async_simple/coro/Lazy.h"
+#include "async_simple/coro/SyncAwait.h"
 #include "async_simple/util/move_only_function.h"
 #include "ib_device.hpp"
 #include "ib_error.hpp"
@@ -96,18 +97,8 @@ struct ib_buffer_queue : public circle_buffer<ib_buffer_t> {
   std::error_code push_recv(ib_buffer_t buf, ib_socket_shared_state_t* state);
 };
 
-inline void check_qp_state(struct ibv_qp* qp, enum ibv_qp_state expected) {
-  struct ibv_qp_attr attr;
-  struct ibv_qp_init_attr init_attr;
-  ibv_query_qp(qp, &attr, IBV_QP_STATE, &init_attr);
-  if (attr.qp_state != expected) {
-    ELOG_ERROR << " QP state = " << attr.qp_state
-               << " (expected =" << (int)expected << ")\n";
-  }
-}
-
 struct ib_socket_shared_state_t
-    : std::enable_shared_from_this<ib_socket_shared_state_t> {
+    : public std::enable_shared_from_this<ib_socket_shared_state_t> {
   using callback_t = async_simple::util::move_only_function<void(
       std::pair<std::error_code, std::size_t>)>;
   static void resume(std::pair<std::error_code, std::size_t>&& arg,
@@ -135,6 +126,11 @@ struct ib_socket_shared_state_t
   asio::ip::tcp::socket soc_;
   std::atomic<bool> has_close_ = false;
   bool peer_close_ = false;
+#ifdef YLT_ENABLE_CUDA
+  std::unique_ptr<cuda_stream_handler_t> handler_;
+#else
+  void* handler_ = nullptr;
+#endif
 
   ib_socket_shared_state_t(std::shared_ptr<ib_device_t> device,
                            coro_io::ExecutorWrapper<>* executor,
@@ -183,7 +179,7 @@ struct ib_socket_shared_state_t
   }
 
   void close_impl() {
-    ELOG_TRACE << "qp " << (qp_ ? qp_->qp_num : -1) << "closed";
+    ELOG_TRACE << "qp " << (qp_ ? qp_->qp_num : -1) << " closed";
     std::error_code ec;
     soc_.cancel(ec);
     soc_.close(ec);
@@ -231,7 +227,12 @@ struct ib_socket_shared_state_t
     if (!peer_close_ && !recv_queue_.full()) {
       if (free_buffer_cnt < free_buffer_limit + recv_result_.size()) {
         if (!buffer) {
-          buffer = device_->get_buffer_pool()->get_buffer();
+#ifdef YLT_ENABLE_CUDA
+          int gpu_id = handler_->get_gpu_id();
+#else
+          int gpu_id = -1;
+#endif
+          buffer = device_->get_buffer_pool()->get_buffer(gpu_id);
         }
         if (!buffer || recv_queue_.push_recv(std::move(buffer), this)) {
           close();
@@ -303,7 +304,6 @@ struct ib_socket_shared_state_t
     }
     // post the receive request to the RQ
     else {
-      check_qp_state(qp_.get(), ibv_qp_state::IBV_QPS_RTS);
       if (auto ec = ibv_post_send(qp_.get(), &sr, &bad_wr); ec) [[unlikely]] {
         err = std::make_error_code(std::errc{std::abs(ec)});
         ELOG_ERROR << "ibv post send failed: " << err.message();
@@ -498,12 +498,15 @@ class ib_socket_t {
       : executor_(executor) {
     init(config);
   }
-
- public:
   ib_socket_t(
       coro_io::ExecutorWrapper<>* executor = coro_io::get_global_executor())
       : executor_(executor) {
     init(config_t{});
+  }
+
+  ib_socket_t(const config_t& config)
+      : executor_(coro_io::get_global_executor()) {
+    init(config);
   }
 
   ib_socket_t(ib_socket_t&&) = default;
@@ -520,6 +523,17 @@ class ib_socket_t {
   }
   ~ib_socket_t() { close(); }
 
+  int get_gpu_id() const noexcept { return gpu_id_; }
+
+#ifdef YLT_ENABLE_CUDA
+  cuda_stream_handler_t& get_cuda_stream_handler() const noexcept {
+    if (!state_->handler_) {
+      state_->handler_ = std::make_unique<cuda_stream_handler_t>(gpu_id_);
+    }
+    return *state_->handler_;
+  }
+#endif
+
   bool is_open() const noexcept {
     return state_->fd_ != nullptr && state_->fd_->is_open() &&
            !state_->has_close_;
@@ -528,10 +542,21 @@ class ib_socket_t {
     return state_->device_->get_buffer_pool();
   }
 
-  std::size_t consume(char* dst, std::size_t sz) {
+  std::size_t consume(char* dst, std::size_t sz, int dst_gpu_id) {
     auto len = std::min(sz, remain_data_.size());
     if (len) {
-      memcpy(dst, remain_data_.data(), len);
+#ifdef YLT_ENABLE_CUDA
+      if (state_->handler_) {
+        cuda_copy_async(*state_->handler_, dst, dst_gpu_id,
+                        (void*)remain_data_.data(),
+                        state_->handler_->get_gpu_id(), len);
+      }
+      else {
+#endif
+        memcpy(dst, remain_data_.data(), len);
+#ifdef YLT_ENABLE_CUDA
+      }
+#endif
       remain_data_ = remain_data_.substr(len);
       if (remain_data_.empty()) {
         assert(state_->recv_buf_);
@@ -632,7 +657,7 @@ class ib_socket_t {
     ELOG_DEBUG << "Local address = " << state_->device_->gid_address();
 
     for (int i = 0; i < conf_.recv_buffer_cnt; ++i) {
-      auto buffer = state_->device_->get_buffer_pool()->get_buffer();
+      auto buffer = state_->device_->get_buffer_pool()->get_buffer(gpu_id_);
       if (!buffer) {
         ELOG_WARN << "buffer out of limit, get send buffer failed";
         co_return std::make_error_code(std::errc::no_buffer_space);
@@ -705,7 +730,7 @@ class ib_socket_t {
       init_qp();
       modify_qp_to_init();
       for (int i = 0; i < conf_.recv_buffer_cnt; ++i) {
-        auto buffer = state_->device_->get_buffer_pool()->get_buffer();
+        auto buffer = state_->device_->get_buffer_pool()->get_buffer(gpu_id_);
         if (!buffer) {
           ELOG_WARN << "buffer out of limit, get send buffer failed"
                     << ", QP:" << state_->qp_->qp_num;
@@ -848,7 +873,7 @@ class ib_socket_t {
 
   std::optional<ibv_sge> get_send_buffer_view() noexcept {
     if (state_->send_queue_.empty()) {
-      auto buffer = buffer_pool()->get_buffer();
+      auto buffer = buffer_pool()->get_buffer(gpu_id_);
       if (!buffer) {
         ELOG_WARN << "buffer out of limit, get send buffer failed, QP:"
                   << state_->qp_->qp_num;
@@ -881,6 +906,7 @@ class ib_socket_t {
     if (conf_.device == nullptr) {
       conf_.device = coro_io::get_global_ib_device();
     }
+    gpu_id_ = conf_.device->get_buffer_pool()->get_config().gpu_id;
     ELOG_INFO << "device name: " << conf_.device->name();
     conf_.recv_buffer_cnt = std::max<uint32_t>(conf_.recv_buffer_cnt, 1);
     conf_.send_buffer_cnt = std::max<uint32_t>(conf_.send_buffer_cnt, 1);
@@ -906,6 +932,9 @@ class ib_socket_t {
         conf_.device, executor_, conf_.recv_buffer_cnt, conf_.send_buffer_cnt,
         conf_.cap.max_recv_wr, conf_.cap.max_inline_data);
     state_->channel_.reset(ibv_create_comp_channel(state_->device_->context()));
+#ifdef YLT_ENABLE_CUDA
+    state_->handler_ = std::make_unique<cuda_stream_handler_t>(gpu_id_);
+#endif
     if (!state_->channel_) [[unlikely]] {
       auto err_code = std::make_error_code(std::errc{errno});
       ELOG_ERROR << " ibv_channel init failed" << err_code.message();
@@ -1089,5 +1118,6 @@ class ib_socket_t {
   coro_io::ExecutorWrapper<>* executor_;
   config_t conf_;
   uint32_t buffer_size_ = 0;
+  int gpu_id_ = -1;
 };
 }  // namespace coro_io

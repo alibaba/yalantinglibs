@@ -111,8 +111,11 @@ struct rpc_error {
       : code(code), msg(std::string{msg}) {}
   rpc_error(coro_rpc::err_code code)
       : code(code), msg(std::string{make_error_message(code)}) {}
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstrict-aliasing"
   uint16_t& val() { return *(uint16_t*)&(code.ec); }
   const uint16_t& val() const { return *(uint16_t*)&(code.ec); }
+#pragma GCC diagnostic pop
   constexpr operator bool() const noexcept { return code; }
 };
 YLT_REFL(rpc_error, val(), msg);

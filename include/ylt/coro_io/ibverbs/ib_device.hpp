@@ -240,14 +240,10 @@ class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
 
   void poll_async_events() {
     ibv_async_event event;
-    ibv_qp_attr attr{.qp_state = IBV_QPS_ERR};
     while (ibv_get_async_event(ctx_.get(), &event) == 0) {
       ELOG_INFO << "IBDevice(" << name()
                 << ") get async event: " << event.event_type;
-      auto qp = detail::print_async_event(ctx_.get(), &event);
-      if (qp) {
-        ibv_modify_qp(qp, &attr, IBV_QP_STATE);
-      }
+      detail::print_async_event(ctx_.get(), &event);
       ibv_ack_async_event(&event);
     }
     ELOG_WARN << "IBDevice(" << name() << ") poll async events thread exit.";
@@ -497,8 +493,8 @@ inline std::unique_ptr<ibv_mr, ib_deleter> ib_buffer_t::regist(ib_device_t& dev,
 };
 
 inline ib_buffer_t ib_buffer_t::regist(ib_buffer_pool_t& pool,
-                                       std::unique_ptr<char[]> data,
-                                       std::size_t size, int ib_flags) {
+                                       memory_owner_t data, std::size_t size,
+                                       int ib_flags) {
   auto mr = ibv_reg_mr(pool.device_.pd(), data.get(), size, ib_flags);
   if (mr != nullptr) [[unlikely]] {
     ELOG_DEBUG << "ibv_reg_mr regist: " << mr

@@ -1,11 +1,21 @@
 cmake_minimum_required(VERSION 3.15)
+# Create an option to control CUDA usage, defaulting to whether CUDA was found
+option(YLT_ENABLE_CUDA "Enable CUDA support" OFF)
+
+# Set project languages based on the option and CUDA availability
+if(YLT_ENABLE_CUDA)
+    set(CMAKE_CUDA_ARCHITECTURES 86)
+    set(PROJECT_LANGUAGES CXX CUDA)
+else()
+    set(PROJECT_LANGUAGES CXX)
+endif()
+
 project(yaLanTingLibs
-        VERSION 0.5.8
+        VERSION 0.6.0
         DESCRIPTION "yaLanTingLibs"
         HOMEPAGE_URL "https://github.com/alibaba/yalantinglibs"
-        LANGUAGES CXX
+        LANGUAGES ${PROJECT_LANGUAGES}
         )
-
 # load pack finder
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/Find/)
 

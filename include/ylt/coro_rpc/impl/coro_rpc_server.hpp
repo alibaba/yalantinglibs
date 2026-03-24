@@ -87,9 +87,9 @@ class coro_rpc_server_base {
                            conn_timeout_duration = std::chrono::seconds(0),
                        bool is_enable_tcp_no_delay = true)
       : pool_(thread_num),
-        conn_timeout_duration_(conn_timeout_duration),
         flag_{stat::init},
-        is_enable_tcp_no_delay_(is_enable_tcp_no_delay) {
+        is_enable_tcp_no_delay_(is_enable_tcp_no_delay),
+        conn_timeout_duration_(conn_timeout_duration) {
     acceptors_.push_back(
         std::make_unique<coro_io::tcp_server_acceptor>(address, port));
   }
@@ -99,21 +99,21 @@ class coro_rpc_server_base {
                            conn_timeout_duration = std::chrono::seconds(0),
                        bool is_enable_tcp_no_delay = true)
       : pool_(thread_num),
-        conn_timeout_duration_(conn_timeout_duration),
         flag_{stat::init},
-        is_enable_tcp_no_delay_(is_enable_tcp_no_delay) {
+        is_enable_tcp_no_delay_(is_enable_tcp_no_delay),
+        conn_timeout_duration_(conn_timeout_duration) {
     acceptors_.push_back(
         std::make_unique<coro_io::tcp_server_acceptor>(address));
   }
 
   coro_rpc_server_base(
-      const server_config &config,
+      const server_config& config,
       std::vector<std::unique_ptr<coro_io::server_acceptor_base>> acceptors =
           {})
       : pool_(config.thread_num),
-        conn_timeout_duration_(config.conn_timeout_duration),
         flag_{stat::init},
-        is_enable_tcp_no_delay_(config.is_enable_tcp_no_delay) {
+        is_enable_tcp_no_delay_(config.is_enable_tcp_no_delay),
+        conn_timeout_duration_(config.conn_timeout_duration) {
 #ifdef YLT_ENABLE_SSL
     if (config.ssl_config) {
       use_ssl_ = init_ssl_context_helper(context_, config.ssl_config.value());
@@ -264,7 +264,7 @@ class coro_rpc_server_base {
           p.setValue(res.value());
         }
       });
-      return std::move(future);
+      return future;
     }
     else {
       return make_error_future(coro_rpc::err_code{errc_});

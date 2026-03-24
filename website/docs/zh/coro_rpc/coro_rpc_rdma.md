@@ -70,6 +70,66 @@ int main() {
 
 具体benchmark的代码[在这里](https://github.com/alibaba/yalantinglibs/blob/main/src/coro_rpc/benchmark/bench.cpp)。
 
+## GPU-direct RDMA 支持
+
+GPU-direct RDMA 允许 GPU 内存和远程节点之间通过 RDMA 直接进行内存访问，消除了数据传输过程中对 CPU 的依赖。这个功能显著降低了 GPU 相关应用程序的延迟并提高了吞吐量。
+
+### 初始化
+
+要启用 GPU-direct RDMA 支持，你需要：
+
+1. **初始化 CUDA 环境**：首先获取可用的 CUDA 设备并初始化 GPU 环境：
+   ```cpp
+   auto cuda_dev_list = coro_io::cuda_device_t::get_cuda_devices();
+   ```
+
+2. **创建支持 GPU 内存的 IB 设备**：创建支持 GPU 显存缓冲区的 InfiniBand 设备：
+   ```cpp
+   auto dev = coro_io::ib_device_t::create(
+       {.buffer_pool_config = {.gpu_id = 0 /* GPU ID */}});
+   ```
+
+3. **使用支持GPU缓冲区的ib设备，初始化服务器和客户端**：
+   - 服务器：`server.init_ibv({.device = dev})`
+   - 客户端：`client.init_ibv({.device = dev})`
+
+#### RPC客户端
+
+- **设置请求attachment**：使用 set_req_attachment2 发送 GPU 数据：
+  ```cpp
+  coro_io::data_view gpu_attachment; // = ...;
+  client.set_req_attachment2(gpu_attachment);
+  ```
+
+- **访问响应attachment**：使用 get_resp_attachment2 从响应中获取服务端发送的 GPU 数据：
+  ```cpp
+  coro_io::data_view resp_attachment = client.get_resp_attachment2();
+  ```
+
+- **可选：设置响应attachment buf**：使用 set_resp_attachment_buf2 预先分配并设置接收attachment响应数据的缓冲区地址。当长度不足时，内部会自动重新分配一个缓冲区。
+  ```cpp
+  coro_io::data_view gpu_attachment_buf; // = ...;
+  client.set_resp_attachment2(gpu_attachment_buf);
+  ```
+
+  data_view是一个数据视图，除传统的`data()`,`size()`接口，还提供了`gpu_id()`接口，用于标明显存所在的显卡ID。当ID=-1时，代表数据位于内存中。
+
+### RPC服务端
+
+RPC服务端，可以通过RPC函数的上下文，访问请求attachment并设置响应attachment：
+
+```cpp
+// 在处理函数中
+void rpc_function() {
+    coro_io::data_view attachment = coro_rpc::get_context()->get_request_attachment2();
+    coro_rpc::get_context()->set_response_attachment2(attachment);
+}
+```
+
+### 性能优势
+
+GPU-direct RDMA 消除了网络传输过程中的 CPU-GPU 内存复制，减少了延迟和 CPU 开销。数据直接从 GPU 内存流向网络接口，反之亦然，这使其非常适合高性能计算和 AI 应用程序，其中大量 GPU 数据需要跨节点共享。
+
 ## RDMA性能优化
 
 ### RDMA内存池
@@ -123,5 +183,7 @@ if (ret.has_value()) {
         assert(result.value()=="hello"); 
     }
 }
+
+
 ```
 
