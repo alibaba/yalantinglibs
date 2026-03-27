@@ -480,7 +480,7 @@ inline std::unique_ptr<ibv_mr, ib_deleter> ib_buffer_t::regist(ib_device_t& dev,
                                                                int ib_flags) {
   auto mr = ibv_reg_mr(dev.pd(), ptr, size, ib_flags);
   ELOG_TRACE << "ibv_reg_mr regist: " << mr << " with pd:" << dev.pd();
-  if (mr != nullptr) [[unlikely]] {
+  if (mr != nullptr) [[likely]] {
     ELOG_TRACE << "regist sge.lkey: " << mr->lkey << ", sge.addr: " << mr->addr
                << ", sge.length: " << mr->length;
     return std::unique_ptr<ibv_mr, ib_deleter>{mr};
@@ -496,7 +496,7 @@ inline ib_buffer_t ib_buffer_t::regist(ib_buffer_pool_t& pool,
                                        memory_owner_t data, std::size_t size,
                                        int ib_flags) {
   auto mr = ibv_reg_mr(pool.device_.pd(), data.get(), size, ib_flags);
-  if (mr != nullptr) [[unlikely]] {
+  if (mr != nullptr) [[likely]] {
     ELOG_DEBUG << "ibv_reg_mr regist: " << mr
                << " with pd:" << pool.device_.pd();
     pool.modify_memory_usage(size);
