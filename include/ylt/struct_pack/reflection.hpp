@@ -464,8 +464,14 @@ constexpr bool deserialize_view = deserialize_view_impl<Type>::value;
   constexpr inline bool is_std_vector_v<std::vector<args...>> = true;
 
   template <typename Type>
+  constexpr inline bool is_std_array_v = false;
+
+  template <typename T, std::size_t N>
+  constexpr inline bool is_std_array_v<std::array<T, N>> = true;
+
+  template <typename Type>
   constexpr bool continuous_container =
-      string<Type> || (container<Type> && (is_std_vector_v<Type> || is_std_basic_string_v<Type>));
+      string<Type> || (container<Type> && (is_std_vector_v<Type> || is_std_basic_string_v<Type> || is_std_array_v<Type>));
 #endif
 
 #if __cpp_concepts >= 201907L
