@@ -240,10 +240,14 @@ class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
 
   void poll_async_events() {
     ibv_async_event event;
+    ibv_qp_attr attr{.qp_state = IBV_QPS_ERR};
     while (ibv_get_async_event(ctx_.get(), &event) == 0) {
       ELOG_INFO << "IBDevice(" << name()
                 << ") get async event: " << event.event_type;
-      detail::print_async_event(ctx_.get(), &event);
+      auto qp = detail::print_async_event(ctx_.get(), &event);
+      if (qp) {
+        ibv_modify_qp(qp, &attr, IBV_QP_STATE);
+      }
       ibv_ack_async_event(&event);
     }
     ELOG_WARN << "IBDevice(" << name() << ") poll async events thread exit.";
