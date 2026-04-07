@@ -1463,3 +1463,42 @@ TEST_CASE("test multimap 2 map") {
     CHECK(e == map2);
   }
 }
+struct DetectWindow {
+  float cx;
+  float cy;
+  struct_pack::compatible<float, 20260401> angle;
+  float w;
+  float h;
+};
+struct DetectModel {
+  std::vector<DetectWindow> detect_windows;
+};
+
+struct PNDetectInfo {
+  std::unordered_map<std::string, DetectModel> models;
+};
+TEST_CASE("test github issue 1167") {
+  PNDetectInfo pn_info;
+  DetectModel model_a;
+  model_a.detect_windows.push_back({100.0f, 200.0f, 0.f, 50.0f, 60.0f});
+  model_a.detect_windows.push_back({300.0f, 400.0f, 0.f, 80.0f, 90.0f});
+  model_a.detect_windows.push_back({500.0f, 600.0f, 0.f, 120.0f, 140.0f});
+  DetectModel model_b;
+  model_b.detect_windows.push_back({50.0f, 75.0f, 0.f, 30.0f, 40.0f});
+  model_b.detect_windows.push_back({150.0f, 175.0f, 0.f, 60.0f, 70.0f});
+  DetectModel model_c;
+  model_c.detect_windows.push_back({0.0f, 0.0f, 0.f, 10.0f, 10.0f});
+  model_c.detect_windows.push_back({-100.0f, -200.0f, 0.f, 20.0f, 30.0f});
+  model_c.detect_windows.push_back({10000.0f, 20000.0f, 0.f, 500.0f, 800.0f});
+  pn_info.models["PN_001"] = model_a;
+  pn_info.models["PN_002"] = model_b;
+  pn_info.models["PN_TEST"] = model_c;
+
+  auto data_str = struct_pack::serialize<std::string>(pn_info);
+
+  auto result = struct_pack::deserialize<PNDetectInfo>(data_str);
+  REQUIRE(result.has_value());
+  const auto& decoded = result.value();
+  CHECK(decoded.models.size() == 3);
+  CHECK(decoded.models.at("PN_001").detect_windows.size() == 3);
+}
