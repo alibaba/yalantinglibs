@@ -277,37 +277,30 @@ class barex_socket_impl_t
           }
         }
         else {
-          auto connector = barex_context_->get_connector();
-          accl::barex::Status s = connector->CloseChannel(
-              channel_,
-              [self = (void*)this, channel = channel_, connector = connector,
-               ctx = barex_context_](accl::barex::Status s) {
-                if (!s.IsOk()) {
-                  ELOG_INFO << "barex socket closed failed (may server close "
-                               "first), this="
-                            << self << " error msg: " << s.ErrMsg();
-                }
-                if (channel->IsActive()) {
-                  s = channel->Close();
+          if (!channel_->IsActive()) {
+            channel_->Destroy();
+            free_channel_memory(barex_context_, channel_).start([](auto&&) {
+            });
+          }
+          else {
+            auto connector = barex_context_->get_connector();
+            accl::barex::Status s = connector->CloseChannel(
+                channel_,
+                [self = (void*)this, channel = channel_, connector = connector,
+                 ctx = barex_context_](accl::barex::Status s) {
                   if (!s.IsOk()) {
-                    ELOG_WARN << "barex socket closed failed, this=" << self
-                              << " error msg: " << s.ErrMsg();
+                    ELOG_INFO << "barex socket closed failed (may server close "
+                                 "first), this="
+                              << self << " error msg: " << s.ErrMsg();
                   }
-                }
-
-                s = channel->Destroy();
-                if (!s.IsOk()) {
-                  ELOG_WARN
-                      << "barex socket closed failed, this=" << (void*)self
-                      << " error msg: " << s.ErrMsg();
-                }
-
-                free_channel_memory(ctx, channel).start([](auto&&) {
+                  channel->Destroy();
+                  free_channel_memory(ctx, channel).start([](auto&&) {
+                  });
                 });
-              });
-          if (!s.IsOk()) {
-            ELOG_WARN << "barex socket closed failed, this=" << (void*)this
-                      << " error msg: " << s.ErrMsg();
+            if (!s.IsOk()) {
+              ELOG_WARN << "barex socket closed failed, this=" << (void*)this
+                        << " error msg: " << s.ErrMsg();
+            }
           }
         }
       }
