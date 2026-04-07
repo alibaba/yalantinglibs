@@ -261,6 +261,11 @@ class client_pool : public std::enable_shared_from_this<
           co_await coro_io::sleep_for(wait_time, &client->get_executor());
         }
         self = watcher.lock();
+        if (!self) {
+          ELOG_WARN << "client pool is destroyed, stop connect client {"
+                    << client.get() << "}";
+          co_return;
+        }
         if (self->is_alive_) {
           ELOG_TRACE << "client pool is aliving, stop connect client {"
                      << client.get() << "} for alive detect";
