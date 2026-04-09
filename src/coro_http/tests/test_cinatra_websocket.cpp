@@ -40,7 +40,8 @@ TEST_CASE("test wss client") {
   std::this_thread::sleep_for(200ms);
 
   coro_http_client client{};
-  bool ok = client.init_ssl(asio::ssl::verify_peer, "../openssl_files/ca.crt");
+  bool ok =
+      client.init_ssl(asio::ssl::verify_peer, "../openssl_files/ca.crt");
   REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
 
   async_simple::coro::syncAwait(client.connect("wss://localhost:9001"));

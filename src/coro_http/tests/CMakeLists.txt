@@ -42,11 +42,17 @@ add_custom_command(
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_CURRENT_SOURCE_DIR}/openssl_files
         ${CMAKE_BINARY_DIR}/output/openssl_files)
+add_custom_command(
+        TARGET coro_http_test POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/openssl_files
+        ${CMAKE_BINARY_DIR}/src/coro_http/tests/openssl_files)
 
 add_definitions(-DINJECT_FOR_HTTP_CLIENT_TEST)
 add_definitions(-DINJECT_FOR_HTTP_SEVER_TEST)
 
-add_test(NAME coro_http_test COMMAND coro_http_test)
+add_test(NAME coro_http_test COMMAND coro_http_test
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/src/coro_http/tests)
 # target_compile_definitions(easylog_test PRIVATE STRUCT_PACK_ENABLE_UNPORTABLE_TYPE)
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_SYSTEM_NAME MATCHES "Windows") # mingw-w64

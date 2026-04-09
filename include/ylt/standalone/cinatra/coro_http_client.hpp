@@ -273,6 +273,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
 
       has_init_ssl_ = true;
+      is_ssl_schema_ = true;
     } catch (std::exception &e) {
       CINATRA_LOG_ERROR << "init ssl failed: " << e.what();
       return false;
@@ -393,6 +394,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
 
       has_init_ssl_ = true;
+      is_ssl_schema_ = true;
       CINATRA_LOG_INFO << "SSL initialized with client certificate for mutual "
                           "authentication";
     } catch (std::exception &e) {

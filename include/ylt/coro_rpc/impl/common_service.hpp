@@ -140,6 +140,10 @@ inline bool init_ssl_context_helper(asio::ssl::context &context,
     context.set_options(asio::ssl::context::default_workarounds |
                         asio::ssl::context::no_sslv2 |
                         asio::ssl::context::single_dh_use);
+
+    // Set lower security level for test certificates (OpenSSL 3.0 compatibility)
+    SSL_CTX_set_security_level(context.native_handle(), 0);
+
     context.set_password_callback(
         [](std::size_t size,
            asio::ssl::context_base::password_purpose purpose) {

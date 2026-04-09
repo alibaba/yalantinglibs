@@ -14,9 +14,6 @@ set(TEST_SRCS
         test_abi_compatible.cpp
         test_rpc_ssl_mutual_auth.cpp
         )
-if (YLT_ENABLE_IBV AND YLT_ENABLE_CUDA)
-        set(TEST_SRC ${TEST_SRCS} test_gdr.cpp)
-endif()
 set(TEST_COMMON
         rpc_api.cpp
         main.cpp
@@ -35,10 +32,16 @@ add_custom_command(
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_CURRENT_SOURCE_DIR}/openssl_files
         ${CMAKE_BINARY_DIR}/output/openssl_files)
+add_custom_command(
+        TARGET coro_rpc_test POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/openssl_files
+        ${CMAKE_BINARY_DIR}/src/coro_rpc/tests/openssl_files)
 target_compile_definitions(coro_rpc_test PRIVATE UNIT_TEST_INJECT)
 target_compile_definitions(coro_rpc_test PRIVATE STRUCT_PACK_ENABLE_UNPORTABLE_TYPE)
 
-add_test(NAME coro_rpc_test COMMAND coro_rpc_test)
+add_test(NAME coro_rpc_test COMMAND coro_rpc_test
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/src/coro_rpc/tests)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output/tests/coro_rpc)
 

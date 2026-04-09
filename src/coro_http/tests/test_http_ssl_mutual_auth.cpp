@@ -146,12 +146,10 @@ TEST_CASE("testing HTTP SSL mutual authentication - client with invalid cert") {
   coro_http_client client;
   // Use client cert but wrong CA for server verification - this will cause
   // handshake failure
-  bool init_ok =
-      client.init_ssl(asio::ssl::verify_peer, CERT_PATH, "wrong_ca.crt",
-                      CLIENT_CERT, CLIENT_KEY, "127.0.0.1");
+  bool init_ok = client.init_ssl(asio::ssl::verify_peer, CERT_PATH,
+                                 "wrong_ca.crt", CLIENT_CERT, CLIENT_KEY, "127.0.0.1");
   // When CA cert file doesn't exist, init_ssl returns false
-  REQUIRE_MESSAGE(init_ok == false,
-                  "client init_ssl should fail with wrong CA cert");
+  REQUIRE_MESSAGE(init_ok == false, "client init_ssl should fail with wrong CA cert");
 
   server.stop();
   thd.join();
