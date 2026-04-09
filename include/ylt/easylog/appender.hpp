@@ -286,9 +286,7 @@ class appender {
 
   void write(record_t &&r) {
     queue_.enqueue(std::move(r));
-    if(queue_.size_approx() <= 1) {
-      cnd_.notify_one();
-    }
+    cnd_.notify_one();
   }
 
   void flush() {

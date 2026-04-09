@@ -2754,6 +2754,91 @@ TEST_CASE("test coro_http_client chunked upload and download") {
   }
 }
 
+TEST_CASE("test zero duration timeout returns correct error codes") {
+  // 验证 set_conn_timeout(0ms) 和 set_req_timeout(0ms) 能确定性地返回正确错误码，
+  // 不依赖与异步操作的竞争结果。
+  coro_http_server server(1, 8091);
+  server.set_http_handler<cinatra::GET, cinatra::PUT, cinatra::POST>(
+      "/timeout_test",
+      [](coro_http_request &, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "ok");
+      });
+  server.async_start();
+
+  std::string uri = "http://127.0.0.1:8091/timeout_test";
+  create_file("timeout_test.txt", 1024);
+
+  // --- conn_timeout(0ms) 场景 ---
+
+  {
+    // async_upload_chunked：0ms 连接超时应返回 connect_timeout
+    coro_http_client client{};
+    client.set_conn_timeout(0ms);
+    auto result = async_simple::coro::syncAwait(
+        client.async_upload_chunked(uri, http_method::PUT, "timeout_test.txt"sv));
+    CHECK(result.status != 200);
+    CHECK(result.net_err == http_errc::connect_timeout);
+  }
+
+  {
+    // async_upload：0ms 连接超时应返回 connect_timeout
+    coro_http_client client{};
+    client.set_conn_timeout(0ms);
+    auto result = async_simple::coro::syncAwait(
+        client.async_upload(uri, http_method::PUT, "timeout_test.txt"sv));
+    CHECK(result.status != 200);
+    CHECK(result.net_err == http_errc::connect_timeout);
+  }
+
+  {
+    // async_request（GET）：0ms 连接超时应返回 connect_timeout
+    coro_http_client client{};
+    client.set_conn_timeout(0ms);
+    auto result = async_simple::coro::syncAwait(
+        client.async_get(uri));
+    CHECK(result.status != 200);
+    CHECK(result.net_err == http_errc::connect_timeout);
+  }
+
+  // --- req_timeout(0ms) 场景（连接正常，请求立即超时） ---
+
+  {
+    // async_upload_chunked：0ms 请求超时应返回 request_timeout
+    coro_http_client client{};
+    client.set_conn_timeout(500ms);
+    client.set_req_timeout(0ms);
+    client.add_header("filename", "timeout_test.txt");
+    auto result = async_simple::coro::syncAwait(
+        client.async_upload_chunked(uri, http_method::PUT, "timeout_test.txt"sv));
+    CHECK(result.status != 200);
+    CHECK(result.net_err == http_errc::request_timeout);
+  }
+
+  {
+    // async_upload：0ms 请求超时应返回 request_timeout
+    coro_http_client client{};
+    client.set_conn_timeout(500ms);
+    client.set_req_timeout(0ms);
+    auto result = async_simple::coro::syncAwait(
+        client.async_upload(uri, http_method::PUT, "timeout_test.txt"sv));
+    CHECK(result.status != 200);
+    CHECK(result.net_err == http_errc::request_timeout);
+  }
+
+  {
+    // async_request（GET）：0ms 请求超时应返回 request_timeout
+    coro_http_client client{};
+    client.set_conn_timeout(500ms);
+    client.set_req_timeout(0ms);
+    auto result = async_simple::coro::syncAwait(client.async_get(uri));
+    CHECK(result.status != 200);
+    CHECK(result.net_err == http_errc::request_timeout);
+  }
+
+  std::error_code ignore_ec;
+  std::filesystem::remove("timeout_test.txt", ignore_ec);
+}
+
 TEST_CASE("test coro_http_client get") {
   coro_http_client client{};
   client.set_conn_timeout(1s);
