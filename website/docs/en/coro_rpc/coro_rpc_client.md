@@ -62,7 +62,7 @@ The duration can be any `std::chrono::duration` type, common examples include `s
 
 coro_rpc supports using OpenSSL to encrypt connections. After installing OpenSSL and importing yalantinglibs into your project with CMake's `find_package` or `fetch_content`, you can enable SSL support by setting the CMake option YLT_ENABLE_SSL=ON. Alternatively, you might manually add the YLT_ENABLE_SSL macro and manually link to OpenSSL.
 
-Once SSL support has been enabled, users can invoke the `init_ssl` function before establishing a connection to the server. This will create an encrypted link between the client and the server. It¡¯s important to note that the coro_rpc server must also be compiled with SSL support enabled, and the `init_ssl` method must be called to enable SSL support before starting the server.
+Once SSL support has been enabled, users can invoke the `init_ssl` function before establishing a connection to the server. This will create an encrypted link between the client and the server. Itâ€™s important to note that the coro_rpc server must also be compiled with SSL support enabled, and the `init_ssl` method must be called to enable SSL support before starting the server.
 
 For one -way SSL authentication(server authentication only),you can use the `init_ssl` function before establishing a connection:The first parameter is the base path where the SSL certificates are located, and the second parameter is the CA certificate filename for verifying the server.
 
