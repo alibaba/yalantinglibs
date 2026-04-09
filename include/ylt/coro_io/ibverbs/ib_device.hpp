@@ -84,12 +84,12 @@ class ib_devices_t {
 };
 inline std::string gid_to_string(uint8_t (&a)[16]) noexcept {
   std::string ret;
-  ret.resize(40);
-  sprintf(ret.data(),
-          "%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%"
-          "02x%02x",
-          a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10],
-          a[11], a[12], a[13], a[14], a[15]);
+  ret.resize(39);
+  snprintf(ret.data(), ret.size() + 1,
+           "%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%"
+           "02x%02x",
+           a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10],
+           a[11], a[12], a[13], a[14], a[15]);
   return ret;
 }
 
@@ -480,7 +480,7 @@ inline std::unique_ptr<ibv_mr, ib_deleter> ib_buffer_t::regist(ib_device_t& dev,
                                                                int ib_flags) {
   auto mr = ibv_reg_mr(dev.pd(), ptr, size, ib_flags);
   ELOG_TRACE << "ibv_reg_mr regist: " << mr << " with pd:" << dev.pd();
-  if (mr != nullptr) [[unlikely]] {
+  if (mr != nullptr) [[likely]] {
     ELOG_TRACE << "regist sge.lkey: " << mr->lkey << ", sge.addr: " << mr->addr
                << ", sge.length: " << mr->length;
     return std::unique_ptr<ibv_mr, ib_deleter>{mr};
@@ -496,7 +496,7 @@ inline ib_buffer_t ib_buffer_t::regist(ib_buffer_pool_t& pool,
                                        memory_owner_t data, std::size_t size,
                                        int ib_flags) {
   auto mr = ibv_reg_mr(pool.device_.pd(), data.get(), size, ib_flags);
-  if (mr != nullptr) [[unlikely]] {
+  if (mr != nullptr) [[likely]] {
     ELOG_DEBUG << "ibv_reg_mr regist: " << mr
                << " with pd:" << pool.device_.pd();
     pool.modify_memory_usage(size);

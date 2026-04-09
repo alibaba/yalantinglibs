@@ -1434,7 +1434,8 @@ class unpacker {
                   // is not multimap
                   if constexpr (!multi_map_container<type>) {
                     if SP_UNLIKELY (real_order[i] == nullptr) {
-                      code = deserialize_one<size_type, version, false>(value);
+                      code =
+                          deserialize_one<size_type, version, NotSkip>(value);
                     }
                     else {
                       code = deserialize_one<size_type, version, NotSkip>(
