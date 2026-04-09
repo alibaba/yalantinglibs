@@ -148,7 +148,7 @@ struct ServerTester : TesterConfig {
       }
 #ifdef YLT_ENABLE_SSL
       if (use_ssl) {
-        bool ok = client->init_ssl("../openssl_files", "server.crt");
+        bool ok = client->init_ssl("../openssl_files", "ca.crt", "127.0.0.1");
         REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
       }
 #endif
@@ -372,7 +372,7 @@ struct ServerTester : TesterConfig {
       }
 #ifdef YLT_ENABLE_SSL
       if (use_ssl) {
-        bool ok = client->init_ssl("../openssl_files", "server.crt");
+        bool ok = client->init_ssl("../openssl_files", "ca.crt", "127.0.0.1");
         REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
       }
 #endif

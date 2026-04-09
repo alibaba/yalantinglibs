@@ -51,7 +51,7 @@ Lazy<std::shared_ptr<coro_rpc_client>> create_client(
     coro_io::ExecutorWrapper<>* executor, std::string port) {
   auto client = std::make_shared<coro_rpc_client>(executor);
 #ifdef YLT_ENABLE_SSL
-  bool ok = client->init_ssl("../openssl_files", "server.crt");
+  bool ok = client->init_ssl("../openssl_files", "ca.crt", "127.0.0.1");
   REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
 #endif
   auto ec = co_await client->connect("127.0.0.1", port);
@@ -696,7 +696,7 @@ TEST_CASE("testing client sync connect, unit test inject only") {
     auto res = server.async_start();
     CHECK_MESSAGE(!res.hasResult(), "server start timeout");
     coro_rpc_client client2(coro_io::get_global_executor());
-    bool ok = client2.init_ssl("../openssl_files", "server.crt");
+    bool ok = client2.init_ssl("../openssl_files", "ca.crt", "127.0.0.1");
     CHECK(ok == true);
     val = client2.sync_connect("127.0.0.1", "8801");
     CHECK_MESSAGE(val == coro_rpc::errc::not_connected, val.message());

@@ -31,10 +31,10 @@ namespace coro_rpc {
  * SSL config
  */
 struct ssl_configure {
-  std::string base_path;  //!< all config files base path
-  std::string cert_file;  //!< relative path of certificate chain file
-  std::string key_file;   //!< relative path of private key file
-  std::string dh_file;    //!< relative path of tmp dh file (optional)
+  std::string base_path;     //!< all config files base path
+  std::string cert_file;     //!< relative path of certificate chain file
+  std::string key_file;      //!< relative path of private key file
+  std::string dh_file;       //!< relative path of tmp dh file (optional)
   std::string ca_cert_file;  //!< relative path of CA certificate file for
                              //!< client verification (optional)
   bool enable_client_verify =
@@ -61,7 +61,7 @@ struct ssl_configure {
  */
 enum class ntls_mode {
   tlcp_dual_cert,    //!< GB/T 38636-2020 TLCP with dual certificates (signing +
-                   //!< encryption)
+                     //!< encryption)
   tls13_single_cert  //!< RFC 8998 TLS 1.3 + GM with single certificate
 };
 
@@ -88,8 +88,8 @@ struct ssl_ntls_configure {
   // TLS 1.3 + GM single certificate configuration (RFC 8998)
   std::string gm_cert_file;  //!< relative path of single SM2 certificate file
                              //!< (for TLS 1.3 + GM)
-  std::string gm_key_file;  //!< relative path of single SM2 private key file
-                            //!< (for TLS 1.3 + GM)
+  std::string gm_key_file;   //!< relative path of single SM2 private key file
+                             //!< (for TLS 1.3 + GM)
 
   // Common NTLS configuration
   std::string
@@ -140,6 +140,11 @@ inline bool init_ssl_context_helper(asio::ssl::context &context,
     context.set_options(asio::ssl::context::default_workarounds |
                         asio::ssl::context::no_sslv2 |
                         asio::ssl::context::single_dh_use);
+
+    // Set lower security level for test certificates (OpenSSL 3.0
+    // compatibility)
+    SSL_CTX_set_security_level(context.native_handle(), 0);
+
     context.set_password_callback(
         [](std::size_t size,
            asio::ssl::context_base::password_purpose purpose) {

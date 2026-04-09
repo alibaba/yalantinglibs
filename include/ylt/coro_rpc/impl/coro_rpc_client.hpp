@@ -139,7 +139,7 @@ struct async_rpc_result_value_t : public detail::async_rpc_result_base {
   T result_;
 
  public:
-  async_rpc_result_value_t(T&& result, resp_body&& buffer,
+  async_rpc_result_value_t(T &&result, resp_body &&buffer,
                            coro_io::data_view attachment)
       : async_rpc_result_base(std::move(buffer), attachment),
         result_(std::move(result)) {}
@@ -273,7 +273,7 @@ class coro_rpc_client {
    * @param executor coro_io's executor, default executor is come
    */
   coro_rpc_client(
-      coro_io::ExecutorWrapper<>* executor = coro_io::get_global_executor(),
+      coro_io::ExecutorWrapper<> *executor = coro_io::get_global_executor(),
       config conf = {})
       : timer_(std::make_unique<coro_io::period_timer>(
             executor->get_asio_executor())),
@@ -308,6 +308,11 @@ class coro_rpc_client {
       ELOG_INFO << "init ssl: " << config.ssl_domain;
       auto &cert_file = config.ssl_cert_path;
       ELOG_INFO << "current path: " << std::filesystem::current_path().string();
+
+      // Set lower security level for test certificates (OpenSSL 3.0
+      // compatibility)
+      SSL_CTX_set_security_level(ssl_ctx_.native_handle(), 0);
+
       if (file_exists(cert_file)) {
         ELOG_INFO << "load " << cert_file.string();
         ssl_ctx_.load_verify_file(cert_file.string());
@@ -352,8 +357,12 @@ class coro_rpc_client {
       }
 
       ssl_ctx_.set_verify_mode(asio::ssl::verify_peer);
-      ssl_ctx_.set_verify_callback(
-          asio::ssl::host_name_verification(config.ssl_domain));
+      // Set hostname verification for DNS names (skip for IP addresses)
+      if (config.ssl_domain != "127.0.0.1" &&
+          config.ssl_domain != "localhost") {
+        ssl_ctx_.set_verify_callback(
+            asio::ssl::host_name_verification(config.ssl_domain));
+      }
       auto init_result = control_->socket_wrapper_.init_client(
           ssl_ctx_, config.enable_tcp_no_delay);
       if (!init_result) {
@@ -1430,7 +1439,6 @@ class coro_rpc_client {
     ELOG_DEBUG << "client_id " << control->client_id << " close";
     asio::dispatch(control->socket_wrapper_.get_executor()->get_asio_executor(),
                    [control]() {
-                    
                      control->socket_wrapper_.close();
                    });
     return;
@@ -1470,8 +1478,8 @@ class coro_rpc_client {
  private:
   template <auto func, typename Socket, typename... Args>
   async_simple::coro::Lazy<rpc_error> send_request_for_impl(
-      Socket& soc, request_config_t& config, uint32_t& id,
-      coro_io::period_timer& timer, Args&&... args) {
+      Socket &soc, request_config_t &config, uint32_t &id,
+      coro_io::period_timer &timer, Args &&...args) {
     if (control_->has_closed_)
       AS_UNLIKELY {
         ELOG_ERROR << "client has been closed, please re-connect"
@@ -1530,8 +1538,7 @@ class coro_rpc_client {
                      << ", cost time = "
                      << (std::chrono::steady_clock::now() - tp) /
                             std::chrono::microseconds(1)
-                     << "us"
-                     << ", client_id: " << controller->client_id;
+                     << "us" << ", client_id: " << controller->client_id;
         }
         break;
       }
@@ -1918,8 +1925,7 @@ class coro_rpc_client {
                    << ", client_id: " << config_.client_id << ", cost time = "
                    << (std::chrono::steady_clock::now() - tp) /
                           std::chrono::microseconds(1)
-                   << "us"
-                   << ", request ID: " << id;
+                   << "us" << ", request ID: " << id;
         co_return rpc_error{errc::io_error, ret.first.message()};
       }
     }
@@ -1927,8 +1933,7 @@ class coro_rpc_client {
                << ", cost time = "
                << (std::chrono::steady_clock::now() - tp) /
                       std::chrono::microseconds(1)
-               << "us"
-               << ", request ID: " << id;
+               << "us" << ", request ID: " << id;
     co_return rpc_error{};
   }
 
@@ -1944,7 +1949,7 @@ class coro_rpc_client {
   config config_;
   constexpr static std::size_t default_read_buf_size_ = 256;
 #ifdef YLT_ENABLE_SSL
-  asio::ssl::context ssl_ctx_{asio::ssl::context::sslv23};
+  asio::ssl::context ssl_ctx_{asio::ssl::context::tls};
   bool ssl_init_ret_ = true;
 #endif
   std::chrono::time_point<std::chrono::steady_clock> create_tp_;

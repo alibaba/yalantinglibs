@@ -144,9 +144,19 @@ TEST_CASE("testing RPC SSL mutual authentication - client without cert") {
   REQUIRE_MESSAGE(init_ok == true, "init ssl fail");
 
   auto ec = syncAwait(client.connect("127.0.0.1", "8803"));
-  REQUIRE_MESSAGE(ec, "connect should fail without client cert");
-  REQUIRE_MESSAGE(ec == coro_rpc::errc::not_connected,
-                  "error should be not_connected");
+  // Note: With TLS 1.3, connect() may succeed even when server requires
+  // client certificate. The server-side verification failure is logged.
+  // Check that either connect fails OR the subsequent RPC call fails.
+  if (ec) {
+    REQUIRE_MESSAGE(ec == coro_rpc::errc::not_connected,
+                    "error should be not_connected");
+  }
+  else {
+    // TLS handshake succeeded, but server rejected due to missing client cert
+    // The RPC call should fail
+    auto result = syncAwait(client.call<hello_ssl_test>());
+    REQUIRE_MESSAGE(!result, "RPC call should fail without client cert");
+  }
 
   server.stop();
   io_context.stop();
@@ -181,7 +191,19 @@ TEST_CASE("testing RPC SSL mutual authentication - client with invalid cert") {
   REQUIRE_MESSAGE(init_ok == true, "init ssl should succeed");
 
   auto ec = syncAwait(client.connect("127.0.0.1", "8804"));
-  REQUIRE_MESSAGE(ec, "connect should fail with invalid client cert");
+  // Note: With TLS 1.3, connect() may succeed even when server requires
+  // valid client certificate. The server-side verification failure is logged.
+  // Check that either connect fails OR the subsequent RPC call fails.
+  if (ec) {
+    REQUIRE_MESSAGE(ec == coro_rpc::errc::not_connected,
+                    "error should be not_connected");
+  }
+  else {
+    // TLS handshake succeeded, but server rejected due to invalid client cert
+    // The RPC call should fail
+    auto result = syncAwait(client.call<hello_ssl_test>());
+    REQUIRE_MESSAGE(!result, "RPC call should fail with invalid client cert");
+  }
 
   server.stop();
   io_context.stop();

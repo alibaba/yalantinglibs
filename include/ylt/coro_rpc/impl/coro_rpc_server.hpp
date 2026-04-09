@@ -107,7 +107,7 @@ class coro_rpc_server_base {
   }
 
   coro_rpc_server_base(
-      const server_config& config,
+      const server_config &config,
       std::vector<std::unique_ptr<coro_io::server_acceptor_base>> acceptors =
           {})
       : pool_(config.thread_num),
@@ -627,7 +627,7 @@ class coro_rpc_server_base {
       connection_transfer_;
 
 #ifdef YLT_ENABLE_SSL
-  asio::ssl::context context_{asio::ssl::context::sslv23};
+  asio::ssl::context context_{asio::ssl::context::tls};
   bool use_ssl_ = false;
 #endif
 #ifdef YLT_ENABLE_IBV
