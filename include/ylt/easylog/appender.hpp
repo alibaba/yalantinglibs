@@ -305,20 +305,18 @@ class appender {
 
     {
       std::lock_guard guard(que_mtx_);
-      if (stop_) {
-        return;
+      if (!stop_) {
+        stop_ = true;
+        cnd_.notify_one();
       }
-      stop_ = true;
     }
 
-    cnd_.notify_one();
+    if (write_thd_.joinable()) {
+      write_thd_.join();
+    }
   }
 
-  ~appender() {
-    stop();
-    if (write_thd_.joinable())
-      write_thd_.join();
-  }
+  ~appender() { stop(); }
 
  private:
   void open_log_file() {

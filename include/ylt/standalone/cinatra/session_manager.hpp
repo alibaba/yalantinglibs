@@ -61,6 +61,9 @@ class session_manager {
 
   void start_check_session_timer() {
     std::lock_guard lock(timer_mtx_);
+    if (stop_timer_ || !check_session_timer_) {
+      return;
+    }
     std::weak_ptr<asio::steady_timer> timer = check_session_timer_;
     check_session_timer_->expires_after(check_session_duration_);
     check_session_timer_->async_wait([this, timer](auto ec) {
@@ -69,12 +72,26 @@ class session_manager {
         return;
       }
 
-      if (ec || stop_timer_) {
+      if (ec) {
         return;
+      }
+
+      {
+        std::lock_guard lock(shutdown_mtx_);
+        if (stop_timer_) {
+          return;
+        }
+        ++active_callbacks_;
       }
 
       remove_expire_session();
       start_check_session_timer();
+
+      {
+        std::lock_guard lock(shutdown_mtx_);
+        --active_callbacks_;
+      }
+      shutdown_cv_.notify_all();
     });
   }
 
@@ -89,9 +106,30 @@ class session_manager {
     start_check_session_timer();
   }
 
-  void stop_timer() { stop_timer_ = true; }
+  void stop_timer() {
+    std::lock_guard lock(shutdown_mtx_);
+    stop_timer_ = true;
+  }
 
  private:
+  ~session_manager() {
+    {
+      std::lock_guard lock(timer_mtx_);
+      check_session_timer_->cancel();
+      check_session_timer_.reset();
+    }
+    {
+      std::lock_guard lock(shutdown_mtx_);
+      stop_timer_ = true;
+    }
+    {
+      std::unique_lock lock(shutdown_mtx_);
+      shutdown_cv_.wait(lock, [this] { return active_callbacks_ == 0; });
+    }
+    std::lock_guard lock(mtx_);
+    map_.clear();
+  }
+
   session_manager()
       : check_session_timer_(std::make_shared<asio::steady_timer>(
             coro_io::get_global_executor()->get_asio_executor())) {
@@ -111,6 +149,10 @@ class session_manager {
   std::shared_ptr<asio::steady_timer> check_session_timer_;
   std::atomic<std::chrono::steady_clock::duration> check_session_duration_ = {
       std::chrono::seconds(15)};
+
+  std::mutex shutdown_mtx_;
+  std::condition_variable shutdown_cv_;
+  int active_callbacks_ = 0;
 };
 
 }  // namespace cinatra
