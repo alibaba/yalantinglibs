@@ -51,7 +51,7 @@ Lazy<std::shared_ptr<coro_rpc_client>> create_client(
     coro_io::ExecutorWrapper<>* executor, std::string port) {
   auto client = std::make_shared<coro_rpc_client>(executor);
 #ifdef YLT_ENABLE_SSL
-  bool ok = client->init_ssl("../openssl_files", "ca.crt", "127.0.0.1");
+  bool ok = client->init_ssl("../openssl_files", "server.crt");
   REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
 #endif
   auto ec = co_await client->connect("127.0.0.1", port);
@@ -438,7 +438,7 @@ class SSLClientTester {
   std::string port_;
   Server server;
   std::string base_path;
-  std::string client_crt_path = "ca.crt";
+  std::string client_crt_path = "server.crt";
   std::string server_crt_path = "server.crt";
   std::string server_key_path = "server.key";
   std::string dh_path = "dhparam.pem";
@@ -453,16 +453,13 @@ class SSLClientTester {
 };
 
 TEST_CASE("testing client with ssl server") {
+  std::vector<ssl_type> type_list{ssl_type::fake, ssl_type::no, ssl_type::_};
   std::string base_path = "../openssl_files";
   unsigned short port = 8809;
-
-  // Test client certificate validation scenarios
-  // Server always uses valid certificates (ssl_type::_)
-  // Client uses different CA certificates (valid, fake, missing)
-  for (auto client_crt : {ssl_type::_, ssl_type::fake, ssl_type::no}) {
-    for (auto server_crt : {ssl_type::_}) {
-      for (auto server_key : {ssl_type::_}) {
-        for (auto dh : {ssl_type::_}) {
+  for (auto client_crt : type_list) {
+    for (auto server_crt : type_list) {
+      for (auto server_key : type_list) {
+        for (auto dh : type_list) {
           SSLClientTester<coro_rpc_server>(base_path, port, client_crt,
                                            server_crt, server_key, dh)
               .run();
@@ -699,7 +696,7 @@ TEST_CASE("testing client sync connect, unit test inject only") {
     auto res = server.async_start();
     CHECK_MESSAGE(!res.hasResult(), "server start timeout");
     coro_rpc_client client2(coro_io::get_global_executor());
-    bool ok = client2.init_ssl("../openssl_files", "ca.crt", "127.0.0.1");
+    bool ok = client2.init_ssl("../openssl_files", "server.crt");
     CHECK(ok == true);
     val = client2.sync_connect("127.0.0.1", "8801");
     CHECK_MESSAGE(val == coro_rpc::errc::not_connected, val.message());

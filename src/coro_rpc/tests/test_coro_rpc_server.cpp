@@ -580,7 +580,7 @@ TEST_CASE("testing coro rpc ssl subserver") {
   auto res = server.async_start();
   CHECK_MESSAGE(!res.hasResult(), "server start failed");
   coro_rpc_client client(coro_io::get_global_executor());
-  CHECK(client.init_ssl("../openssl_files", "ca.crt", "127.0.0.1"));
+  CHECK(client.init_ssl("../openssl_files", "server.crt"));
   auto ec = syncAwait(client.connect("127.0.0.1", "8810"));
   REQUIRE_MESSAGE(!ec,
                   std::to_string(client.get_client_id()).append(ec.message()));
@@ -588,7 +588,7 @@ TEST_CASE("testing coro rpc ssl subserver") {
   REQUIRE_MESSAGE(ret.has_value(), ret.error().msg);
   coro_http::coro_http_client cli;
   CHECK_MESSAGE(
-      cli.init_ssl(asio::ssl::verify_peer, "../openssl_files/ca.crt"),
+      cli.init_ssl(asio::ssl::verify_peer, "../openssl_files/server.crt"),
       "init ssl failed");
   auto result = syncAwait(cli.connect("https://localhost:8810"));
   CHECK_MESSAGE(!result.net_err, result.net_err.message());
