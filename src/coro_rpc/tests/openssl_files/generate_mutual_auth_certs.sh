@@ -1,110 +1,61 @@
 #!/bin/bash
 # Generate test certificates for mutual SSL authentication
-# This script generates CA, server, and client certificates for mutual auth testing only
-# The original fake_server.crt/key and server.crt/key are NOT modified
+# All generated files use "mutual_" prefix to avoid overwriting original files
+# The original upstream certificate/key files are NOT modified
 
 echo "========================================"
 echo "Generating mutual authentication certificates"
 echo "========================================"
 
-# Create OpenSSL config file
-cat > openssl_mutual_auth.cnf << 'EOF'
-[req]
-default_bits = 2048
-distinguished_name = req_distinguished_name
-req_extensions = v3_req
-x509_extensions = v3_ca
-
-[req_distinguished_name]
-countryName = CN
-stateOrProvinceName = Beijing
-localityName = Beijing
-organizationName = Alibaba
-organizationalUnitName = Test
-commonName = TestCA
-
-[v3_req]
-keyUsage = keyEncipherment, dataEncipherment
-extendedKeyUsage = serverAuth
-subjectAltName = @alt_names
-
-[v3_ca]
-subjectKeyIdentifier = hash
-authorityKeyIdentifier = keyid:always,issuer
-basicConstraints = critical,CA:TRUE
-keyUsage = critical, cRLSign, keyCertSign
-
-[alt_names]
-DNS.1 = localhost
-DNS.2 = 127.0.0.1
-IP.1 = 127.0.0.1
-EOF
+echo ""
+echo "[1/5] Generating CA private key..."
+openssl genrsa -out mutual_ca.key 2048
 
 echo ""
-echo "[1/6] Generating CA private key..."
-openssl genrsa -out ca.key 2048
+echo "[2/5] Generating CA certificate..."
+openssl req -new -x509 -days 3650 -key mutual_ca.key -out mutual_ca.crt \
+    -subj "/C=CN/ST=Beijing/L=Beijing/O=MutualTest/OU=Test/CN=MutualTestCA"
 
 echo ""
-echo "[2/6] Generating CA certificate..."
-openssl req -new -x509 -days 3650 -key ca.key -out ca.crt \
-    -subj "/C=CN/ST=Beijing/L=Beijing/O=Alibaba/OU=Test/CN=TestCA" \
-    -config openssl_mutual_auth.cnf -extensions v3_ca
+echo "[3/5] Generating server certificate (CA-signed)..."
+openssl genrsa -out mutual_server.key 2048
+openssl req -new -key mutual_server.key -out mutual_server.csr \
+    -subj "/C=CN/ST=Beijing/L=Beijing/O=MutualTest/OU=Test/CN=127.0.0.1"
+openssl x509 -req -days 3650 -in mutual_server.csr -CA mutual_ca.crt -CAkey mutual_ca.key \
+    -CAcreateserial -out mutual_server.crt
 
 echo ""
-echo "[3/6] Generating server private key for mutual auth..."
-openssl genrsa -out server.key 2048
+echo "[4/5] Generating client certificate (CA-signed)..."
+openssl genrsa -out mutual_client.key 2048
+openssl req -new -key mutual_client.key -out mutual_client.csr \
+    -subj "/C=CN/ST=Beijing/L=Beijing/O=MutualTest/OU=Test/CN=MutualTestClient"
+openssl x509 -req -days 3650 -in mutual_client.csr -CA mutual_ca.crt -CAkey mutual_ca.key \
+    -CAcreateserial -out mutual_client.crt
 
 echo ""
-echo "[4/6] Generating and signing server certificate..."
-openssl req -new -key server.key -out server.csr \
-    -subj "/C=CN/ST=Beijing/L=Beijing/O=Alibaba/OU=Test/CN=127.0.0.1" \
-    -config openssl_mutual_auth.cnf
-openssl x509 -req -days 3650 -in server.csr -CA ca.crt -CAkey ca.key \
-    -CAcreateserial -out server.crt \
-    -extfile openssl_mutual_auth.cnf -extensions v3_req
-
-echo ""
-echo "[5/6] Generating client private key..."
-openssl genrsa -out client.key 2048
-
-echo ""
-echo "[6/6] Generating and signing client certificate..."
-openssl req -new -key client.key -out client.csr \
-    -subj "/C=CN/ST=Beijing/L=Beijing/O=Alibaba/OU=Test/CN=TestClient" \
-    -config openssl_mutual_auth.cnf
-openssl x509 -req -days 3650 -in client.csr -CA ca.crt -CAkey ca.key \
-    -CAcreateserial -out client.crt
-
-echo ""
-echo "Generating fake certificates for negative testing..."
-openssl genrsa -out fake.key 2048
-openssl req -new -key fake.key -out fake.csr \
-    -subj "/C=CN/ST=Beijing/L=Beijing/O=Fake/OU=Fake/CN=FakeClient" \
-    -config openssl_mutual_auth.cnf
-openssl x509 -req -days 3650 -in fake.csr -CA ca.crt -CAkey ca.key \
-    -CAcreateserial -out fake.crt
+echo "[5/5] Generating fake client certificate (self-signed, NOT by CA)..."
+openssl genrsa -out mutual_fake.key 2048
+openssl req -new -x509 -days 3650 -key mutual_fake.key -out mutual_fake.crt \
+    -subj "/C=CN/ST=Beijing/L=Beijing/O=Fake/OU=Fake/CN=FakeClient"
 
 echo ""
 echo "Cleaning up temporary files..."
-rm -f *.csr *.srl ca.key openssl_mutual_auth.cnf
+rm -f mutual_ca.key *.csr *.srl
 
 echo ""
 echo "========================================"
 echo "Mutual auth certificates generated!"
 echo "========================================"
 echo ""
-echo "Generated files (for mutual auth only):"
-echo "  ca.crt          - CA certificate"
-echo "  server.crt      - Server certificate (CA-signed)"
-echo "  server.key      - Server private key"
-echo "  client.crt      - Client certificate"
-echo "  client.key      - Client private key"
-echo "  fake.crt        - Fake client certificate (for negative testing)"
-echo "  fake.key        - Fake client private key (for negative testing)"
+echo "Generated files (mutual_ prefix):"
+echo "  mutual_ca.crt       - CA certificate"
+echo "  mutual_server.crt   - Server certificate (CA-signed)"
+echo "  mutual_server.key   - Server private key"
+echo "  mutual_client.crt   - Client certificate (CA-signed)"
+echo "  mutual_client.key   - Client private key"
+echo "  mutual_fake.crt     - Fake client certificate (self-signed)"
+echo "  mutual_fake.key     - Fake client private key"
 echo ""
-echo "Original files preserved:"
-echo "  fake_server.crt - Original server certificate"
-echo "  fake_server.key - Original server private key"
-echo "  dh512.pem       - DH parameters"
-echo "  dhparam.pem     - DH parameters"
-echo "  generate.txt    - Original generation notes"
+echo "Original upstream files NOT modified:"
+echo "  ca.crt, server.crt, server.key, client.crt, client.key"
+echo "  fake.crt, fake.key, dh512.pem, dhparam.pem, generate.txt"

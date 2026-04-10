@@ -28,11 +28,11 @@ using namespace coro_http;
 using namespace std::chrono_literals;
 
 const std::string CERT_PATH = "../openssl_files/";
-const std::string SERVER_CERT = "server.crt";
-const std::string SERVER_KEY = "server.key";
-const std::string CLIENT_CERT = "client.crt";
-const std::string CLIENT_KEY = "client.key";
-const std::string CA_CERT = "ca.crt";
+const std::string SERVER_CERT = "mutual_server.crt";
+const std::string SERVER_KEY = "mutual_server.key";
+const std::string CLIENT_CERT = "mutual_client.crt";
+const std::string CLIENT_KEY = "mutual_client.key";
+const std::string CA_CERT = "mutual_ca.crt";
 
 #ifdef YLT_ENABLE_SSL
 TEST_CASE("testing HTTP SSL one-way authentication") {

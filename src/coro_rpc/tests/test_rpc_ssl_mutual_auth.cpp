@@ -29,11 +29,11 @@ using namespace coro_rpc;
 using namespace async_simple::coro;
 
 const std::string CERT_PATH = "../openssl_files";
-const std::string SERVER_CERT = "server.crt";
-const std::string SERVER_KEY = "server.key";
-const std::string CLIENT_CERT = "client.crt";
-const std::string CLIENT_KEY = "client.key";
-const std::string CA_CERT = "ca.crt";
+const std::string SERVER_CERT = "mutual_server.crt";
+const std::string SERVER_KEY = "mutual_server.key";
+const std::string CLIENT_CERT = "mutual_client.crt";
+const std::string CLIENT_KEY = "mutual_client.key";
+const std::string CA_CERT = "mutual_ca.crt";
 
 namespace {
 std::string hello_ssl_test() { return "Hello World"; }
@@ -187,7 +187,7 @@ TEST_CASE("testing RPC SSL mutual authentication - client with invalid cert") {
 
   coro_rpc_client client;
   bool init_ok =
-      client.init_ssl(CERT_PATH, CA_CERT, "fake.crt", "fake.key", "127.0.0.1");
+      client.init_ssl(CERT_PATH, CA_CERT, "mutual_fake.crt", "mutual_fake.key", "127.0.0.1");
   REQUIRE_MESSAGE(init_ok == true, "init ssl should succeed");
 
   auto ec = syncAwait(client.connect("127.0.0.1", "8804"));
