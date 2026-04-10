@@ -37,7 +37,7 @@ const std::string CA_CERT = "mutual_ca.crt";
 
 namespace {
 std::string hello_ssl_test() { return "Hello World"; }
-}
+}  // namespace
 
 #ifdef YLT_ENABLE_SSL
 TEST_CASE("testing RPC SSL one-way authentication") {
@@ -186,8 +186,8 @@ TEST_CASE("testing RPC SSL mutual authentication - client with invalid cert") {
   REQUIRE_MESSAGE(!res.hasResult(), "server start failed");
 
   coro_rpc_client client;
-  bool init_ok =
-      client.init_ssl(CERT_PATH, CA_CERT, "mutual_fake.crt", "mutual_fake.key", "127.0.0.1");
+  bool init_ok = client.init_ssl(CERT_PATH, CA_CERT, "mutual_fake.crt",
+                                 "mutual_fake.key", "127.0.0.1");
   REQUIRE_MESSAGE(init_ok == true, "init ssl should succeed");
 
   auto ec = syncAwait(client.connect("127.0.0.1", "8804"));

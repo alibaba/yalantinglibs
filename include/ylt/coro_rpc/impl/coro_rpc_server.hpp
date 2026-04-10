@@ -186,8 +186,8 @@ class coro_rpc_server_base {
   }
 
  public:
-  const std::vector<std::unique_ptr<coro_io::server_acceptor_base>> &
-  get_acceptors() const noexcept {
+  const std::vector<std::unique_ptr<coro_io::server_acceptor_base>>
+      &get_acceptors() const noexcept {
     return acceptors_;
   }
   async_simple::Future<coro_rpc::err_code> async_start() noexcept {
@@ -230,7 +230,7 @@ class coro_rpc_server_base {
         }
       }
       if (!errc_) {
-        if constexpr (requires(typename server_config::executor_pool_t &pool) {
+        if constexpr (requires(typename server_config::executor_pool_t & pool) {
                         pool.run();
                       }) {
           thd_ = std::thread([this] {

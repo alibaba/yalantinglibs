@@ -1538,7 +1538,8 @@ class coro_rpc_client {
                      << ", cost time = "
                      << (std::chrono::steady_clock::now() - tp) /
                             std::chrono::microseconds(1)
-                     << "us" << ", client_id: " << controller->client_id;
+                     << "us"
+                     << ", client_id: " << controller->client_id;
         }
         break;
       }
@@ -1925,7 +1926,8 @@ class coro_rpc_client {
                    << ", client_id: " << config_.client_id << ", cost time = "
                    << (std::chrono::steady_clock::now() - tp) /
                           std::chrono::microseconds(1)
-                   << "us" << ", request ID: " << id;
+                   << "us"
+                   << ", request ID: " << id;
         co_return rpc_error{errc::io_error, ret.first.message()};
       }
     }
@@ -1933,7 +1935,8 @@ class coro_rpc_client {
                << ", cost time = "
                << (std::chrono::steady_clock::now() - tp) /
                       std::chrono::microseconds(1)
-               << "us" << ", request ID: " << id;
+               << "us"
+               << ", request ID: " << id;
     co_return rpc_error{};
   }
 
