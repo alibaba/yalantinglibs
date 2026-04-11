@@ -674,9 +674,13 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     timer_guard(coro_http_client *self,
                 std::chrono::steady_clock::duration duration, std::string msg)
         : self(self), dur_(duration) {
+      if (duration.count() == 0) {
+        // Zero duration means immediate timeout.
+        self->socket_->is_timeout_ = true;
+        return;
+      }
       self->socket_->is_timeout_ = false;
-
-      if (duration.count() >= 0) {
+      if (duration.count() > 0) {
         self->timeout(self->timer_, duration, std::move(msg))
             .start([](auto &&) {
             });
@@ -1196,6 +1200,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
 
     auto time_guard = timer_guard(this, req_timeout_duration_, "request timer");
+    if (socket_->is_timeout_) {
+      co_return resp_data{make_error_code(http_errc::request_timeout), 404};
+    }
     std::tie(ec, size) = co_await async_write(asio::buffer(header_str));
     if (ec) {
       handle_upload_timeout_error(ec);
@@ -1393,6 +1400,10 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       CINATRA_LOG_DEBUG << req_head_str;
 #endif
       auto guard = timer_guard(this, req_timeout_duration_, "request timer");
+      if (socket_->is_timeout_) {
+        ec = make_error_code(http_errc::request_timeout);
+        break;
+      }
       if (has_body) {
         std::tie(ec, size) = co_await async_write(vec);
       }
@@ -2249,7 +2260,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     if (socket_->has_closed_) {
       auto time_out_guard =
           timer_guard(this, conn_timeout_duration_, "connect timer");
-      socket_->is_timeout_ = false;
+      if (socket_->is_timeout_) {
+        co_return resp_data{make_error_code(http_errc::connect_timeout), 404};
+      }
       host_ = proxy_host_.empty() ? u.get_host() : proxy_host_;
       port_ = proxy_port_.empty() ? u.get_port() : proxy_port_;
       if (eps->empty()) {
@@ -2278,6 +2291,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
           << ":" << std::to_string((*eps)[0].port());
       std::error_code ec;
       if (ec = co_await coro_io::async_connect(socket_->impl_, *eps); ec) {
+        if (socket_->is_timeout_) {
+          ec = make_error_code(http_errc::connect_timeout);
+        }
         co_return resp_data{ec, 404};
       }
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST

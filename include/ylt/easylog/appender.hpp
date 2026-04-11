@@ -158,8 +158,6 @@ class appender {
 
     buf[0] = '[';
     auto [ptr, ec] = std::to_chars(buf + 1, buf + 21, tid);
-    buf[22] = ']';
-    buf[23] = ' ';
     last_tid = tid;
     last_len = ptr - buf;
     buf[last_len++] = ']';
@@ -295,28 +293,28 @@ class appender {
     std::lock_guard guard(mtx_);
     if (file_.is_open()) {
       file_.flush();
-      file_.sync_with_stdio();
     }
   }
 
   void stop() {
-    std::lock_guard guard(mtx_);
     if (!write_thd_.joinable()) {
       return;
     }
 
-    if (stop_) {
-      return;
+    {
+      std::lock_guard guard(que_mtx_);
+      if (!stop_) {
+        stop_ = true;
+        cnd_.notify_one();
+      }
     }
-    stop_ = true;
-    cnd_.notify_one();
+
+    if (write_thd_.joinable()) {
+      write_thd_.join();
+    }
   }
 
-  ~appender() {
-    stop();
-    if (write_thd_.joinable())
-      write_thd_.join();
-  }
+  ~appender() { stop(); }
 
  private:
   void open_log_file() {
@@ -346,6 +344,9 @@ class appender {
         if (file_.write(BOM_STR.data(), BOM_STR.size())) {
           file_size_ += BOM_STR.size();
         }
+      }
+      else {
+        file_size_ = file_size;
       }
     }
   }
