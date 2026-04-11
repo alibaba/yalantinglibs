@@ -168,8 +168,8 @@ class logger {
     async_ = true;
   }
 
-  logger(const logger &) = delete;
-  logger& operator=(const logger &) = delete;
+  logger(const logger&) = delete;
+  logger& operator=(const logger&) = delete;
 
   void append_record(record_t record) { appender_->write(std::move(record)); }
 

@@ -124,7 +124,9 @@ class session_manager {
     }
     {
       std::unique_lock lock(shutdown_mtx_);
-      shutdown_cv_.wait(lock, [this] { return active_callbacks_ == 0; });
+      shutdown_cv_.wait(lock, [this] {
+        return active_callbacks_ == 0;
+      });
     }
     std::lock_guard lock(mtx_);
     map_.clear();
