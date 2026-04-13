@@ -140,7 +140,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 #ifdef YLT_ENABLE_NTLS
     bool use_ntls =
         false;  // if set use_ntls true, cinatra will use NTLS/TLCP protocol.
-#endif          // YLT_ENABLE_NTLS
+#endif  // YLT_ENABLE_NTLS
 #endif
   };
 
@@ -273,7 +273,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
 
       has_init_ssl_ = true;
-      is_ssl_schema_ = true;
     } catch (std::exception &e) {
       CINATRA_LOG_ERROR << "init ssl failed: " << e.what();
       return false;
@@ -298,8 +297,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   }
 
   /*!
-   * Initialize SSL with client certificate for mutual authentication
-   * @param verify_mode SSL verify mode (e.g., asio::ssl::verify_peer)
+   * Initialize SSL with mutual authentication support
+   * @param verify_mode SSL verify mode
    * @param base_path Base path for certificate files
    * @param cert_file CA certificate file name for server verification
    * @param client_cert_file Client certificate file name for mutual
@@ -309,39 +308,42 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
    * @param sni_hostname SNI hostname
    * @return true if initialization successful
    */
-  [[nodiscard]] bool init_ssl(int verify_mode, const std::string &base_path,
-                              const std::string &cert_file,
-                              const std::string &client_cert_file,
-                              const std::string &client_key_file,
-                              const std::string &sni_hostname) {
+  bool init_ssl(int verify_mode, const std::string &base_path,
+                const std::string &cert_file,
+                const std::string &client_cert_file,
+                const std::string &client_key_file,
+                const std::string &sni_hostname = "") {
     if (has_init_ssl_) {
       return true;
     }
 
     try {
-      ssl_ctx_ = std::make_unique<asio::ssl::context>(asio::ssl::context::tls);
-
-      // Set cipher list for OpenSSL 3.0 compatibility
-      SSL_CTX *native_ctx = ssl_ctx_->native_handle();
-      if (native_ctx) {
-        //        const char* ciphers = "HIGH:!aNULL:!MD5:!3DES";
-        //        SSL_CTX_set_cipher_list(native_ctx, ciphers);
-        SSL_CTX_set_min_proto_version(native_ctx, TLS1_2_VERSION);
-        SSL_CTX_set_max_proto_version(native_ctx, TLS1_3_VERSION);
+#ifdef YLT_ENABLE_NTLS
+      if (use_ntls_) {
+        ssl_ctx_ = std::make_unique<asio::ssl::context>(
+            SSL_CTX_new(NTLS_client_method()));
+        SSL_CTX_enable_ntls(ssl_ctx_->native_handle());
+        if (!SSL_CTX_set_cipher_list(
+                ssl_ctx_->native_handle(),
+                "ECC-SM2-SM4-GCM-SM3:ECC-SM2-SM4-CBC-SM3")) {
+          CINATRA_LOG_WARNING << "failed to set NTLS cipher suites";
+        }
       }
-
+      else {
+        CINATRA_LOG_ERROR << "NTLS is not supported in this build.";
+        return false;
+      }
+#else
+      ssl_ctx_ =
+          std::make_unique<asio::ssl::context>(asio::ssl::context::sslv23);
+#endif
       auto full_cert_file = std::filesystem::path(base_path).append(cert_file);
       if (std::filesystem::exists(full_cert_file)) {
         ssl_ctx_->load_verify_file(full_cert_file.string());
-        CINATRA_LOG_INFO << "loaded CA certificate: "
-                         << full_cert_file.string();
       }
       else {
-        if (!base_path.empty() || !cert_file.empty()) {
-          CINATRA_LOG_ERROR << "CA certificate file not found: "
-                            << full_cert_file.string();
+        if (!base_path.empty() || !cert_file.empty())
           return false;
-        }
       }
 
       if (base_path.empty() && cert_file.empty()) {
@@ -386,7 +388,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       if (!sni_hostname.empty()) {
         ssl_ctx_->set_verify_callback(
             asio::ssl::host_name_verification(sni_hostname));
-
         if (need_set_sni_host_) {
           SSL_set_tlsext_host_name(socket_->ssl_stream_->native_handle(),
                                    sni_hostname.c_str());
@@ -397,6 +398,78 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       is_ssl_schema_ = true;
       CINATRA_LOG_INFO << "SSL initialized with client certificate for mutual "
                           "authentication";
+    } catch (std::exception &e) {
+      CINATRA_LOG_ERROR << "init ssl failed: " << e.what();
+      return false;
+    }
+    return true;
+  }
+
+  /*!
+   * Initialize SSL with CA certificate for server verification
+   * @param verify_mode SSL verify mode
+   * @param base_path Base path for certificate files
+   * @param cert_file CA certificate file name
+   * @param sni_hostname SNI hostname
+   * @return true if initialization successful
+   */
+  [[nodiscard]] bool init_ssl(int verify_mode, const std::string &base_path,
+                              const std::string &cert_file,
+                              const std::string &sni_hostname) {
+    if (has_init_ssl_) {
+      return true;
+    }
+
+    try {
+#ifdef YLT_ENABLE_NTLS
+      if (use_ntls_) {
+        ssl_ctx_ = std::make_unique<asio::ssl::context>(
+            SSL_CTX_new(NTLS_client_method()));
+        SSL_CTX_enable_ntls(ssl_ctx_->native_handle());
+        if (!SSL_CTX_set_cipher_list(
+                ssl_ctx_->native_handle(),
+                "ECC-SM2-SM4-GCM-SM3:ECC-SM2-SM4-CBC-SM3")) {
+          CINATRA_LOG_WARNING << "failed to set NTLS cipher suites";
+        }
+      }
+      else {
+        CINATRA_LOG_ERROR << "NTLS is not supported in this build.";
+        return false;
+      }
+#else
+      ssl_ctx_ =
+          std::make_unique<asio::ssl::context>(asio::ssl::context::sslv23);
+#endif
+      auto full_cert_file = std::filesystem::path(base_path).append(cert_file);
+      if (std::filesystem::exists(full_cert_file)) {
+        ssl_ctx_->load_verify_file(full_cert_file.string());
+      }
+      else {
+        if (!base_path.empty() || !cert_file.empty())
+          return false;
+      }
+
+      if (base_path.empty() && cert_file.empty()) {
+        ssl_ctx_->set_default_verify_paths();
+      }
+
+      ssl_ctx_->set_verify_mode(verify_mode);
+
+      socket_->ssl_stream_ =
+          std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
+              socket_->impl_, *ssl_ctx_);
+
+      if (!sni_hostname.empty()) {
+        ssl_ctx_->set_verify_callback(
+            asio::ssl::host_name_verification(sni_hostname));
+        if (need_set_sni_host_) {
+          SSL_set_tlsext_host_name(socket_->ssl_stream_->native_handle(),
+                                   sni_hostname.c_str());
+        }
+      }
+
+      has_init_ssl_ = true;
+      is_ssl_schema_ = true;
     } catch (std::exception &e) {
       CINATRA_LOG_ERROR << "init ssl failed: " << e.what();
       return false;
@@ -782,9 +855,13 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     timer_guard(coro_http_client *self,
                 std::chrono::steady_clock::duration duration, std::string msg)
         : self(self), dur_(duration) {
+      if (duration.count() == 0) {
+        // Zero duration means immediate timeout.
+        self->socket_->is_timeout_ = true;
+        return;
+      }
       self->socket_->is_timeout_ = false;
-
-      if (duration.count() >= 0) {
+      if (duration.count() > 0) {
         self->timeout(self->timer_, duration, std::move(msg))
             .start([](auto &&) {
             });
@@ -1304,6 +1381,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
 
     auto time_guard = timer_guard(this, req_timeout_duration_, "request timer");
+    if (socket_->is_timeout_) {
+      co_return resp_data{make_error_code(http_errc::request_timeout), 404};
+    }
     std::tie(ec, size) = co_await async_write(asio::buffer(header_str));
     if (ec) {
       handle_upload_timeout_error(ec);
@@ -1501,6 +1581,10 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       CINATRA_LOG_DEBUG << req_head_str;
 #endif
       auto guard = timer_guard(this, req_timeout_duration_, "request timer");
+      if (socket_->is_timeout_) {
+        ec = make_error_code(http_errc::request_timeout);
+        break;
+      }
       if (has_body) {
         std::tie(ec, size) = co_await async_write(vec);
       }
@@ -2357,7 +2441,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     if (socket_->has_closed_) {
       auto time_out_guard =
           timer_guard(this, conn_timeout_duration_, "connect timer");
-      socket_->is_timeout_ = false;
+      if (socket_->is_timeout_) {
+        co_return resp_data{make_error_code(http_errc::connect_timeout), 404};
+      }
       host_ = proxy_host_.empty() ? u.get_host() : proxy_host_;
       port_ = proxy_port_.empty() ? u.get_port() : proxy_port_;
       if (eps->empty()) {
@@ -2386,6 +2472,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
           << ":" << std::to_string((*eps)[0].port());
       std::error_code ec;
       if (ec = co_await coro_io::async_connect(socket_->impl_, *eps); ec) {
+        if (socket_->is_timeout_) {
+          ec = make_error_code(http_errc::connect_timeout);
+        }
         co_return resp_data{ec, 404};
       }
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
