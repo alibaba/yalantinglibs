@@ -424,7 +424,9 @@ async_simple::coro::Lazy<void> test_ntls_http_client_mutual_auth() {
         CLIENT_ENC_CERT,        // 客户端加密证书
         CLIENT_ENC_KEY,         // 客户端加密私钥
         CA_CERT,                // CA证书
-        asio::ssl::verify_peer  // 验证服务器证书
+        asio::ssl::verify_peer, // 验证服务器证书
+        "",                     // 私钥密码（可选）
+        "localhost"             // SNI主机名（用于证书主机名验证）
     );
     
     if (!init_ok) {
@@ -458,7 +460,9 @@ bool init_ok = client.init_ntls_tls13_gm_client(
     "",                      // 单向认证不需要客户端私钥
     CA_CERT,                 // CA证书
     asio::ssl::verify_peer,  // 验证服务器证书
-    "TLS_SM4_GCM_SM3:TLS_SM4_CCM_SM3"  // TLS 1.3国密密码套件
+    "TLS_SM4_GCM_SM3:TLS_SM4_CCM_SM3",  // TLS 1.3国密密码套件
+    "",                      // 私钥密码（可选）
+    "localhost"              // SNI主机名（用于证书主机名验证）
 );
 ```
 
@@ -560,6 +564,21 @@ rm *.csr *.srl
 
 **注意：** 生产环境请使用正式的CA机构签发的证书，并妥善保管私钥文件。
 
+**证书CN/SAN要求：**
+
+服务器证书的 CN（Common Name）或 SAN（Subject Alternative Name）必须设置为服务器的实际域名或 IP 地址。客户端在建立连接时会验证服务器证书中的主机名是否与请求的目标地址匹配。如果证书中的主机名与实际服务器地址不一致，连接将失败。
+
+生成证书时，请将 CN 设置为服务器地址：
+```bash
+# 示例：CN 设置为服务器域名
+tongsuo req -new -key server_sign.key -out server_sign.csr \
+    -subj "/C=CN/ST=Beijing/L=Beijing/O=Test/OU=Test/CN=your.server.com"
+
+# 示例：CN 设置为服务器 IP
+tongsuo req -new -key server_sign.key -out server_sign.csr \
+    -subj "/C=CN/ST=Beijing/L=Beijing/O=Test/OU=Test/CN=192.168.1.100"
+```
+
 ### 证书文件组织
 
 建议的证书目录结构：
@@ -593,6 +612,17 @@ rm *.csr *.srl
 - **适用场景**：高安全要求的系统、内网服务
 - **配置**：`enable_client_verify = true`
 - **客户端**：需要提供客户端证书和私钥
+
+### 主机名验证
+
+无论是 RSA 还是 SM2(NTLS)，客户端都会对服务器证书进行主机名验证：
+
+- 当客户端通过 `sni_hostname`（coro_http）或 `domain`/`server_name`（coro_rpc）参数指定服务器域名时，会启用主机名验证
+- 服务器证书的 CN（Common Name）或 SAN（Subject Alternative Name）必须与客户端指定的主机名匹配
+- 如果使用 IP 地址（如 `127.0.0.1`）或 `localhost`，会跳过主机名验证
+- 如果证书 CN 与实际服务器地址不匹配，连接将失败并报 `certificate verify failed` 错误
+
+**建议**：生产环境中，证书的 CN 或 SAN 应配置为服务器的实际域名或 IP 地址。
 
 
 ## 示例代码

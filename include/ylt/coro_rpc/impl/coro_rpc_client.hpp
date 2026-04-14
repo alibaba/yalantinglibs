@@ -359,8 +359,9 @@ class coro_rpc_client {
       }
 
       ssl_ctx_.set_verify_mode(asio::ssl::verify_peer);
-      // Set hostname verification for DNS names (skip for IP addresses)
-      if (config.ssl_domain != "127.0.0.1" &&
+      // Set hostname verification for DNS names (skip for IP addresses and empty)
+      if (!config.ssl_domain.empty() &&
+          config.ssl_domain != "127.0.0.1" &&
           config.ssl_domain != "localhost") {
         ssl_ctx_.set_verify_callback(
             asio::ssl::host_name_verification(config.ssl_domain));
@@ -560,13 +561,16 @@ class coro_rpc_client {
         }
       }
 
-      // Set verification mode - use same approach as HTTP client
+      // Set verification mode
       if (config.enable_client_verify) {
         ssl_ctx_.set_verify_mode(asio::ssl::verify_peer);
-        // Note: Skip host_name_verification for NTLS as it may not be
-        // compatible The server certificate will still be verified against CA
-        // ssl_ctx_.set_verify_callback(
-        //    asio::ssl::host_name_verification(config.ssl_domain));
+        // Set hostname verification for DNS names (skip for IP addresses)
+        if (!config.ssl_domain.empty() &&
+            config.ssl_domain != "127.0.0.1" &&
+            config.ssl_domain != "localhost") {
+          ssl_ctx_.set_verify_callback(
+              asio::ssl::host_name_verification(config.ssl_domain));
+        }
       }
       else {
         ssl_ctx_.set_verify_mode(asio::ssl::verify_none);

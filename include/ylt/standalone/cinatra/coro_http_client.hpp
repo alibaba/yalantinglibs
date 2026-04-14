@@ -393,6 +393,14 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
                                    sni_hostname.c_str());
         }
       }
+      else if (verify_mode != asio::ssl::verify_none) {
+        // No explicit hostname provided, but verification is requested.
+        // Verify the CA chain only (no hostname matching).
+        ssl_ctx_->set_verify_callback(
+            [](bool preverified, asio::ssl::verify_context&) {
+              return preverified;
+            });
+      }
 
       has_init_ssl_ = true;
       is_ssl_schema_ = true;
@@ -1624,7 +1632,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
                         const std::string &enc_key_file,
                         const std::string &ca_cert_file = "",
                         int verify_mode = asio::ssl::verify_none,
-                        const std::string &passwd = "") {
+                        const std::string &passwd = "",
+                        const std::string &sni_hostname = "") {
     if (has_init_ssl_) {
       return true;
     }
@@ -1697,6 +1706,21 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
           std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
               socket_->impl_, *ssl_ctx_);
 
+      if (!sni_hostname.empty()) {
+        ssl_ctx_->set_verify_callback(
+            asio::ssl::host_name_verification(sni_hostname));
+        if (need_set_sni_host_) {
+          SSL_set_tlsext_host_name(socket_->ssl_stream_->native_handle(),
+                                   sni_hostname.c_str());
+        }
+      }
+      else if (verify_mode != asio::ssl::verify_none) {
+        ssl_ctx_->set_verify_callback(
+            [](bool preverified, asio::ssl::verify_context&) {
+              return preverified;
+            });
+      }
+
       has_init_ssl_ = true;
       use_ntls_ = true;
       return true;
@@ -1713,7 +1737,8 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       const std::string &ca_cert_file = "",
       int verify_mode = asio::ssl::verify_none,
       const std::string &cipher_suites = "TLS_SM4_GCM_SM3:TLS_SM4_CCM_SM3",
-      const std::string &passwd = "") {
+      const std::string &passwd = "",
+      const std::string &sni_hostname = "") {
     if (has_init_ssl_) {
       return true;
     }
@@ -1781,6 +1806,21 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       socket_->ssl_stream_ =
           std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
               socket_->impl_, *ssl_ctx_);
+
+      if (!sni_hostname.empty()) {
+        ssl_ctx_->set_verify_callback(
+            asio::ssl::host_name_verification(sni_hostname));
+        if (need_set_sni_host_) {
+          SSL_set_tlsext_host_name(socket_->ssl_stream_->native_handle(),
+                                   sni_hostname.c_str());
+        }
+      }
+      else if (verify_mode != asio::ssl::verify_none) {
+        ssl_ctx_->set_verify_callback(
+            [](bool preverified, asio::ssl::verify_context&) {
+              return preverified;
+            });
+      }
 
       has_init_ssl_ = true;
       use_ntls_ = true;
