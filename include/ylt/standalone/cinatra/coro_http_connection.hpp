@@ -6,6 +6,10 @@
 #include <system_error>
 #include <thread>
 
+#ifdef CINATRA_ENABLE_SSL
+#include <openssl/ssl.h>
+#endif
+
 #include "asio/dispatch.hpp"
 #include "asio/streambuf.hpp"
 #include "async_simple/coro/Lazy.h"
@@ -72,6 +76,10 @@ class coro_http_connection
           std::make_unique<asio::ssl::context>(asio::ssl::context::sslv23);
 
       ssl_ctx_->set_options(ssl_options);
+      // Set lower security level for test certificates (OpenSSL 3.0
+      // compatibility)
+      SSL_CTX_set_security_level(ssl_ctx_->native_handle(), 0);
+
       if (!passwd.empty()) {
         ssl_ctx_->set_password_callback([pwd = std::move(passwd)](auto, auto) {
           return pwd;
@@ -86,6 +94,86 @@ class coro_http_connection
       if (fs::exists(key_file, ec)) {
         ssl_ctx_->use_private_key_file(std::move(key_file),
                                        asio::ssl::context::pem);
+      }
+
+      socket_wrapper_.ssl_stream() =
+          std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
+              *socket_wrapper_.socket(), *ssl_ctx_);
+    } catch (const std::exception &e) {
+      CINATRA_LOG_ERROR << "init ssl failed, reason: " << e.what();
+      return false;
+    }
+    return true;
+  }
+
+  /*!
+   * Initialize SSL with mutual authentication support
+   * @param cert_file Server certificate file path
+   * @param key_file Server private key file path
+   * @param ca_cert_file CA certificate file path for client verification
+   * @param enable_client_verify Enable client certificate verification
+   * @param passwd Server private key password (optional)
+   * @return true if initialization successful
+   */
+  bool init_ssl(const std::string &cert_file, const std::string &key_file,
+                const std::string &ca_cert_file, bool enable_client_verify,
+                std::string passwd = "") {
+    unsigned long ssl_options = asio::ssl::context::default_workarounds |
+                                asio::ssl::context::no_sslv2 |
+                                asio::ssl::context::single_dh_use;
+    try {
+      ssl_ctx_ =
+          std::make_unique<asio::ssl::context>(asio::ssl::context::sslv23);
+
+      ssl_ctx_->set_options(ssl_options);
+      // Set lower security level for test certificates (OpenSSL 3.0
+      // compatibility)
+      SSL_CTX_set_security_level(ssl_ctx_->native_handle(), 0);
+
+      if (!passwd.empty()) {
+        ssl_ctx_->set_password_callback([pwd = std::move(passwd)](auto, auto) {
+          return pwd;
+        });
+      }
+
+      std::error_code ec;
+      if (fs::exists(cert_file, ec)) {
+        ssl_ctx_->use_certificate_chain_file(cert_file);
+      }
+
+      if (fs::exists(key_file, ec)) {
+        ssl_ctx_->use_private_key_file(key_file, asio::ssl::context::pem);
+      }
+
+      // Load CA certificate for client verification if provided
+      if (!ca_cert_file.empty() && fs::exists(ca_cert_file, ec)) {
+        ssl_ctx_->load_verify_file(ca_cert_file, ec);
+        if (ec) {
+          CINATRA_LOG_ERROR << "failed to load CA certificate: " << ca_cert_file
+                            << ", error: " << ec.message();
+          return false;
+        }
+        CINATRA_LOG_INFO << "loaded CA certificate: " << ca_cert_file;
+      }
+
+      // Set verification mode based on client verification configuration
+      if (enable_client_verify) {
+        ssl_ctx_->set_verify_mode(
+            asio::ssl::verify_peer | asio::ssl::verify_fail_if_no_peer_cert,
+            ec);
+        if (ec) {
+          CINATRA_LOG_WARNING << "failed to set verify mode: " << ec.message();
+        }
+        else {
+          CINATRA_LOG_INFO
+              << "client certificate verification enabled (mandatory)";
+        }
+      }
+      else {
+        ssl_ctx_->set_verify_mode(asio::ssl::verify_none, ec);
+        if (ec) {
+          CINATRA_LOG_WARNING << "failed to set verify mode: " << ec.message();
+        }
       }
 
       socket_wrapper_.ssl_stream() =

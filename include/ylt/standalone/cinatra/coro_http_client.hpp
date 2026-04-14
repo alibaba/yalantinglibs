@@ -295,6 +295,115 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
     return init_ssl(verify_mode, base_path, cert_file, sni_hostname);
   }
+
+  /*!
+   * Initialize SSL with mutual authentication support
+   * @param verify_mode SSL verify mode
+   * @param base_path Base path for certificate files
+   * @param cert_file CA certificate file name for server verification
+   * @param client_cert_file Client certificate file name for mutual
+   * authentication
+   * @param client_key_file Client private key file name for mutual
+   * authentication
+   * @param sni_hostname SNI hostname
+   * @return true if initialization successful
+   */
+  bool init_ssl(int verify_mode, const std::string &base_path,
+                const std::string &cert_file,
+                const std::string &client_cert_file,
+                const std::string &client_key_file,
+                const std::string &sni_hostname = "") {
+    if (has_init_ssl_) {
+      return true;
+    }
+
+    try {
+#ifdef YLT_ENABLE_NTLS
+      if (use_ntls_) {
+        ssl_ctx_ = std::make_unique<asio::ssl::context>(
+            SSL_CTX_new(NTLS_client_method()));
+        SSL_CTX_enable_ntls(ssl_ctx_->native_handle());
+        if (!SSL_CTX_set_cipher_list(
+                ssl_ctx_->native_handle(),
+                "ECC-SM2-SM4-GCM-SM3:ECC-SM2-SM4-CBC-SM3")) {
+          CINATRA_LOG_WARNING << "failed to set NTLS cipher suites";
+        }
+      }
+      else {
+        CINATRA_LOG_ERROR << "NTLS is not supported in this build.";
+        return false;
+      }
+#else
+      ssl_ctx_ =
+          std::make_unique<asio::ssl::context>(asio::ssl::context::sslv23);
+#endif
+      auto full_cert_file = std::filesystem::path(base_path).append(cert_file);
+      if (std::filesystem::exists(full_cert_file)) {
+        ssl_ctx_->load_verify_file(full_cert_file.string());
+      }
+      else {
+        if (!base_path.empty() || !cert_file.empty())
+          return false;
+      }
+
+      if (base_path.empty() && cert_file.empty()) {
+        ssl_ctx_->set_default_verify_paths();
+      }
+
+      // Load client certificate and key for mutual authentication
+      auto full_client_cert_file =
+          std::filesystem::path(base_path).append(client_cert_file);
+      auto full_client_key_file =
+          std::filesystem::path(base_path).append(client_key_file);
+
+      if (std::filesystem::exists(full_client_cert_file)) {
+        ssl_ctx_->use_certificate_chain_file(full_client_cert_file.string());
+        CINATRA_LOG_INFO << "loaded client certificate: "
+                         << full_client_cert_file.string();
+      }
+      else {
+        CINATRA_LOG_ERROR << "client certificate file not found: "
+                          << full_client_cert_file.string();
+        return false;
+      }
+
+      if (std::filesystem::exists(full_client_key_file)) {
+        ssl_ctx_->use_private_key_file(full_client_key_file.string(),
+                                       asio::ssl::context::pem);
+        CINATRA_LOG_INFO << "loaded client private key: "
+                         << full_client_key_file.string();
+      }
+      else {
+        CINATRA_LOG_ERROR << "client key file not found: "
+                          << full_client_key_file.string();
+        return false;
+      }
+
+      ssl_ctx_->set_verify_mode(verify_mode);
+
+      socket_->ssl_stream_ =
+          std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
+              socket_->impl_, *ssl_ctx_);
+
+      if (!sni_hostname.empty()) {
+        ssl_ctx_->set_verify_callback(
+            asio::ssl::host_name_verification(sni_hostname));
+        if (need_set_sni_host_) {
+          SSL_set_tlsext_host_name(socket_->ssl_stream_->native_handle(),
+                                   sni_hostname.c_str());
+        }
+      }
+
+      has_init_ssl_ = true;
+      is_ssl_schema_ = true;
+      CINATRA_LOG_INFO << "SSL initialized with client certificate for mutual "
+                          "authentication";
+    } catch (std::exception &e) {
+      CINATRA_LOG_ERROR << "init ssl failed: " << e.what();
+      return false;
+    }
+    return true;
+  }
 #endif
 
   // return body_, the user will own body's lifetime.
