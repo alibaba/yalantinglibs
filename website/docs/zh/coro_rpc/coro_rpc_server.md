@@ -390,14 +390,46 @@ coro_rpc支持使用openssl对连接进行加密。在安装openssl并使用cmak
 
 当启用ssl支持后，用户可以调用`init_ssl`函数，然后再连接到服务器。这会使得客户端与服务器之间建立加密的链接。需要注意的是，coro_rpc服务端在编译时也必须启用ssl支持。
 
+### 单向SSL认证
+
+单向SSL认证只验证服务器身份，服务端配置自己的证书和私钥：
+
 ```cpp
-coro_rpc_server server;
-server.init_ssl({
-  .base_path = "./",           // ssl文件的基本路径
-  .cert_file = "server.crt",   // 证书相对于base_path的路径
-  .key_file = "server.key"     // 私钥相对于base_path的路径
-});
+coro_rpc_server server(2, 9000);
+ssl_configure ssl_conf;
+ssl_conf.base_path = "./certs";
+ssl_conf.cert_file = "server.crt";
+ssl_conf.key_file = "server.key";
+ssl_conf.ca_cert_file = "";  // 单向认证为空
+ssl_conf.enable_client_verify = false;  // 不验证客户端证书
+
+server.init_ssl(ssl_conf);
+server.register_handler<your_function>();
+server.start();
 ```
+
+### 双向SSL认证（mTLS）
+
+双向SSL认证同时验证客户端和服务器身份，服务端需要配置CA证书以验证客户端：
+
+```cpp
+coro_rpc_server server(2, 9000);
+ssl_configure ssl_conf;
+ssl_conf.base_path = "./certs";
+ssl_conf.cert_file = "server.crt";
+ssl_conf.key_file = "server.key";
+ssl_conf.ca_cert_file = "ca.crt";  // CA证书，用于验证客户端
+ssl_conf.enable_client_verify = true;  // 启用强制客户端证书验证
+
+server.init_ssl(ssl_conf);
+server.register_handler<your_function>();
+server.start();
+```
+
+**重要说明**：
+- `enable_client_verify` 标志启用强制客户端证书验证
+- 启用双向认证后，客户端必须提供由 `ca_cert_file` 指定的CA签发的有效证书
+- 服务器将拒绝没有有效客户端证书的连接
 
 启用ssl支持后，服务器将拒绝一切非ssl连接。
 
@@ -443,7 +475,9 @@ struct ssl_configure {
   std::string base_path;  // ssl文件的基本路径
   std::string cert_file;  // 证书相对于base_path的路径
   std::string key_file;   // 私钥相对于base_path的路径
-  std::string dh_file;    // dh_file相对于base_path的路径(可选) 
+  std::string dh_file;    // dh_file相对于base_path的路径(可选)
+  std::string ca_cert_file;  // CA证书相对于base_path的路径(可选，用于验证客户端证书)
+  bool enable_client_verify = false;  // 启用强制客户端证书验证
 }
 int start() {
   coro_rpc::config_t config{};

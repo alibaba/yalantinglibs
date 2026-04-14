@@ -66,13 +66,62 @@ coro_rpc支持使用openssl对连接进行加密。在安装openssl并使用cmak
 
 当启用ssl支持后，用户可以调用`init_ssl`函数，然后再连接到服务器。这会使得客户端与服务器之间建立加密的链接。需要注意的是，coro_rpc服务端在编译时也必须启用ssl支持，并且在启动服务器之前也需要调用`init_ssl`方法来启用SSL支持。
 
+### 单向SSL认证
+
+单向SSL认证只验证服务器身份，客户端使用CA证书验证服务器：
+
+服务端配置：
+
 ```cpp
-client.init_ssl("./","server.crt");
+coro_rpc_server server(2, 9000);
+ssl_configure ssl_conf;
+ssl_conf.base_path = "./certs";
+ssl_conf.cert_file = "server.crt";
+ssl_conf.key_file = "server.key";
+ssl_conf.ca_cert_file = "";  // 单向认证为空
+ssl_conf.enable_client_verify = false;  // 不验证客户端证书
+
+server.init_ssl(ssl_conf);
+server.register_handler<your_function>();
+server.start();
 ```
 
-第一个字符串代表SSL证书所在的基本路径，第二个字符串代表SSL证书相对于基本路径的相对路径。
+### 双向SSL认证（Mutual Authentication）
 
-当建立连接时，客户端会使用该证书校验服务端发来的证书，以避免中间人攻击。因此，客户端必须持有服务端使用的证书或其根证书。
+双向SSL认证同时验证客户端和服务器身份，客户端需要提供自己的证书：
+
+客户端配置：
+
+```cpp
+    // 客户端双向认证
+    client.init_ssl("./",  // 证书路径
+                    "ca.crt",  // CA证书，用于验证服务器
+                    "client.crt",  // 客户端证书
+                    "client.key",  // 客户端私钥
+                    "127.0.0.1"  // 服务器主机名（SNI）
+    );
+```
+
+服务端配置：
+
+```cpp
+coro_rpc_server server(2, 9000);
+ssl_configure ssl_conf;
+ssl_conf.base_path = "./certs";
+ssl_conf.cert_file = "server.crt";
+ssl_conf.key_file = "server.key";
+ssl_conf.ca_cert_file = "ca.crt";  // CA证书，用于验证客户端
+ssl_conf.enable_client_verify = true;  // 启用客户端证书验证
+
+server.init_ssl(ssl_conf);
+server.register_handler<your_function>();
+server.start();
+```
+
+**重要说明**：
+- `enable_client_verify` 标志启用强制客户端证书验证
+- 启用双向认证后，客户端必须提供由 `ca_cert_file` 指定的CA签发的有效证书
+- 主机名参数必须与服务器证书中的通用名称（CN）或主题备用名称（SAN）匹配
 
 我们同样支持国密NTLS。你需要开启CMAKE选项`YLT_ENABLE_NTLS`。
 

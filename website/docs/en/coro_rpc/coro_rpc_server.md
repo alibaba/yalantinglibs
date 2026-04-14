@@ -385,15 +385,46 @@ coro_rpc supports encrypting connections with OpenSSL. After installing OpenSSL 
 
 Once SSL support is enabled, users can call the `init_ssl` function before connecting to the server. This will establish an encrypted link between the client and the server. It should be noted that the coro_rpc server also must have SSL support enabled at compile time.
 
+### One-way SSL Authentication
+
+For one-way SSL authentication (server authentication only), configure the server with its certificate and private key:
+
 ```cpp
-coro_rpc_server server;
-server.init_ssl({
-  .base_path = "./",           // Base path of ssl files.
-  .cert_file = "server.crt",   // Path of the certificate relative to base_path.
-  .key_file = "server.key"     // Path of the private key relative to base_path.
-});
+coro_rpc_server server(2, 9000);
+ssl_configure ssl_conf;
+ssl_conf.base_path = "./certs";
+ssl_conf.cert_file = "server.crt";
+ssl_conf.key_file = "server.key";
+ssl_conf.ca_cert_file = "";  // Empty for one-way authentication
+ssl_conf.enable_client_verify = false;  // Disable client certificate verification
+
+server.init_ssl(ssl_conf);
+server.register_handler<your_function>();
+server.start();
 ```
 
+### Mutual SSL Authentication (mTLS)
+
+For mutual SSL authentication (both client and server authentication), configure the server to verify client certificates:
+
+```cpp
+coro_rpc_server server(2, 9000);
+ssl_configure ssl_conf;
+ssl_conf.base_path = "./certs";
+ssl_conf.cert_file = "server.crt";
+ssl_conf.key_file = "server.key";
+ssl_conf.ca_cert_file = "ca.crt";  // CA certificate for verifying clients
+ssl_conf.enable_client_verify = true;  // Enable mandatory client certificate verification
+
+server.init_ssl(ssl_conf);
+server.register_handler<your_function>();
+server.start();
+```
+
+**Important Notes**:
+- The `enable_client_verify` flag enables mandatory client certificate verification
+- When mutual authentication is enabled, clients must provide a valid certificate signed by the CA specified in `ca_cert_file`
+- The server will reject any client connection without a valid client certificate
 
 After enabling SSL, the server will reject all non-ssl connections.
 
@@ -438,6 +469,8 @@ struct ssl_configure {
   std::string cert_file;  // Path of the certificate relative to base_path.
   std::string key_file;   // Path of the private key relative to base_path.
   std::string dh_file;    // Path of the dh_file relative to base_path (optional).
+  std::string ca_cert_file;  // Path of the CA certificate relative to base_path (optional, for client verification).
+  bool enable_client_verify = false;  // Enable mandatory client certificate verification.
 }
 int start() {
   coro_rpc::config_t config{};
