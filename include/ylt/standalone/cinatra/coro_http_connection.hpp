@@ -478,7 +478,9 @@ class coro_http_connection
       // Set verification mode
       asio::error_code ec;
       if (ntls_config.enable_client_verify) {
-        ssl_ctx_->set_verify_mode(asio::ssl::verify_peer, ec);
+        ssl_ctx_->set_verify_mode(
+            asio::ssl::verify_peer | asio::ssl::verify_fail_if_no_peer_cert,
+            ec);
       }
       else {
         ssl_ctx_->set_verify_mode(asio::ssl::verify_none, ec);

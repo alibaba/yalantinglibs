@@ -140,7 +140,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 #ifdef YLT_ENABLE_NTLS
     bool use_ntls =
         false;  // if set use_ntls true, cinatra will use NTLS/TLCP protocol.
-#endif          // YLT_ENABLE_NTLS
+#endif  // YLT_ENABLE_NTLS
 #endif
   };
 
@@ -233,14 +233,12 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
           CINATRA_LOG_WARNING << "failed to set NTLS cipher suites";
         }
       }
-      else {
-        CINATRA_LOG_ERROR << "NTLS is not supported in this build.";
-        return false;
-      }
-#else
-      ssl_ctx_ =
-          std::make_unique<asio::ssl::context>(asio::ssl::context::sslv23);
+      else
 #endif  // YLT_ENABLE_NTLS
+      {
+        ssl_ctx_ =
+            std::make_unique<asio::ssl::context>(asio::ssl::context::sslv23);
+      }
       auto full_cert_file = std::filesystem::path(base_path).append(cert_file);
       if (std::filesystem::exists(full_cert_file)) {
         ssl_ctx_->load_verify_file(full_cert_file.string());
@@ -262,8 +260,12 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 
       // ssl_ctx_.add_certificate_authority(asio::buffer(CA_PEM));
       if (!sni_hostname.empty()) {
-        ssl_ctx_->set_verify_callback(
-            asio::ssl::host_name_verification(sni_hostname));
+        // Skip hostname verification for IP addresses and localhost
+        if (sni_hostname != "127.0.0.1" && sni_hostname != "localhost" &&
+            sni_hostname != "::1") {
+          ssl_ctx_->set_verify_callback(
+              asio::ssl::host_name_verification(sni_hostname));
+        }
 
         if (need_set_sni_host_) {
           // Set SNI Hostname (many hosts need this to handshake successfully)
@@ -329,14 +331,12 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
           CINATRA_LOG_WARNING << "failed to set NTLS cipher suites";
         }
       }
-      else {
-        CINATRA_LOG_ERROR << "NTLS is not supported in this build.";
-        return false;
+      else
+#endif  // YLT_ENABLE_NTLS
+      {
+        ssl_ctx_ =
+            std::make_unique<asio::ssl::context>(asio::ssl::context::sslv23);
       }
-#else
-      ssl_ctx_ =
-          std::make_unique<asio::ssl::context>(asio::ssl::context::sslv23);
-#endif
       auto full_cert_file = std::filesystem::path(base_path).append(cert_file);
       if (std::filesystem::exists(full_cert_file)) {
         ssl_ctx_->load_verify_file(full_cert_file.string());
@@ -386,8 +386,12 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
               socket_->impl_, *ssl_ctx_);
 
       if (!sni_hostname.empty()) {
-        ssl_ctx_->set_verify_callback(
-            asio::ssl::host_name_verification(sni_hostname));
+        // Skip hostname verification for IP addresses and localhost
+        if (sni_hostname != "127.0.0.1" && sni_hostname != "localhost" &&
+            sni_hostname != "::1") {
+          ssl_ctx_->set_verify_callback(
+              asio::ssl::host_name_verification(sni_hostname));
+        }
         if (need_set_sni_host_) {
           SSL_set_tlsext_host_name(socket_->ssl_stream_->native_handle(),
                                    sni_hostname.c_str());
@@ -397,7 +401,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         // No explicit hostname provided, but verification is requested.
         // Verify the CA chain only (no hostname matching).
         ssl_ctx_->set_verify_callback(
-            [](bool preverified, asio::ssl::verify_context&) {
+            [](bool preverified, asio::ssl::verify_context &) {
               return preverified;
             });
       }
@@ -1716,7 +1720,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
       else if (verify_mode != asio::ssl::verify_none) {
         ssl_ctx_->set_verify_callback(
-            [](bool preverified, asio::ssl::verify_context&) {
+            [](bool preverified, asio::ssl::verify_context &) {
               return preverified;
             });
       }
@@ -1737,8 +1741,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       const std::string &ca_cert_file = "",
       int verify_mode = asio::ssl::verify_none,
       const std::string &cipher_suites = "TLS_SM4_GCM_SM3:TLS_SM4_CCM_SM3",
-      const std::string &passwd = "",
-      const std::string &sni_hostname = "") {
+      const std::string &passwd = "", const std::string &sni_hostname = "") {
     if (has_init_ssl_) {
       return true;
     }
@@ -1817,7 +1820,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
       else if (verify_mode != asio::ssl::verify_none) {
         ssl_ctx_->set_verify_callback(
-            [](bool preverified, asio::ssl::verify_context&) {
+            [](bool preverified, asio::ssl::verify_context &) {
               return preverified;
             });
       }
@@ -2857,7 +2860,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   bool has_init_ssl_ = false;
   bool is_ssl_schema_ = false;
 #ifdef YLT_ENABLE_NTLS
-  bool use_ntls_ = true;
+  bool use_ntls_ = false;
 #endif  // YLT_ENABLE_NTLS
   bool need_set_sni_host_ = true;
 #endif

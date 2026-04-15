@@ -33,10 +33,10 @@ namespace coro_rpc {
  * SSL config
  */
 struct ssl_configure {
-  std::string base_path;  //!< all config files base path
-  std::string cert_file;  //!< relative path of certificate chain file
-  std::string key_file;   //!< relative path of private key file
-  std::string dh_file;    //!< relative path of tmp dh file (optional)
+  std::string base_path;     //!< all config files base path
+  std::string cert_file;     //!< relative path of certificate chain file
+  std::string key_file;      //!< relative path of private key file
+  std::string dh_file;       //!< relative path of tmp dh file (optional)
   std::string ca_cert_file;  //!< relative path of CA certificate file for
                              //!< client verification (optional)
   bool enable_client_verify =
@@ -456,7 +456,8 @@ inline bool init_ntls_context_helper(asio::ssl::context &context,
 
     // Set verification mode
     if (conf.enable_client_verify) {
-      context.set_verify_mode(asio::ssl::verify_peer, ec);
+      context.set_verify_mode(
+          asio::ssl::verify_peer | asio::ssl::verify_fail_if_no_peer_cert, ec);
     }
     else {
       context.set_verify_mode(asio::ssl::verify_none, ec);
