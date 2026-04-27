@@ -14,7 +14,11 @@
  * limitations under the License.
  */
 #pragma once
+#if __cpp_lib_expected >= 202202L && __cplusplus > 202002L
+#include <expected>
+#else
 #include "tl/expected.hpp"
+#endif
 namespace ylt {
 #if __cpp_lib_expected >= 202202L && __cplusplus > 202002L
 template <class T, class E>
