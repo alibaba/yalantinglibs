@@ -20,6 +20,7 @@ if (YLT_ENABLE_SSL)
         set(TEST_SRCS
                 ${TEST_SRCS}
                 test_rpc_ssl_mutual_auth.cpp
+                test_rpc_ssl_reconnect.cpp
         )
 endif()
 set(TEST_COMMON
