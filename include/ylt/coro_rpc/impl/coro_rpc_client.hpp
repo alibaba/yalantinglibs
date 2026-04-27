@@ -1153,7 +1153,13 @@ class coro_rpc_client {
                << ", the first endpoint is: " << (*eps)[0].address().to_string()
                << ":" << std::to_string((*eps)[0].port())
                << ", client_id: " << config_.client_id;
-    ec = co_await coro_io::async_connect(soc, *eps);
+    // Use socket_wrapper_.visit() to get a fresh socket reference instead of
+    // the `soc` parameter, which may dangle if reset() destroyed and
+    // recreated ssl_stream_ above.
+    ec = co_await control_->socket_wrapper_.visit(
+        [eps](auto &fresh_soc) {
+          return coro_io::async_connect(fresh_soc, *eps);
+        });
     std::error_code ignore_ec;
     timer_->cancel(ignore_ec);
     if (control_->is_timeout_) {
@@ -1235,11 +1241,11 @@ class coro_rpc_client {
 
   /*
    * buffer layout
-   * ┌────────────────┬────────────────┐
-   * │req_header      │args            │
-   * ├────────────────┼────────────────┤
-   * │REQ_HEADER_LEN  │variable length │
-   * └────────────────┴────────────────┘
+   * 閳瑰备鏀㈤埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞顑芥敘閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳?
+   * 閳逛拷eq_header      閳逛繘rgs            閳?
+   * 閳规壕鏀㈤埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞灏栨敘閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳?
+   * 閳逛縼EQ_HEADER_LEN  閳瑰€俛riable length 閳?
+   * 閳规柡鏀㈤埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞绮规敘閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳?
    */
   template <auto func, typename... Args>
   std::vector<std::byte> prepare_buffer(uint32_t &id,
@@ -1455,10 +1461,6 @@ class coro_rpc_client {
       std::shared_ptr<coro_rpc_client::control_t> control) {
     bool expected = false;
     if (!control->has_closed_.compare_exchange_strong(expected, true)) {
-      co_await coro_io::post(
-          []() {
-          },
-          control->executor_);  // post to control ioc
       co_return;
     }
     co_await coro_io::post(
