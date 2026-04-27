@@ -1461,6 +1461,10 @@ class coro_rpc_client {
       std::shared_ptr<coro_rpc_client::control_t> control) {
     bool expected = false;
     if (!control->has_closed_.compare_exchange_strong(expected, true)) {
+      co_await coro_io::post(
+          []() {
+          },
+          control->executor_);  // drain: wait for any pending close_socket_async dispatch
       co_return;
     }
     co_await coro_io::post(
