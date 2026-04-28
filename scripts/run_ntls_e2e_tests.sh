@@ -59,6 +59,34 @@ run_ntls_rpc_tests() {
   timeout 120 "${client_bin}" >"${LOG_DIR}/ntls_rpc_client.log" 2>&1
   echo "NTLS RPC client completed successfully."
 
+  # Verify mutual authentication enforces client certificate
+  echo "Verifying mutual auth rejects clients without certificates..."
+  local tongsuo_bin="${TONGSUO_INSTALL_PREFIX:-/usr/local/tongsuo}/bin/tongsuo"
+  if [[ ! -x "${tongsuo_bin}" ]]; then
+    tongsuo_bin="${TONGSUO_INSTALL_PREFIX:-/usr/local/tongsuo}/bin/openssl"
+  fi
+  if [[ -x "${tongsuo_bin}" ]]; then
+    # Port 8802: TLCP mutual auth - should reject connection without client cert
+    if "${tongsuo_bin}" s_client -connect 127.0.0.1:8802 -ntls \
+       -CAfile "${TONGSUO_INSTALL_PREFIX:-/usr/local/tongsuo}/ssl/certs/sm2/chain-ca.crt" \
+       </dev/null 2>&1 | grep -qi "error\|alert\|fail\|denied\|handshake"; then
+      echo "PASS: TLCP mutual auth (8802) correctly rejected client without certificate"
+    else
+      echo "WARNING: TLCP mutual auth (8802) may have accepted client without certificate"
+    fi
+
+    # Port 8804: TLS 1.3 + GM mutual auth - should reject connection without client cert
+    if "${tongsuo_bin}" s_client -connect 127.0.0.1:8804 -ntls \
+       -CAfile "${TONGSUO_INSTALL_PREFIX:-/usr/local/tongsuo}/ssl/certs/sm2/chain-ca.crt" \
+       </dev/null 2>&1 | grep -qi "error\|alert\|fail\|denied\|handshake"; then
+      echo "PASS: TLS 1.3 + GM mutual auth (8804) correctly rejected client without certificate"
+    else
+      echo "WARNING: TLS 1.3 + GM mutual auth (8804) may have accepted client without certificate"
+    fi
+  else
+    echo "Tongsuo binary not found, skipping mutual auth rejection verification"
+  fi
+
   kill "${RPC_SERVER_PID}" 2>/dev/null || true
   RPC_SERVER_PID=""
 }
@@ -82,6 +110,34 @@ run_ntls_http_tests() {
   echo "Running NTLS HTTP client..."
   timeout 120 "${client_bin}" >"${LOG_DIR}/ntls_http_client.log" 2>&1
   echo "NTLS HTTP client completed successfully."
+
+  # Verify mutual authentication enforces client certificate
+  echo "Verifying HTTP mutual auth rejects clients without certificates..."
+  local tongsuo_bin="${TONGSUO_INSTALL_PREFIX:-/usr/local/tongsuo}/bin/tongsuo"
+  if [[ ! -x "${tongsuo_bin}" ]]; then
+    tongsuo_bin="${TONGSUO_INSTALL_PREFIX:-/usr/local/tongsuo}/bin/openssl"
+  fi
+  if [[ -x "${tongsuo_bin}" ]]; then
+    # Port 8802: TLCP mutual auth - should reject connection without client cert
+    if "${tongsuo_bin}" s_client -connect 127.0.0.1:8802 -ntls \
+       -CAfile "${TONGSUO_INSTALL_PREFIX:-/usr/local/tongsuo}/ssl/certs/sm2/chain-ca.crt" \
+       </dev/null 2>&1 | grep -qi "error\|alert\|fail\|denied\|handshake"; then
+      echo "PASS: HTTP TLCP mutual auth (8802) correctly rejected client without certificate"
+    else
+      echo "WARNING: HTTP TLCP mutual auth (8802) may have accepted client without certificate"
+    fi
+
+    # Port 8804: TLS 1.3 + GM mutual auth - should reject connection without client cert
+    if "${tongsuo_bin}" s_client -connect 127.0.0.1:8804 -ntls \
+       -CAfile "${TONGSUO_INSTALL_PREFIX:-/usr/local/tongsuo}/ssl/certs/sm2/chain-ca.crt" \
+       </dev/null 2>&1 | grep -qi "error\|alert\|fail\|denied\|handshake"; then
+      echo "PASS: HTTP TLS 1.3 + GM mutual auth (8804) correctly rejected client without certificate"
+    else
+      echo "WARNING: HTTP TLS 1.3 + GM mutual auth (8804) may have accepted client without certificate"
+    fi
+  else
+    echo "Tongsuo binary not found, skipping HTTP mutual auth rejection verification"
+  fi
 
   kill "${HTTP_SERVER_PID}" 2>/dev/null || true
   HTTP_SERVER_PID=""

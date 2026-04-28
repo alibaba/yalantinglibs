@@ -76,6 +76,10 @@
 #include "inject_action.hpp"
 #endif
 
+#ifdef YLT_ENABLE_SSL
+#include <openssl/ssl.h>
+#endif
+
 #ifdef GENERATE_BENCHMARK_DATA
 #include <fstream>
 #endif
@@ -196,6 +200,10 @@ class coro_rpc_client {
     bool enable_tcp_no_delay = true;
     std::filesystem::path ssl_cert_path{};
     std::string ssl_domain{};
+    std::filesystem::path
+        client_cert_file{};  // Client certificate for mutual authentication
+    std::filesystem::path
+        client_key_file{};  // Client private key for mutual authentication
   };
 #ifdef YLT_ENABLE_NTLS
   struct tcp_with_ntls_config {
@@ -303,6 +311,11 @@ class coro_rpc_client {
       ELOG_INFO << "init ssl: " << config.ssl_domain;
       auto &cert_file = config.ssl_cert_path;
       ELOG_INFO << "current path: " << std::filesystem::current_path().string();
+
+      // Set lower security level for test certificates (OpenSSL 3.0
+      // compatibility)
+      SSL_CTX_set_security_level(ssl_ctx_.native_handle(), 0);
+
       if (file_exists(cert_file)) {
         ELOG_INFO << "load " << cert_file.string();
         ssl_ctx_.load_verify_file(cert_file.string());
@@ -311,9 +324,48 @@ class coro_rpc_client {
         ELOG_INFO << "no certificate file " << cert_file.string();
         return ssl_init_ret_;
       }
+
+      // Load client certificate and key for mutual authentication
+      if (!config.client_cert_file.empty() || !config.client_key_file.empty()) {
+        if (config.client_cert_file.empty() || config.client_key_file.empty()) {
+          ELOG_ERROR << "Both client certificate and key must be provided for "
+                        "mutual authentication";
+          return ssl_init_ret_;
+        }
+
+        if (file_exists(config.client_cert_file)) {
+          ELOG_INFO << "load client certificate: "
+                    << config.client_cert_file.string();
+          ssl_ctx_.use_certificate_chain_file(config.client_cert_file.string());
+        }
+        else {
+          ELOG_ERROR << "client certificate file not found: "
+                     << config.client_cert_file.string();
+          return ssl_init_ret_;
+        }
+
+        if (file_exists(config.client_key_file)) {
+          ELOG_INFO << "load client private key: "
+                    << config.client_key_file.string();
+          ssl_ctx_.use_private_key_file(config.client_key_file.string(),
+                                        asio::ssl::context::pem);
+        }
+        else {
+          ELOG_ERROR << "client key file not found: "
+                     << config.client_key_file.string();
+          return ssl_init_ret_;
+        }
+        ELOG_INFO << "client certificate loaded for mutual authentication";
+      }
+
       ssl_ctx_.set_verify_mode(asio::ssl::verify_peer);
-      ssl_ctx_.set_verify_callback(
-          asio::ssl::host_name_verification(config.ssl_domain));
+      // Set hostname verification for DNS names (skip for IP addresses and
+      // empty)
+      if (!config.ssl_domain.empty() && config.ssl_domain != "127.0.0.1" &&
+          config.ssl_domain != "localhost") {
+        ssl_ctx_.set_verify_callback(
+            asio::ssl::host_name_verification(config.ssl_domain));
+      }
       auto init_result = control_->socket_wrapper_.init_client(
           ssl_ctx_, config.enable_tcp_no_delay);
       if (!init_result) {
@@ -509,13 +561,15 @@ class coro_rpc_client {
         }
       }
 
-      // Set verification mode - use same approach as HTTP client
+      // Set verification mode
       if (config.enable_client_verify) {
         ssl_ctx_.set_verify_mode(asio::ssl::verify_peer);
-        // Note: Skip host_name_verification for NTLS as it may not be
-        // compatible The server certificate will still be verified against CA
-        // ssl_ctx_.set_verify_callback(
-        //    asio::ssl::host_name_verification(config.ssl_domain));
+        // Set hostname verification for DNS names (skip for IP addresses)
+        if (!config.ssl_domain.empty() && config.ssl_domain != "127.0.0.1" &&
+            config.ssl_domain != "localhost") {
+          ssl_ctx_.set_verify_callback(
+              asio::ssl::host_name_verification(config.ssl_domain));
+        }
       }
       else {
         ssl_ctx_.set_verify_mode(asio::ssl::verify_none);
@@ -650,9 +704,51 @@ class coro_rpc_client {
                               .ssl_domain = std::move(ssl_domain)};
     }
     else {
-      auto &conf = std::get<tcp_with_ssl_config>(config_.socket_config);
+      auto& conf = std::get<tcp_with_ssl_config>(config_.socket_config);
       conf.ssl_cert_path = std::move(ssl_cert_path);
       conf.ssl_domain = domain = std::move(ssl_domain);
+    }
+    return init_socket_wrapper(
+        std::get<tcp_with_ssl_config>(config_.socket_config));
+  }
+
+  /*!
+   * Initialize SSL with client certificate for mutual authentication
+   * @param cert_base_path Base path for certificate files
+   * @param cert_file_name CA certificate file name for server verification
+   * @param client_cert_file Client certificate file name for mutual
+   * authentication
+   * @param client_key_file Client private key file name for mutual
+   * authentication
+   * @param domain Server domain name
+   * @return true if initialization successful
+   */
+  [[nodiscard]] bool init_ssl(std::string_view cert_base_path,
+                              std::string_view cert_file_name,
+                              std::string_view client_cert_file,
+                              std::string_view client_key_file,
+                              std::string_view domain = "localhost") {
+    std::string ssl_domain = std::string{domain};
+    std::string ssl_cert_path =
+        std::filesystem::path(cert_base_path).append(cert_file_name).string();
+    std::string ssl_client_cert_path =
+        std::filesystem::path(cert_base_path).append(client_cert_file).string();
+    std::string ssl_client_key_path =
+        std::filesystem::path(cert_base_path).append(client_key_file).string();
+
+    if (config_.socket_config.index() != 1) {
+      config_.socket_config = tcp_with_ssl_config{
+          .ssl_cert_path = std::move(ssl_cert_path),
+          .ssl_domain = std::move(ssl_domain),
+          .client_cert_file = std::move(ssl_client_cert_path),
+          .client_key_file = std::move(ssl_client_key_path)};
+    }
+    else {
+      auto &conf = std::get<tcp_with_ssl_config>(config_.socket_config);
+      conf.ssl_cert_path = std::move(ssl_cert_path);
+      conf.ssl_domain = std::move(ssl_domain);
+      conf.client_cert_file = std::move(ssl_client_cert_path);
+      conf.client_key_file = std::move(ssl_client_key_path);
     }
     return init_socket_wrapper(
         std::get<tcp_with_ssl_config>(config_.socket_config));
@@ -1056,7 +1152,13 @@ class coro_rpc_client {
                << ", the first endpoint is: " << (*eps)[0].address().to_string()
                << ":" << std::to_string((*eps)[0].port())
                << ", client_id: " << config_.client_id;
-    ec = co_await coro_io::async_connect(soc, *eps);
+    // Use socket_wrapper_.visit() to get a fresh socket reference instead of
+    // the `soc` parameter, which may dangle if reset() destroyed and
+    // recreated ssl_stream_ above.
+    ec = co_await control_->socket_wrapper_.visit(
+        [eps](auto &fresh_soc) {
+          return coro_io::async_connect(fresh_soc, *eps);
+        });
     std::error_code ignore_ec;
     timer_->cancel(ignore_ec);
     if (control_->is_timeout_) {
@@ -1138,11 +1240,11 @@ class coro_rpc_client {
 
   /*
    * buffer layout
-   * ┌────────────────┬────────────────┐
-   * │req_header      │args            │
-   * ├────────────────┼────────────────┤
-   * │REQ_HEADER_LEN  │variable length │
-   * └────────────────┴────────────────┘
+   * 閳瑰备鏀㈤埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞顑芥敘閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳?
+   * 閳逛拷eq_header      閳逛繘rgs            閳?
+   * 閳规壕鏀㈤埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞灏栨敘閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳?
+   * 閳逛縼EQ_HEADER_LEN  閳瑰€俛riable length 閳?
+   * 閳规柡鏀㈤埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞绮规敘閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳?
    */
   template <auto func, typename... Args>
   std::vector<std::byte> prepare_buffer(uint32_t &id,
@@ -1361,7 +1463,7 @@ class coro_rpc_client {
       co_await coro_io::post(
           []() {
           },
-          control->executor_);  // post to control ioc
+          control->executor_);  // drain: wait for any pending close_socket_async dispatch
       co_return;
     }
     co_await coro_io::post(

@@ -167,6 +167,15 @@ struct socket_wrapper_t {
       socket_->shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
       socket_->close(ignored_ec);
     }
+#ifdef YLT_ENABLE_SSL
+    // Do NOT destroy ssl_stream_ here. Closing the socket cancels pending
+    // async SSL operations, but on Windows IOCP their completion handlers
+    // may be dequeued AFTER any asio::post handler (LIFO ordering). If we
+    // destroy ssl_stream_ (even via asio::post), the cancellation completion
+    // handler would access freed SSL memory. Instead, leave ssl_stream_ alive
+    // so pending completions can safely reference it. It will be cleaned up
+    // later by init_ssl() (during reset) or by the destructor.
+#endif
   }
 
   coro_io::endpoint remote_endpoint() {
@@ -196,6 +205,14 @@ struct socket_wrapper_t {
   using tcp_socket_t = asio::ip::tcp::socket;
 #ifdef YLT_ENABLE_SSL
   void init_ssl(asio::ssl::context &ssl_ctx) {
+    // If an old ssl_stream_ exists, destroy it directly.
+    // This is safe because init_ssl() is only called from reset(), which
+    // happens after the cancelled async_connect coroutine has already
+    // completed (its completion handler has run), so no pending async
+    // operations reference the old ssl_stream_.
+    if (ssl_stream_) {
+      ssl_stream_.reset();
+    }
     ssl_stream_ = std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
         *socket_, ssl_ctx);
   }

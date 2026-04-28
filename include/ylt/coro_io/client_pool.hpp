@@ -207,13 +207,14 @@ class client_pool : public std::enable_shared_from_this<
     ELOG_WARN << "reconnect client{" << client.get() << "},host:{"
               << client->get_host() << ":" << client->get_port()
               << "} out of max limit, stop retry. connect failed";
-    alive_detect(client->get_config(), std::move(self)).start([](auto&&) {
-    });
+    typename client_t::config config_copy = client->get_config();
     client = nullptr;
+    alive_detect(std::move(config_copy), std::move(self)).start([](auto&&) {
+    });
   }
 
   static async_simple::coro::Lazy<void> alive_detect(
-      const typename client_t::config& client_config,
+      typename client_t::config client_config,
       std::weak_ptr<client_pool> watcher) {
     std::shared_ptr<client_pool> self = watcher.lock();
     using namespace std::chrono_literals;

@@ -180,7 +180,6 @@ const int verify_peer = SSL_VERIFY_PEER;
 const int verify_fail_if_no_peer_cert = SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
 const int verify_client_once = SSL_VERIFY_CLIENT_ONCE;
 
-  /// 
   /// \param verify_mode 证书校验模式，默认校验
   /// \param full_path ssl 证书名称
   /// \param sni_hostname sni host 名称，默认为url的host
@@ -206,11 +205,80 @@ void test_coro_http_client() {
   print(data.status);
 
   data = co_await client1.async_get(uri2);
-  print(data.status);  
+  print(data.status);
 }
 #endif
 ```
 根据需要，一般情况下init_ssl()可以不调用。
+
+### 双向SSL认证（mTLS）
+
+coro_http 同样支持SSL双向认证，客户端和服务器都需要提供证书进行身份验证。
+
+#### 客户端配置
+
+客户端需要提供自己的证书和私钥：
+
+```cpp
+#ifdef YLT_ENABLE_SSL
+void test_mutual_ssl_client() {
+  coro_http_client client{};
+  // 双向认证：提供CA证书、客户端证书和私钥
+  bool init_ok = client.init_ssl(
+      asio::ssl::verify_peer,  // 验证服务器证书
+      "./certs/ca.crt",        // CA证书，用于验证服务器
+      "127.0.0.1"              // 服务器主机名（SNI）
+  );
+
+  // 使用init_ssl重载方法加载客户端证书
+  // 或者通过config配置客户端证书
+  coro_http_client::config conf;
+  conf.base_path = "./certs";
+  conf.cert_file = "client.crt";  // 客户端证书
+  conf.verify_mode = asio::ssl::verify_peer;
+  conf.domain = "127.0.0.1";
+  client.init_config(conf);
+
+  auto result = client.get("https://127.0.0.1:9001/");
+  if (result.status == 200) {
+    std::cout << "双向认证成功: " << result.resp_body << "\n";
+  }
+}
+#endif
+```
+
+#### 服务端配置
+
+服务端需要配置CA证书来验证客户端：
+
+```cpp
+coro_http_server server(1, 9001);
+
+bool init_ok = server.init_ssl(
+    "./certs/server.crt",   // 服务器证书
+    "./certs/server.key",   // 服务器私钥
+    "",                      // 无密码
+    "./certs/ca.crt",       // CA证书，用于验证客户端
+    true                     // 启用客户端证书验证（强制）
+);
+
+if (!init_ok) {
+  std::cerr << "SSL初始化失败" << std::endl;
+  return;
+}
+
+server.set_http_handler<GET>("/", [](coro_http_request& req,
+                                     coro_http_response& resp) {
+  resp.set_status_and_content(status_type::ok, "Hello Mutual Auth!");
+});
+
+server.sync_start();
+```
+
+**重要说明**：
+- 启用双向认证后，客户端必须提供由服务端指定的CA签发的有效证书
+- 服务器将拒绝没有有效客户端证书的连接
+- 客户端的主机名参数需要与服务器证书中的CN匹配
 
 ## 国密SSL（NTLS）支持
 

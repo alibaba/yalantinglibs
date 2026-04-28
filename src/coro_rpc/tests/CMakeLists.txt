@@ -16,6 +16,13 @@ set(TEST_SRCS
 if (YLT_ENABLE_IBV AND YLT_ENABLE_CUDA)
         set(TEST_SRC ${TEST_SRCS} test_gdr.cpp)
 endif()
+if (YLT_ENABLE_SSL)
+        set(TEST_SRCS
+                ${TEST_SRCS}
+                test_rpc_ssl_mutual_auth.cpp
+                test_rpc_ssl_reconnect.cpp
+        )
+endif()
 set(TEST_COMMON
         rpc_api.cpp
         main.cpp

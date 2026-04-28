@@ -77,6 +77,26 @@ class coro_http_server {
     use_ssl_ = true;
   }
 
+  /*!
+   * Initialize SSL with mutual authentication support
+   * @param cert_file Server certificate file path
+   * @param key_file Server private key file path
+   * @param ca_cert_file CA certificate file path for client verification (empty
+   * to skip)
+   * @param enable_client_verify Enable client certificate verification
+   * @param passwd Server private key password (optional)
+   */
+  void init_ssl(const std::string& cert_file, const std::string& key_file,
+                const std::string& ca_cert_file, bool enable_client_verify,
+                const std::string& passwd = "") {
+    cert_file_ = cert_file;
+    key_file_ = key_file;
+    ca_cert_file_ = ca_cert_file;
+    enable_client_verify_ = enable_client_verify;
+    passwd_ = passwd;
+    use_ssl_ = true;
+  }
+
 #ifdef YLT_ENABLE_NTLS
   /*!
    * Initialize NTLS with dual certificates (signing and encryption)
@@ -810,7 +830,13 @@ class coro_http_server {
 
 #ifdef CINATRA_ENABLE_SSL
     if (!is_transfer_connect && use_ssl_) {
-      conn->init_ssl(cert_file_, key_file_, passwd_);
+      if (!ca_cert_file_.empty() || enable_client_verify_) {
+        conn->init_ssl(cert_file_, key_file_, ca_cert_file_,
+                       enable_client_verify_, passwd_);
+      }
+      else {
+        conn->init_ssl(cert_file_, key_file_, passwd_);
+      }
     }
 #ifdef YLT_ENABLE_NTLS
     else if (!is_transfer_connect && use_ntls_) {
@@ -1174,6 +1200,8 @@ class coro_http_server {
   std::string cert_file_;
   std::string key_file_;
   std::string passwd_;
+  std::string ca_cert_file_;
+  bool enable_client_verify_ = false;
   bool use_ssl_ = false;
 #ifdef YLT_ENABLE_NTLS
   bool use_ntls_ = false;
