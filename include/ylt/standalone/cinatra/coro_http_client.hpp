@@ -140,7 +140,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
 #ifdef YLT_ENABLE_NTLS
     bool use_ntls =
         false;  // if set use_ntls true, cinatra will use NTLS/TLCP protocol.
-#endif  // YLT_ENABLE_NTLS
+#endif          // YLT_ENABLE_NTLS
 #endif
   };
 
@@ -255,7 +255,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       ssl_ctx_->set_verify_mode(verify_mode);
 
       socket_->ssl_stream_ =
-          std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
+          std::make_unique<asio::ssl::stream<asio::ip::tcp::socket&>>(
               socket_->impl_, *ssl_ctx_);
 
       // ssl_ctx_.add_certificate_authority(asio::buffer(CA_PEM));
@@ -401,7 +401,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         // No explicit hostname provided, but verification is requested.
         // Verify the CA chain only (no hostname matching).
         ssl_ctx_->set_verify_callback(
-            [](bool preverified, asio::ssl::verify_context &) {
+            [](bool preverified, asio::ssl::verify_context&) {
               return preverified;
             });
       }
@@ -410,7 +410,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       is_ssl_schema_ = true;
       CINATRA_LOG_INFO << "SSL initialized with client certificate for mutual "
                           "authentication";
-    } catch (std::exception &e) {
+    } catch (std::exception& e) {
       CINATRA_LOG_ERROR << "init ssl failed: " << e.what();
       return false;
     }
@@ -1630,14 +1630,14 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   /*!
    * Initialize NTLS client with dual certificates
    */
-  bool init_ntls_client(const std::string &sign_cert_file,
-                        const std::string &sign_key_file,
-                        const std::string &enc_cert_file,
-                        const std::string &enc_key_file,
-                        const std::string &ca_cert_file = "",
+  bool init_ntls_client(const std::string& sign_cert_file,
+                        const std::string& sign_key_file,
+                        const std::string& enc_cert_file,
+                        const std::string& enc_key_file,
+                        const std::string& ca_cert_file = "",
                         int verify_mode = asio::ssl::verify_none,
-                        const std::string &passwd = "",
-                        const std::string &sni_hostname = "") {
+                        const std::string& passwd = "",
+                        const std::string& sni_hostname = "") {
     if (has_init_ssl_) {
       return true;
     }
@@ -1720,7 +1720,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
       else if (verify_mode != asio::ssl::verify_none) {
         ssl_ctx_->set_verify_callback(
-            [](bool preverified, asio::ssl::verify_context &) {
+            [](bool preverified, asio::ssl::verify_context&) {
               return preverified;
             });
       }
@@ -1737,11 +1737,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
    * Initialize NTLS client with TLS 1.3 + GM single certificate mode (RFC 8998)
    */
   bool init_ntls_tls13_gm_client(
-      const std::string &gm_cert_file = "", const std::string &gm_key_file = "",
-      const std::string &ca_cert_file = "",
+      const std::string& gm_cert_file = "", const std::string& gm_key_file = "",
+      const std::string& ca_cert_file = "",
       int verify_mode = asio::ssl::verify_none,
-      const std::string &cipher_suites = "TLS_SM4_GCM_SM3:TLS_SM4_CCM_SM3",
-      const std::string &passwd = "", const std::string &sni_hostname = "") {
+      const std::string& cipher_suites = "TLS_SM4_GCM_SM3:TLS_SM4_CCM_SM3",
+      const std::string& passwd = "", const std::string& sni_hostname = "") {
     if (has_init_ssl_) {
       return true;
     }
@@ -1820,7 +1820,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       }
       else if (verify_mode != asio::ssl::verify_none) {
         ssl_ctx_->set_verify_callback(
-            [](bool preverified, asio::ssl::verify_context &) {
+            [](bool preverified, asio::ssl::verify_context&) {
               return preverified;
             });
       }

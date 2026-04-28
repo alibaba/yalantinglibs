@@ -359,9 +359,9 @@ class coro_rpc_client {
       }
 
       ssl_ctx_.set_verify_mode(asio::ssl::verify_peer);
-      // Set hostname verification for DNS names (skip for IP addresses and empty)
-      if (!config.ssl_domain.empty() &&
-          config.ssl_domain != "127.0.0.1" &&
+      // Set hostname verification for DNS names (skip for IP addresses and
+      // empty)
+      if (!config.ssl_domain.empty() && config.ssl_domain != "127.0.0.1" &&
           config.ssl_domain != "localhost") {
         ssl_ctx_.set_verify_callback(
             asio::ssl::host_name_verification(config.ssl_domain));
@@ -565,8 +565,7 @@ class coro_rpc_client {
       if (config.enable_client_verify) {
         ssl_ctx_.set_verify_mode(asio::ssl::verify_peer);
         // Set hostname verification for DNS names (skip for IP addresses)
-        if (!config.ssl_domain.empty() &&
-            config.ssl_domain != "127.0.0.1" &&
+        if (!config.ssl_domain.empty() && config.ssl_domain != "127.0.0.1" &&
             config.ssl_domain != "localhost") {
           ssl_ctx_.set_verify_callback(
               asio::ssl::host_name_verification(config.ssl_domain));
@@ -705,7 +704,7 @@ class coro_rpc_client {
                               .ssl_domain = std::move(ssl_domain)};
     }
     else {
-      auto &conf = std::get<tcp_with_ssl_config>(config_.socket_config);
+      auto& conf = std::get<tcp_with_ssl_config>(config_.socket_config);
       conf.ssl_cert_path = std::move(ssl_cert_path);
       conf.ssl_domain = domain = std::move(ssl_domain);
     }

@@ -86,9 +86,9 @@ class coro_http_server {
    * @param enable_client_verify Enable client certificate verification
    * @param passwd Server private key password (optional)
    */
-  void init_ssl(const std::string &cert_file, const std::string &key_file,
-                const std::string &ca_cert_file, bool enable_client_verify,
-                const std::string &passwd = "") {
+  void init_ssl(const std::string& cert_file, const std::string& key_file,
+                const std::string& ca_cert_file, bool enable_client_verify,
+                const std::string& passwd = "") {
     cert_file_ = cert_file;
     key_file_ = key_file;
     ca_cert_file_ = ca_cert_file;

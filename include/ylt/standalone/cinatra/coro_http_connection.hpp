@@ -115,8 +115,8 @@ class coro_http_connection
    * @param passwd Server private key password (optional)
    * @return true if initialization successful
    */
-  bool init_ssl(const std::string &cert_file, const std::string &key_file,
-                const std::string &ca_cert_file, bool enable_client_verify,
+  bool init_ssl(const std::string& cert_file, const std::string& key_file,
+                const std::string& ca_cert_file, bool enable_client_verify,
                 std::string passwd = "") {
     unsigned long ssl_options = asio::ssl::context::default_workarounds |
                                 asio::ssl::context::no_sslv2 |
@@ -177,9 +177,9 @@ class coro_http_connection
       }
 
       socket_wrapper_.ssl_stream() =
-          std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
+          std::make_unique<asio::ssl::stream<asio::ip::tcp::socket&>>(
               *socket_wrapper_.socket(), *ssl_ctx_);
-    } catch (const std::exception &e) {
+    } catch (const std::exception& e) {
       CINATRA_LOG_ERROR << "init ssl failed, reason: " << e.what();
       return false;
     }
