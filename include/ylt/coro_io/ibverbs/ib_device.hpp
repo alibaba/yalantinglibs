@@ -279,7 +279,7 @@ class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
     if (gid_index_ >= 0) {
       if (auto ec = ibv_query_gid(ctx_.get(), conf.port, gid_index_, &gid_);
           ec) {
-        auto err_code = std::make_error_code(std::errc{ec});
+        auto err_code = std::make_error_code(std::errc{errno});
         ELOG_ERROR << "IBDevice failed to query port " << conf.port
                    << " of device " << name_ << " by gid_index:" << gid_index_
                    << ", error msg: " << err_code.message();

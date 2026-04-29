@@ -996,7 +996,7 @@ class ib_socket_t {
     int flags =
         IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS;
     if (auto ec = ibv_modify_qp(state_->qp_.get(), &attr, flags); ec) {
-      auto err_code = std::make_error_code(std::errc{ec});
+      auto err_code = std::make_error_code(std::errc{errno});
       ELOG_ERROR << "modify qp to init failed: " << err_code.message()
                  << ", QP=" << state_->qp_->qp_num;
       throw std::system_error(err_code);
@@ -1029,7 +1029,7 @@ class ib_socket_t {
                 IBV_QP_RQ_PSN | IBV_QP_MAX_DEST_RD_ATOMIC |
                 IBV_QP_MIN_RNR_TIMER;
     if (auto ec = ibv_modify_qp(state_->qp_.get(), &attr, flags); ec) {
-      auto err_code = std::make_error_code(std::errc{ec});
+      auto err_code = std::make_error_code(std::errc{errno});
       ELOG_ERROR << "modify qp to rtr failed: " << err_code.message()
                  << ", QP=" << state_->qp_->qp_num;
       throw std::system_error(err_code);
@@ -1047,7 +1047,7 @@ class ib_socket_t {
     int flags = IBV_QP_STATE | IBV_QP_TIMEOUT | IBV_QP_RETRY_CNT |
                 IBV_QP_RNR_RETRY | IBV_QP_SQ_PSN | IBV_QP_MAX_QP_RD_ATOMIC;
     if (auto ec = ibv_modify_qp(state_->qp_.get(), &attr, flags); ec != 0) {
-      auto err_code = std::make_error_code(std::errc{ec});
+      auto err_code = std::make_error_code(std::errc{errno});
       ELOG_ERROR << "modify qp to rts failed: " << err_code.message()
                  << ", QP=" << state_->qp_->qp_num;
       throw std::system_error(err_code);
