@@ -260,8 +260,14 @@ class coro_rpc_server_base {
           p.setValue(errc_);
         }
         else {
-          ELOG_ERROR << "server quit with error: " << res.value().message();
-          p.setValue(res.value());
+          auto &value = res.value();
+          if (value.ec == coro_rpc::errc::operation_canceled) {
+            ELOG_INFO << "server quit: " << value.message();
+          }
+          else {
+            ELOG_ERROR << "server quit with error: " << value.message();
+          }
+          p.setValue(value);
         }
       });
       return future;
