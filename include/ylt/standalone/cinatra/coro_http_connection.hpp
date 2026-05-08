@@ -78,7 +78,9 @@ class coro_http_connection
       ssl_ctx_->set_options(ssl_options);
       // Set lower security level for test certificates (OpenSSL 3.0
       // compatibility)
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
       SSL_CTX_set_security_level(ssl_ctx_->native_handle(), 0);
+#endif
 
       if (!passwd.empty()) {
         ssl_ctx_->set_password_callback([pwd = std::move(passwd)](auto, auto) {
@@ -128,7 +130,9 @@ class coro_http_connection
       ssl_ctx_->set_options(ssl_options);
       // Set lower security level for test certificates (OpenSSL 3.0
       // compatibility)
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
       SSL_CTX_set_security_level(ssl_ctx_->native_handle(), 0);
+#endif
 
       if (!passwd.empty()) {
         ssl_ctx_->set_password_callback([pwd = std::move(passwd)](auto, auto) {
