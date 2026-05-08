@@ -180,7 +180,9 @@ inline bool init_ssl_context_helper(asio::ssl::context &context,
 
     // Set lower security level for test certificates (OpenSSL 3.0
     // compatibility)
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
     SSL_CTX_set_security_level(context.native_handle(), 0);
+#endif
 
     // Load CA certificate for client verification if provided
     asio::error_code ec;

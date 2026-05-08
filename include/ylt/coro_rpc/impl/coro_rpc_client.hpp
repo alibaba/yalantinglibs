@@ -327,7 +327,9 @@ class coro_rpc_client {
 
       // Set lower security level for test certificates (OpenSSL 3.0
       // compatibility)
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
       SSL_CTX_set_security_level(ssl_ctx_.native_handle(), 0);
+#endif
 
       if (file_exists(cert_file)) {
         ELOG_INFO << "load " << cert_file.string();
