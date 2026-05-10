@@ -36,8 +36,8 @@ inline constexpr std::string_view type_string() {
   constexpr size_t suffix_length = sample.size() - prefix_length - 3;
   auto name = str.substr(prefix_length, str.size() - prefix_length - suffix_length);
 #if defined(_MSC_VER) && !defined(__clang__)
-  // remove msvc specific class/struct/union/enum prefix, enum struct/class must be before enum
-  for (std::string_view prefix : {"class ", "struct ", "union ", "enum class ", "enum struct ", "enum "}) {
+  // remove msvc specific class/struct/union/enum prefix
+  for (std::string_view prefix : {"class ", "struct ", "union ", "enum "}) {
     if (name.starts_with(prefix)) {
       name.remove_prefix(prefix.size());
       break;
