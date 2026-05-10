@@ -34,14 +34,13 @@ inline constexpr std::string_view type_string() {
   constexpr size_t prefix_length = sample.find("int");
   constexpr std::string_view str = get_raw_name<T>();
   constexpr size_t suffix_length = sample.size() - prefix_length - 3;
-  constexpr auto name =
-      str.substr(prefix_length, str.size() - prefix_length - suffix_length);
-#if defined(_MSC_VER)
-  constexpr size_t space_pos = name.find(" ");
-  if constexpr (space_pos != std::string_view::npos) {
-    constexpr auto prefix = name.substr(0, space_pos);
-    if constexpr (prefix != "const" && prefix != "volatile") {
-      return name.substr(space_pos + 1);
+  auto name = str.substr(prefix_length, str.size() - prefix_length - suffix_length);
+#if defined(_MSC_VER) && !defined(__clang__)
+  // remove msvc specific class/struct/union/enum prefix, enum struct/class must be before enum
+  for (std::string_view prefix : {"class ", "struct ", "union ", "enum class ", "enum struct ", "enum "}) {
+    if (name.starts_with(prefix)) {
+      name.remove_prefix(prefix.size());
+      break;
     }
   }
 #endif

@@ -470,12 +470,25 @@ namespace test_type_string {
 struct struct_test {};
 class class_test {};
 union union_test {};
+enum plain_enum { pe_a, pe_b };
+enum class scoped_enum { a, b };
+enum struct scoped_enum_struct { a, b };
+struct class_like {};    // name starts with "class", not the keyword
+struct structural {};    // name starts with "struct", not the keyword
+union union_attr {};     // name starts with "union", not the keyword
 }  // namespace test_type_string
 
 TEST_CASE("test type_string") {
   CHECK(type_string<int>() == "int");
   CHECK(type_string<const int>() == "const int");
   CHECK(type_string<volatile int>() == "volatile int");
+  CHECK(type_string<unsigned int>() == "unsigned int");
+  CHECK(type_string<long long>() == "long long");
+  CHECK(type_string<long double>() == "long double");
+  CHECK(type_string<const unsigned int>() == "const unsigned int");
+  CHECK(type_string<const long long>() == "const long long");
+  CHECK(type_string<const long double>() == "const long double");
+  CHECK(type_string<const volatile int>() == "const volatile int");
 
 #if defined(__clang__)
   CHECK(type_string<int&>() == "int &");
@@ -506,6 +519,31 @@ TEST_CASE("test type_string") {
         "test_type_string::union_test");
   CHECK(type_string<const test_type_string::union_test>() ==
         "const union test_type_string::union_test");
+  CHECK(type_string<test_type_string::plain_enum>() ==
+        "test_type_string::plain_enum");
+  CHECK(type_string<const test_type_string::plain_enum>() ==
+        "const enum test_type_string::plain_enum");
+  CHECK(type_string<test_type_string::scoped_enum>() ==
+        "test_type_string::scoped_enum");
+  CHECK(type_string<const test_type_string::scoped_enum>() ==
+        "const enum class test_type_string::scoped_enum");
+  CHECK(type_string<test_type_string::scoped_enum_struct>() ==
+        "test_type_string::scoped_enum_struct");
+  CHECK(type_string<const test_type_string::scoped_enum_struct>() ==
+        "const enum struct test_type_string::scoped_enum_struct");
+  // types whose names start with a keyword prefix (space-based matching)
+  CHECK(type_string<test_type_string::class_like>() ==
+        "test_type_string::class_like");
+  CHECK(type_string<const test_type_string::class_like>() ==
+        "const struct test_type_string::class_like");
+  CHECK(type_string<test_type_string::structural>() ==
+        "test_type_string::structural");
+  CHECK(type_string<const test_type_string::structural>() ==
+        "const struct test_type_string::structural");
+  CHECK(type_string<test_type_string::union_attr>() ==
+        "test_type_string::union_attr");
+  CHECK(type_string<const test_type_string::union_attr>() ==
+        "const union test_type_string::union_attr");
 #else
   CHECK(type_string<test_type_string::struct_test>() ==
         "test_type_string::struct_test");
@@ -519,6 +557,30 @@ TEST_CASE("test type_string") {
         "test_type_string::union_test");
   CHECK(type_string<const test_type_string::union_test>() ==
         "const test_type_string::union_test");
+  CHECK(type_string<test_type_string::plain_enum>() ==
+        "test_type_string::plain_enum");
+  CHECK(type_string<const test_type_string::plain_enum>() ==
+        "const test_type_string::plain_enum");
+  CHECK(type_string<test_type_string::scoped_enum>() ==
+        "test_type_string::scoped_enum");
+  CHECK(type_string<const test_type_string::scoped_enum>() ==
+        "const test_type_string::scoped_enum");
+  CHECK(type_string<test_type_string::scoped_enum_struct>() ==
+        "test_type_string::scoped_enum_struct");
+  CHECK(type_string<const test_type_string::scoped_enum_struct>() ==
+        "const test_type_string::scoped_enum_struct");
+  CHECK(type_string<test_type_string::class_like>() ==
+        "test_type_string::class_like");
+  CHECK(type_string<const test_type_string::class_like>() ==
+        "const test_type_string::class_like");
+  CHECK(type_string<test_type_string::structural>() ==
+        "test_type_string::structural");
+  CHECK(type_string<const test_type_string::structural>() ==
+        "const test_type_string::structural");
+  CHECK(type_string<test_type_string::union_attr>() ==
+        "test_type_string::union_attr");
+  CHECK(type_string<const test_type_string::union_attr>() ==
+        "const test_type_string::union_attr");
 #endif
 }
 
