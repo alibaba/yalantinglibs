@@ -99,8 +99,7 @@ TEST_CASE("test member value") {
     ((out << "name: " << arr[Is] << ", value: " << std::get<Is>(ref_tp)
           << "\n"),
      ...);
-  }
-  (std::make_index_sequence<arr.size()>{});
+  }(std::make_index_sequence<arr.size()>{});
 
   std::string result = out.str();
   std::cout << out.str();
@@ -473,9 +472,9 @@ union union_test {};
 enum plain_enum { pe_a, pe_b };
 enum class scoped_enum { a, b };
 enum struct scoped_enum_struct { a, b };
-struct class_like {};    // name starts with "class", not the keyword
-struct structural {};    // name starts with "struct", not the keyword
-union union_attr {};     // name starts with "union", not the keyword
+struct class_like {};  // name starts with "class", not the keyword
+struct structural {};  // name starts with "struct", not the keyword
+union union_attr {};   // name starts with "union", not the keyword
 }  // namespace test_type_string
 
 TEST_CASE("test type_string") {

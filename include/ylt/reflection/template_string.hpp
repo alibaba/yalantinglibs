@@ -34,7 +34,8 @@ inline constexpr std::string_view type_string() {
   constexpr size_t prefix_length = sample.find("int");
   constexpr std::string_view str = get_raw_name<T>();
   constexpr size_t suffix_length = sample.size() - prefix_length - 3;
-  auto name = str.substr(prefix_length, str.size() - prefix_length - suffix_length);
+  auto name =
+      str.substr(prefix_length, str.size() - prefix_length - suffix_length);
 #if defined(_MSC_VER) && !defined(__clang__)
   // remove msvc specific class/struct/union/enum prefix
   for (std::string_view prefix : {"class ", "struct ", "union ", "enum "}) {
@@ -108,7 +109,7 @@ constexpr std::pair<bool, std::string_view> try_get_enum_name() {
 // value
 template <typename E, std::int64_t... Is>
 constexpr inline auto get_enum_arr(
-    const std::integer_sequence<std::int64_t, Is...> &) {
+    const std::integer_sequence<std::int64_t, Is...>&) {
   constexpr std::size_t N = sizeof...(Is);
   std::array<std::string_view, N> enum_names = {};
   std::array<E, N> enum_values = {};
@@ -126,24 +127,24 @@ constexpr inline auto get_enum_arr(
   return std::make_tuple(num, enum_values, enum_names);
 }
 
-template <std::size_t N, const std::array<int, N> &arr, size_t... Is>
-constexpr auto array_to_seq(const std::index_sequence<Is...> &) {
+template <std::size_t N, const std::array<int, N>& arr, size_t... Is>
+constexpr auto array_to_seq(const std::index_sequence<Is...>&) {
   return std::integer_sequence<std::int64_t, arr[Is]...>();
 }
 
 // convert array to map
 template <typename E, size_t N, size_t... Is>
 constexpr inline auto get_enum_to_str_map(
-    const std::array<std::string_view, N> &enum_names,
-    const std::array<E, N> &enum_values, const std::index_sequence<Is...> &) {
+    const std::array<std::string_view, N>& enum_names,
+    const std::array<E, N>& enum_values, const std::index_sequence<Is...>&) {
   return frozen::unordered_map<E, frozen::string, sizeof...(Is)>{
       {enum_values[Is], enum_names[Is]}...};
 }
 
 template <typename E, size_t N, size_t... Is>
 constexpr inline auto get_str_to_enum_map(
-    const std::array<std::string_view, N> &enum_names,
-    const std::array<E, N> &enum_values, const std::index_sequence<Is...> &) {
+    const std::array<std::string_view, N>& enum_names,
+    const std::array<E, N>& enum_values, const std::index_sequence<Is...>&) {
   return frozen::unordered_map<frozen::string, E, sizeof...(Is)>{
       {enum_names[Is], enum_values[Is]}...};
 }
@@ -161,7 +162,7 @@ template <bool str_to_enum, typename E>
 constexpr inline auto get_enum_map() {
 #if defined(__clang__) || defined(_MSC_VER) || \
     (defined(__GNUC__) && __GNUC__ > 8)
-  constexpr auto &arr = enum_value<E>::value;
+  constexpr auto& arr = enum_value<E>::value;
   constexpr auto arr_size = arr.size();
   if constexpr (arr_size > 0) {
     // the user has defined a specialization template
