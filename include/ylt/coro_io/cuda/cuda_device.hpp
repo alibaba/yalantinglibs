@@ -16,6 +16,7 @@
 #pragma once
 
 #include <atomic>
+#include <cstdio>
 #include <memory>
 #include <mutex>
 #include <span>
@@ -132,13 +133,33 @@ class cuda_device_t : public std::enable_shared_from_this<cuda_device_t> {
     else {
       name_.clear();
     }
-    ELOG_INFO << "Get cuda device(" << gpu_id_ << "): " << name_;
+    pci_bus_id_ = query_pci_bus_id();
+    ELOG_INFO << "Get cuda device(" << gpu_id_ << "): " << name_
+              << ", PCI: " << pci_bus_id_;
   }
   int get_gpu_id() const noexcept { return gpu_id_; }
   std::string_view name() const noexcept { return name_; }
 
+  // Returns PCI bus ID string in "DDDD:BB:DD.0" format.
+  std::string pci_bus_id() const { return pci_bus_id_; }
+
  private:
+  std::string query_pci_bus_id() const {
+    int domain_id = 0, bus_id = 0, dev_id = 0;
+    YLT_CHECK_CUDA_ERR(cuDeviceGetAttribute(
+        &domain_id, CU_DEVICE_ATTRIBUTE_PCI_DOMAIN_ID, device_));
+    YLT_CHECK_CUDA_ERR(
+        cuDeviceGetAttribute(&bus_id, CU_DEVICE_ATTRIBUTE_PCI_BUS_ID, device_));
+    YLT_CHECK_CUDA_ERR(cuDeviceGetAttribute(
+        &dev_id, CU_DEVICE_ATTRIBUTE_PCI_DEVICE_ID, device_));
+    char buf[64];
+    std::snprintf(buf, sizeof(buf), "%04x:%02x:%02x.0", domain_id, bus_id,
+                  dev_id);
+    return std::string(buf);
+  }
+
   std::string name_;
+  std::string pci_bus_id_;
   int gpu_id_;
   CUcontext context_;
   CUdevice device_;
