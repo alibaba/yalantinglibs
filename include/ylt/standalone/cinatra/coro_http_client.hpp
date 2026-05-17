@@ -2089,6 +2089,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       if (is_ranges) {
         is_keep_alive = true;
       }
+      redirect_uri_.clear();
+      bool is_redirect = parser_.is_location();
+      if (is_redirect)
+        redirect_uri_ = parser_.get_header_value("Location");
+
       if (parser_.is_chunked()) {
         out_buf_ = {};
         is_keep_alive = true;
@@ -2114,11 +2119,6 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         ec = co_await handle_multipart(data, std::move(ctx));
         break;
       }
-
-      redirect_uri_.clear();
-      bool is_redirect = parser_.is_location();
-      if (is_redirect)
-        redirect_uri_ = parser_.get_header_value("Location");
 
       if (!parser_.get_header_value("Content-Encoding").empty()) {
         if (parser_.get_header_value("Content-Encoding").find("gzip") !=
