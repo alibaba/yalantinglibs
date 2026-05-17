@@ -3146,8 +3146,8 @@ TEST_CASE("test coro http auto redirect with chunked response") {
   coro_http_server server(1, 8090);
   server.set_http_handler<GET>(
       "/chunked_redirect",
-      [](coro_http_request &, coro_http_response &res)
-          -> async_simple::coro::Lazy<void> {
+      [](coro_http_request&,
+         coro_http_response& res) -> async_simple::coro::Lazy<void> {
         res.set_delay(true);
         constexpr std::string_view response =
             "HTTP/1.1 302 Found\r\n"
@@ -3163,7 +3163,7 @@ TEST_CASE("test coro http auto redirect with chunked response") {
         co_return;
       });
   server.set_http_handler<GET>(
-      "/redirect_target", [](coro_http_request &, coro_http_response &res) {
+      "/redirect_target", [](coro_http_request&, coro_http_response& res) {
         res.set_status_and_content(status_type::ok, "redirect ok");
       });
   server.async_start();
