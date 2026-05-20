@@ -757,7 +757,8 @@ class coro_http_server {
 #ifdef __GNUC__
     acceptor_.set_option(tcp::acceptor::reuse_address(true), ec);
 #endif
-    if (auto opt_ec = coro_io::detail::set_ipv6_only_false(acceptor_, *endpoint);
+    if (auto opt_ec =
+            coro_io::detail::set_ipv6_only_false(acceptor_, *endpoint);
         opt_ec) {
       CINATRA_LOG_WARNING << "set v6_only(false) failed: " << opt_ec.message();
     }

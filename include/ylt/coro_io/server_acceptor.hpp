@@ -82,8 +82,8 @@ struct tcp_server_acceptor : public server_acceptor_base {
     using asio::ip::tcp;
     asio::error_code ec;
 
-    auto endpoint = detail::resolve_listen_endpoint(
-        acceptor_->get_executor(), address_, port_, ec);
+    auto endpoint = detail::resolve_listen_endpoint(acceptor_->get_executor(),
+                                                    address_, port_, ec);
     if (!endpoint) {
       ELOG_ERROR << "resolve address " << address_
                  << " error: " << ec.message();

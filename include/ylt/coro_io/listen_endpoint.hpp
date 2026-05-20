@@ -32,8 +32,8 @@ inline std::optional<asio::ip::tcp::endpoint> resolve_listen_endpoint(
 
   ec.clear();
   tcp::resolver resolver(executor);
-  auto it = resolver.resolve(
-      tcp::resolver::query(address, std::to_string(port)), ec);
+  auto it =
+      resolver.resolve(tcp::resolver::query(address, std::to_string(port)), ec);
   if (ec || it == tcp::resolver::iterator{}) {
     return std::nullopt;
   }
