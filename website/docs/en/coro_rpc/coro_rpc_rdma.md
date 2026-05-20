@@ -70,6 +70,46 @@ We conducted some performance tests on coro_rpc between two hosts in a 180Gb RDM
 
 The specific benchmark code can be found [here](https://github.com/alibaba/yalantinglibs/blob/main/src/coro_rpc/benchmark/bench.cpp).
 
+## Automatic GID Selection
+
+In RDMA communication, a GID (Global Identifier) is a global address used to identify a device port. A single RDMA device port may have multiple GID entries (different protocol types, different IP addresses), and the optimal GID must be selected to establish a connection.
+
+coro_rpc implements automatic GID selection logic internally, so users do not need to manually specify a `gid_index`. The selection rules are as follows:
+
+### Filtering Rules
+
+- For RoCE-type GIDs, entries with `ndev_ifindex == 0` (i.e., no associated network device) are excluded
+- IB-type GIDs are not subject to this restriction (the IB protocol does not depend on the IP network stack)
+
+### Priority Ordering
+
+**Device type priority** (high → low):
+
+1. **IB** (InfiniBand)
+2. **RoCE v2** (based on UDP/IP, routable)
+3. **RoCE v1** (based on Ethernet, not routable)
+
+**Address priority within the same type** (high → low):
+
+1. **Global unicast address**: Routable IPv6 or IPv4-mapped global addresses (e.g., `fd03::`, `2001::`, `::ffff:10.x.x.x`)
+2. **Link-local address**: `fe80::/10` or `::ffff:169.254.x.x`, valid only on the local link
+3. **Loopback address**: `::1` or `::ffff:127.x.x.x`
+
+### Example
+
+Using a real GID table from an mlx5 bond device:
+
+| INDEX | GID | Type | Classification |
+|-------|-----|------|----------------|
+| 0 | `fe80::0225:9dff:fe78:82ef` | RoCE v1 | Link-local |
+| 1 | `fe80::0225:9dff:fe78:82ef` | RoCE v2 | Link-local |
+| 2 | `fd03:4516:1090:4e40::1` | RoCE v1 | Global unicast |
+| 3 | `fd03:4516:1090:4e40::1` | RoCE v2 | Global unicast |
+| 4 | `fe80:4516:1090:4e40::1` | RoCE v1 | Link-local |
+| 5 | `fe80:4516:1090:4e40::1` | RoCE v2 | Link-local |
+
+The automatic selection result is **INDEX 3** (RoCE v2 + global unicast address), which is the optimal choice.
+
 ## GPU-direct RDMA Support
 
 GPU-direct RDMA allows direct memory access between GPU memory and remote nodes via RDMA, eliminating the dependency on CPU during data transfers. This feature significantly reduces latency and improves throughput for GPU-related applications.

@@ -14,16 +14,19 @@
  * limitations under the License.
  */
 #pragma once
+#include <arpa/inet.h>
 #include <infiniband/verbs.h>
 #include <netinet/in.h>
 
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <stdexcept>
 #include <string>
 #include <system_error>
 #include <unordered_map>
+#include <vector>
 
 #include "asio/dispatch.hpp"
 #include "asio/ip/address.hpp"
@@ -360,30 +363,133 @@ class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
   ~ib_device_t() { stop_async_event_watcher(); }
 
  private:
-  int ipv6_addr_v4mapped(const struct in6_addr* a) {
-    return ((a->s6_addr32[0] | a->s6_addr32[1]) |
-            (a->s6_addr32[2] ^ htonl(0x0000ffff))) == 0UL ||
-           /* IPv4 encoded multicast addresses */
-           (a->s6_addr32[0] == htonl(0xff0e0000) &&
-            ((a->s6_addr32[1] | (a->s6_addr32[2] ^ htonl(0x0000ffff))) == 0UL));
+  // Address priority rank for GID selection (lower is better)
+  enum class gid_addr_rank : int {
+    global_unicast = 0,  // Normal routable IPv6 or IPv4-mapped global address
+    link_local = 1,      // fe80::/10 or ::ffff:169.254.x.x
+    loopback = 2,        // ::1 or ::ffff:127.x.x.x
+  };
+
+  // Device type priority (lower is better)
+  static int gid_type_priority(uint32_t gid_type) {
+    switch (gid_type) {
+      case IBV_GID_TYPE_IB:
+        return 0;
+      case IBV_GID_TYPE_ROCE_V2:
+        return 1;
+      case IBV_GID_TYPE_ROCE_V1:
+        return 2;
+      default:
+        return 3;
+    }
+  }
+
+  static gid_addr_rank classify_gid_address(const union ibv_gid& gid) {
+    // Check IPv4-mapped address (::ffff:x.x.x.x)
+    bool is_v4_mapped =
+        (gid.raw[0] == 0 && gid.raw[1] == 0 && gid.raw[2] == 0 &&
+         gid.raw[3] == 0 && gid.raw[4] == 0 && gid.raw[5] == 0 &&
+         gid.raw[6] == 0 && gid.raw[7] == 0 && gid.raw[8] == 0 &&
+         gid.raw[9] == 0 && gid.raw[10] == 0xff && gid.raw[11] == 0xff);
+
+    if (is_v4_mapped) {
+      // ::ffff:127.x.x.x → loopback
+      if (gid.raw[12] == 127) {
+        return gid_addr_rank::loopback;
+      }
+      // ::ffff:169.254.x.x → link-local
+      if (gid.raw[12] == 169 && gid.raw[13] == 254) {
+        return gid_addr_rank::link_local;
+      }
+      return gid_addr_rank::global_unicast;
+    }
+
+    // IPv6 loopback ::1
+    static constexpr uint8_t ipv6_loopback[16] = {0, 0, 0, 0, 0, 0, 0, 0,
+                                                  0, 0, 0, 0, 0, 0, 0, 1};
+    if (memcmp(gid.raw, ipv6_loopback, 16) == 0) {
+      return gid_addr_rank::loopback;
+    }
+
+    // fe80::/10 → link-local
+    if ((gid.raw[0] == 0xfe) && ((gid.raw[1] & 0xc0) == 0x80)) {
+      return gid_addr_rank::link_local;
+    }
+
+    return gid_addr_rank::global_unicast;
+  }
+
+ public:
+  // Select best GID from a list of entries. Returns gid_index or -1 if empty.
+  // Exposed as public static for unit testing.
+  static int select_best_gid(const std::vector<ibv_gid_entry>& entries) {
+    if (entries.empty()) {
+      return -1;
+    }
+
+    int best_index = -1;
+    int best_type_prio = 4;
+    gid_addr_rank best_addr_rank = gid_addr_rank::loopback;
+
+    for (auto& entry : entries) {
+      int type_prio = gid_type_priority(entry.gid_type);
+      gid_addr_rank addr_rank = classify_gid_address(entry.gid);
+
+      // Compare: type priority first, then address rank
+      if (type_prio < best_type_prio ||
+          (type_prio == best_type_prio && addr_rank < best_addr_rank)) {
+        best_type_prio = type_prio;
+        best_addr_rank = addr_rank;
+        best_index = static_cast<int>(entry.gid_index);
+      }
+    }
+
+    return best_index;
   }
 
   int find_best_gid_index(int default_gid_index) {
 #ifndef YLT_IBVERBS_DONT_SUPPORT_FIND_GID_INDEX
+    std::vector<ibv_gid_entry> valid_entries;
     ibv_gid_entry gid_entry;
+
     for (int i = 0; i < attr_.gid_tbl_len; i++) {
-      if (auto ret = ibv_query_gid_ex(ctx_.get(), port_, i, &gid_entry, 0)) {
+      if (ibv_query_gid_ex(ctx_.get(), port_, i, &gid_entry, 0)) {
         continue;
       }
-      if ((ipv6_addr_v4mapped((struct in6_addr*)gid_entry.gid.raw) &&
-           gid_entry.gid_type == IBV_GID_TYPE_ROCE_V2) ||
-          gid_entry.gid_type == IBV_GID_TYPE_IB) {
-        return i;
+      // For RoCE types, skip entries without an associated net device
+      if (gid_entry.gid_type != IBV_GID_TYPE_IB &&
+          gid_entry.ndev_ifindex == 0) {
+        continue;
       }
+      valid_entries.push_back(gid_entry);
+    }
+
+    // Debug: print all valid GID entries
+    ELOG_DEBUG << this->name_ << " GID table has " << valid_entries.size()
+               << " valid entries (total table size: " << attr_.gid_tbl_len
+               << ")";
+    for (auto& entry : valid_entries) {
+      char gid_str[INET6_ADDRSTRLEN] = {};
+      inet_ntop(AF_INET6, entry.gid.raw, gid_str, sizeof(gid_str));
+      const char* type_str = entry.gid_type == IBV_GID_TYPE_IB        ? "IB"
+                             : entry.gid_type == IBV_GID_TYPE_ROCE_V2 ? "RoCEv2"
+                             : entry.gid_type == IBV_GID_TYPE_ROCE_V1
+                                 ? "RoCEv1"
+                                 : "Unknown";
+      ELOG_DEBUG << "  gid[" << entry.gid_index << "] type=" << type_str
+                 << " ndev_ifindex=" << entry.ndev_ifindex
+                 << " addr=" << gid_str;
+    }
+
+    int best = select_best_gid(valid_entries);
+    if (best >= 0) {
+      ELOG_DEBUG << "Selected best GID index: " << best;
+      return best;
     }
 #endif
-    ELOG_DEBUG << "selected best device failed, maybe the platform don't "
-                  "support it. return default rdma device gid";
+    ELOG_DEBUG << "select best GID failed, maybe the platform doesn't "
+                  "support it. return default gid index: "
+               << default_gid_index;
     return default_gid_index;
   }
 

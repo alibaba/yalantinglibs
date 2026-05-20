@@ -4,6 +4,7 @@ if(YLT_HAVE_IBVERBS)
 
   add_executable(ibverbs_test
     test_device.cpp
+    test_select_best_gid.cpp
     test_ib_socket.cpp
     main.cpp
   )
