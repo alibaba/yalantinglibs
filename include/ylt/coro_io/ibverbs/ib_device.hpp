@@ -278,7 +278,7 @@ class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
     gid_index_ = conf.use_best_gid_index ? find_best_gid_index(conf.gid_index)
                                          : conf.gid_index;
 
-    ELOG_INFO << name_ << " Active MTU: " << detail::mtu_str(attr_.active_mtu)
+    ELOG_WARN << name_ << " Active MTU: " << detail::mtu_str(attr_.active_mtu)
               << ", "
               << "Max MTU: " << detail::mtu_str(attr_.max_mtu)
               << ", gid index: " << gid_index_;
@@ -465,9 +465,9 @@ class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
     }
 
     // Debug: print all valid GID entries
-    ELOG_DEBUG << this->name_ << " GID table has " << valid_entries.size()
-               << " valid entries (total table size: " << attr_.gid_tbl_len
-               << ")";
+    ELOG_WARN << this->name_ << " GID table has " << valid_entries.size()
+              << " valid entries (total table size: " << attr_.gid_tbl_len
+              << ")";
     for (auto& entry : valid_entries) {
       char gid_str[INET6_ADDRSTRLEN] = {};
       inet_ntop(AF_INET6, entry.gid.raw, gid_str, sizeof(gid_str));
@@ -476,20 +476,20 @@ class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
                              : entry.gid_type == IBV_GID_TYPE_ROCE_V1
                                  ? "RoCEv1"
                                  : "Unknown";
-      ELOG_DEBUG << "  gid[" << entry.gid_index << "] type=" << type_str
-                 << " ndev_ifindex=" << entry.ndev_ifindex
-                 << " addr=" << gid_str;
+      ELOG_WARN << "  gid[" << entry.gid_index << "] type=" << type_str
+                << " ndev_ifindex=" << entry.ndev_ifindex
+                << " addr=" << gid_str;
     }
 
     int best = select_best_gid(valid_entries);
     if (best >= 0) {
-      ELOG_DEBUG << "Selected best GID index: " << best;
+      ELOG_WARN << "Selected best GID index: " << best;
       return best;
     }
 #endif
-    ELOG_DEBUG << "select best GID failed, maybe the platform doesn't "
-                  "support it. return default gid index: "
-               << default_gid_index;
+    ELOG_WARN << "select best GID failed, maybe the platform doesn't "
+                 "support it. return default gid index: "
+              << default_gid_index;
     return default_gid_index;
   }
 
