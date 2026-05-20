@@ -70,6 +70,46 @@ int main() {
 
 具体benchmark的代码[在这里](https://github.com/alibaba/yalantinglibs/blob/main/src/coro_rpc/benchmark/bench.cpp)。
 
+## GID 自动选择
+
+在 RDMA 通信中，GID（Global Identifier）是用于标识设备端口的全局地址。一个 RDMA 设备端口可能对应多个 GID 条目（不同协议类型、不同 IP 地址），需要选择最优的 GID 来建立连接。
+
+coro_rpc 内部实现了 GID 自动选择逻辑，用户无需手动指定 `gid_index`。选择规则如下：
+
+### 过滤规则
+
+- 对于 RoCE 类型的 GID，如果其 `ndev_ifindex == 0`（即没有关联的网络设备），则会被排除
+- IB 类型的 GID 不受此限制（IB 协议不依赖 IP 网络栈）
+
+### 优先级排序
+
+**设备类型优先级**（高 → 低）：
+
+1. **IB**（InfiniBand）
+2. **RoCE v2**（基于 UDP/IP，支持路由）
+3. **RoCE v1**（基于以太网，不可路由）
+
+**同类型下的地址优先级**（高 → 低）：
+
+1. **全局单播地址**：可路由的 IPv6 地址或 IPv4-mapped 全局地址（如 `fd03::`、`2001::`、`::ffff:10.x.x.x`）
+2. **链路本地地址**：`fe80::/10` 或 `::ffff:169.254.x.x`，仅本链路有效
+3. **回环地址**：`::1` 或 `::ffff:127.x.x.x`
+
+### 示例
+
+以一个 mlx5 bond 设备的真实 GID 表为例：
+
+| INDEX | GID | 类型 | 分类 |
+|-------|-----|------|------|
+| 0 | `fe80::0225:9dff:fe78:82ef` | RoCE v1 | 链路本地 |
+| 1 | `fe80::0225:9dff:fe78:82ef` | RoCE v2 | 链路本地 |
+| 2 | `fd03:4516:1090:4e40::1` | RoCE v1 | 全局单播 |
+| 3 | `fd03:4516:1090:4e40::1` | RoCE v2 | 全局单播 |
+| 4 | `fe80:4516:1090:4e40::1` | RoCE v1 | 链路本地 |
+| 5 | `fe80:4516:1090:4e40::1` | RoCE v2 | 链路本地 |
+
+自动选择结果为 **INDEX 3**（RoCE v2 + 全局单播地址），这是最优选择。
+
 ## GPU-direct RDMA 支持
 
 GPU-direct RDMA 允许 GPU 内存和远程节点之间通过 RDMA 直接进行内存访问，消除了数据传输过程中对 CPU 的依赖。这个功能显著降低了 GPU 相关应用程序的延迟并提高了吞吐量。
