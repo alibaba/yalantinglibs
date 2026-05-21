@@ -1896,7 +1896,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       return {false, {}};
     }
 
-    if (u.host.front() == '[') {  // for ipv6
+    if (!u.host.empty() && u.host.front() == '[') {  // for ipv6
       if (u.host.size() > 2)
         u.host = u.host.substr(1, u.host.size() - 2);
     }
