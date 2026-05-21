@@ -9,7 +9,7 @@
 #include <string>
 #include <system_error>
 
-#include "asio/ip/address.hpp"
+#include "listen_endpoint.hpp"
 #include "socket_wrapper.hpp"
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
@@ -81,19 +81,16 @@ struct tcp_server_acceptor : public server_acceptor_base {
     ELOG_INFO << "begin to listen";
     using asio::ip::tcp;
     asio::error_code ec;
-    asio::ip::tcp::resolver::query query(address_, std::to_string(port_));
-    asio::ip::tcp::resolver resolver(acceptor_->get_executor());
-    asio::ip::tcp::resolver::iterator it = resolver.resolve(query, ec);
 
-    asio::ip::tcp::resolver::iterator it_end;
-    if (ec || it == it_end) {
+    auto endpoint = detail::resolve_listen_endpoint(acceptor_->get_executor(),
+                                                    address_, port_, ec);
+    if (!endpoint) {
       ELOG_ERROR << "resolve address " << address_
                  << " error: " << ec.message();
       return listen_errc::bad_address;
     }
 
-    auto endpoint = it->endpoint();
-    acceptor_->open(endpoint.protocol(), ec);
+    acceptor_->open(endpoint->protocol(), ec);
     if (ec) {
       ELOG_ERROR << "open failed, error: " << ec.message();
       return listen_errc::open_error;
@@ -101,7 +98,11 @@ struct tcp_server_acceptor : public server_acceptor_base {
 #ifdef __GNUC__
     acceptor_->set_option(tcp::acceptor::reuse_address(true), ec);
 #endif
-    acceptor_->bind(endpoint, ec);
+    if (auto opt_ec = detail::set_ipv6_only_false(*acceptor_, *endpoint);
+        opt_ec) {
+      ELOG_WARN << "set v6_only(false) failed: " << opt_ec.message();
+    }
+    acceptor_->bind(*endpoint, ec);
     if (ec) {
       ELOG_ERROR << "bind port " << port_ << " error: " << ec.message();
       acceptor_->cancel(ec);

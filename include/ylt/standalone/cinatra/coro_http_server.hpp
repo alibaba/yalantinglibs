@@ -12,6 +12,7 @@
 #include "ylt/coro_io/coro_file.hpp"
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
+#include "ylt/coro_io/listen_endpoint.hpp"
 #include "ylt/coro_io/load_balancer.hpp"
 
 namespace cinatra {
@@ -736,13 +737,10 @@ class coro_http_server {
     using asio::ip::tcp;
     asio::error_code ec;
 
-    asio::ip::tcp::resolver::query query(address_, std::to_string(port_));
-    asio::ip::tcp::resolver resolver(acceptor_.get_executor());
-    asio::ip::tcp::resolver::iterator it = resolver.resolve(query, ec);
-
-    asio::ip::tcp::resolver::iterator it_end;
-    if (ec || it == it_end) {
-      CINATRA_LOG_ERROR << "bad address: " << address_
+    auto endpoint = coro_io::detail::resolve_listen_endpoint(
+        acceptor_.get_executor(), address_, port_, ec);
+    if (!endpoint) {
+      CINATRA_LOG_ERROR << "invalid address: " << address_
                         << " error: " << ec.message();
       if (ec) {
         return ec;
@@ -750,8 +748,7 @@ class coro_http_server {
       return std::make_error_code(std::errc::address_not_available);
     }
 
-    auto endpoint = it->endpoint();
-    acceptor_.open(endpoint.protocol(), ec);
+    acceptor_.open(endpoint->protocol(), ec);
     if (ec) {
       CINATRA_LOG_ERROR << "acceptor open failed"
                         << " error: " << ec.message();
@@ -760,7 +757,12 @@ class coro_http_server {
 #ifdef __GNUC__
     acceptor_.set_option(tcp::acceptor::reuse_address(true), ec);
 #endif
-    acceptor_.bind(endpoint, ec);
+    if (auto opt_ec =
+            coro_io::detail::set_ipv6_only_false(acceptor_, *endpoint);
+        opt_ec) {
+      CINATRA_LOG_WARNING << "set v6_only(false) failed: " << opt_ec.message();
+    }
+    acceptor_.bind(*endpoint, ec);
     if (ec) {
       CINATRA_LOG_ERROR << "bind port: " << port_ << " error: " << ec.message();
       std::error_code ignore_ec;
