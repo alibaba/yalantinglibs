@@ -41,6 +41,7 @@
 #include "common_service.hpp"
 #include "coro_connection.hpp"
 #include "ylt/coro_io/coro_io.hpp"
+#include "ylt/coro_io/ibverbs/ib_device.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
 #include "ylt/coro_rpc/impl/expected.hpp"
 namespace coro_rpc {
@@ -109,7 +110,8 @@ class coro_rpc_server_base {
         port_(config.port),
         conn_timeout_duration_(config.conn_timeout_duration),
         flag_{stat::init},
-        is_enable_tcp_no_delay_(config.is_enable_tcp_no_delay) {
+        is_enable_tcp_no_delay_(config.is_enable_tcp_no_delay),
+        numa_id_(config.thread_pool_numa_id) {
 #ifdef YLT_ENABLE_SSL
     if (config.ssl_config) {
       init_ssl_context_helper(context_, config.ssl_config.value());
@@ -134,6 +136,10 @@ class coro_rpc_server_base {
 #ifdef YLT_ENABLE_IBV
   void init_ibv(const coro_io::ib_socket_t::config_t &conf = {}) {
     ibv_config_ = conf;
+    if (numa_id_ == -1) {
+      auto device = conf.device? conf.device : coro_io::get_global_ib_device();
+      numa_id_ = device->get_numa_id();
+    }
   }
 #endif
 
@@ -170,6 +176,10 @@ class coro_rpc_server_base {
         return make_error_future(
             coro_rpc::err_code{coro_rpc::errc::server_has_ran});
       }
+      if (numa_max_node() > 1 && numa_id_ != -1) {
+        ELOG_INFO << "server " << address_  << ":" << port_<< " thread pool will run on numa node id: " << numa_id_;
+      }
+      pool_.run_at_numa_node(numa_id_);
       errc_ = listen();
       if (!errc_) {
         if constexpr (requires(typename server_config::executor_pool_t &pool) {
@@ -545,5 +555,6 @@ class coro_rpc_server_base {
 #ifdef YLT_ENABLE_IBV
   std::optional<coro_io::ib_socket_t::config_t> ibv_config_;
 #endif
+  int numa_id_ = -1;
 };
 }  // namespace coro_rpc

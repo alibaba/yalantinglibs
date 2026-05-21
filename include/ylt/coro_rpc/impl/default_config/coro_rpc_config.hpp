@@ -43,6 +43,7 @@ struct config_base {
 #ifdef YLT_ENABLE_IBV
   std::optional<coro_io::ib_socket_t::config_t> ibv_config = std::nullopt;
 #endif
+  int thread_pool_numa_id = -1;
 };
 
 struct config_t : public config_base {
