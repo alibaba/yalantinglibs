@@ -48,7 +48,7 @@ TEST_CASE("test server acceptor") {
     coro_rpc_server server(static_cast<size_t>(1),
                            static_cast<unsigned short>(8826),
                            std::string("::"));
-    const auto &acceptors = server.get_acceptors();
+    const auto& acceptors = server.get_acceptors();
 #if defined(__linux__)
     REQUIRE(acceptors.size() == 2);
     CHECK(acceptors[0]->address() == "::");
@@ -64,8 +64,7 @@ TEST_CASE("test server acceptor") {
 
   SUBCASE("test ipv6 any accepts ipv4 and ipv6 rpc clients") {
     coro_rpc_server server(static_cast<size_t>(1),
-                           static_cast<unsigned short>(0),
-                           std::string("::"));
+                           static_cast<unsigned short>(0), std::string("::"));
     server.register_handler<hello>();
 
     auto res = server.async_start();
