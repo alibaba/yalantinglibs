@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 
 #include "cinatra/coro_http_client.hpp"
 #include "cinatra/coro_http_response.hpp"
@@ -216,7 +217,14 @@ class coro_http_server {
         });
       }
 
-      accept().start([p = std::move(promise), this](auto &&res) mutable {
+      if (acceptor_v4_) {
+        accept(*acceptor_v4_, acceptor_v4_close_waiter_)
+            .via(out_ctx_ == nullptr ? pool_->get_executor() : out_executor_.get())
+            .detach();
+      }
+
+      accept(acceptor_, acceptor_close_waiter_).start(
+          [p = std::move(promise), this](auto &&res) mutable {
         if (res.hasError()) {
           errc_ = std::make_error_code(std::errc::io_error);
           p.setValue(errc_);
@@ -757,9 +765,20 @@ class coro_http_server {
 #ifdef __GNUC__
     acceptor_.set_option(tcp::acceptor::reuse_address(true), ec);
 #endif
-    if (auto opt_ec =
-            coro_io::detail::set_ipv6_only_false(acceptor_, *endpoint);
-        opt_ec) {
+    bool need_dual_stack = false;
+#if defined(__linux__)
+    need_dual_stack = endpoint->protocol() == tcp::v6() &&
+                      coro_io::detail::is_ipv6_any_address(address_);
+#endif
+    if (need_dual_stack) {
+      acceptor_.set_option(asio::ip::v6_only(true), ec);
+      if (ec) {
+        CINATRA_LOG_WARNING << "set v6_only(true) failed: " << ec.message();
+      }
+    }
+    else if (auto opt_ec =
+                 coro_io::detail::set_ipv6_only_false(acceptor_, *endpoint);
+             opt_ec) {
       CINATRA_LOG_WARNING << "set v6_only(false) failed: " << opt_ec.message();
     }
     acceptor_.bind(*endpoint, ec);
@@ -787,6 +806,45 @@ class coro_http_server {
       return ec;
     }
     port_ = end_point.port();
+
+    if (need_dual_stack) {
+      acceptor_v4_.emplace(acceptor_.get_executor());
+      tcp::endpoint endpoint_v4(asio::ip::make_address_v4("0.0.0.0"), port_);
+
+      acceptor_v4_->open(endpoint_v4.protocol(), ec);
+      if (ec) {
+        CINATRA_LOG_ERROR << "IPv4 acceptor open failed"
+                          << " error: " << ec.message();
+        return ec;
+      }
+#ifdef __GNUC__
+      acceptor_v4_->set_option(tcp::acceptor::reuse_address(true), ec);
+#endif
+      acceptor_v4_->bind(endpoint_v4, ec);
+      if (ec) {
+        CINATRA_LOG_ERROR << "bind IPv4 port: " << port_
+                          << " error: " << ec.message();
+        std::error_code ignore_ec;
+        acceptor_v4_->cancel(ignore_ec);
+        acceptor_v4_->close(ignore_ec);
+        acceptor_v4_.reset();
+        return ec;
+      }
+#ifdef _MSC_VER
+      acceptor_v4_->set_option(tcp::acceptor::reuse_address(true));
+#endif
+      acceptor_v4_->listen(asio::socket_base::max_listen_connections, ec);
+      if (ec) {
+        CINATRA_LOG_ERROR << "IPv4 port: " << port_
+                          << " listen error: " << ec.message();
+        std::error_code ignore_ec;
+        acceptor_v4_->cancel(ignore_ec);
+        acceptor_v4_->close(ignore_ec);
+        acceptor_v4_.reset();
+        return ec;
+      }
+      CINATRA_LOG_INFO << "listen IPv4 port " << port_ << " successfully";
+    }
 
     CINATRA_LOG_INFO << "listen port " << port_ << " successfully";
     return {};
@@ -864,25 +922,24 @@ class coro_http_server {
     return conn;
   }
 
-  async_simple::coro::Lazy<std::error_code> accept() {
+  async_simple::coro::Lazy<std::error_code> accept(
+      asio::ip::tcp::acceptor &acceptor, std::promise<void> &close_waiter) {
     for (;;) {
       coro_io::ExecutorWrapper<> *executor;
       if (out_ctx_ == nullptr) {
         executor = pool_->get_executor();
       }
       else {
-        out_executor_ = std::make_unique<coro_io::ExecutorWrapper<>>(
-            out_ctx_->get_executor());
         executor = out_executor_.get();
       }
       asio::ip::tcp::socket socket(executor->get_asio_executor());
 
-      auto error = co_await coro_io::async_accept(acceptor_, socket);
+      auto error = co_await coro_io::async_accept(acceptor, socket);
       if (error) {
         CINATRA_LOG_INFO << "accept failed, error: " << error.message();
         if (error == asio::error::operation_aborted ||
             error == asio::error::bad_descriptor) {
-          acceptor_close_waiter_.set_value();
+          close_waiter.set_value();
           co_return error;
         }
         continue;
@@ -930,7 +987,17 @@ class coro_http_server {
       acceptor_.cancel(ec);
       acceptor_.close(ec);
     });
+    if (acceptor_v4_) {
+      asio::dispatch(acceptor_v4_->get_executor(), [this]() {
+        asio::error_code ec;
+        acceptor_v4_->cancel(ec);
+        acceptor_v4_->close(ec);
+      });
+    }
     acceptor_close_waiter_.get_future().wait();
+    if (acceptor_v4_) {
+      acceptor_v4_close_waiter_.get_future().wait();
+    }
   }
 
   void start_check_timer() {
@@ -1175,9 +1242,11 @@ class coro_http_server {
   std::string address_;
   std::error_code errc_ = {};
   asio::ip::tcp::acceptor acceptor_;
+  std::optional<asio::ip::tcp::acceptor> acceptor_v4_;
   std::thread thd_;
   std::mutex thd_mtx_;
   std::promise<void> acceptor_close_waiter_;
+  std::promise<void> acceptor_v4_close_waiter_;
   bool no_delay_ = true;
 
   uint64_t conn_id_ = 0;

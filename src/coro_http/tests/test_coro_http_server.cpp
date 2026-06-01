@@ -126,6 +126,32 @@ TEST_CASE("coro_server example, will block") {
   CHECK(server.port() > 0);
 }
 
+TEST_CASE("http listen on ipv6 any accepts ipv4 connections") {
+  coro_http_server server(static_cast<size_t>(1), static_cast<unsigned short>(0),
+                          std::string("::"), false);
+  server.set_http_handler<GET>(
+      "/", [](coro_http_request &req, coro_http_response &resp) {
+        resp.set_status_and_content(status_type::ok, "dual stack ok");
+      });
+
+  auto start_result = server.async_start();
+  CHECK(!start_result.hasResult());
+  REQUIRE(server.port() > 0);
+
+  std::this_thread::sleep_for(100ms);
+
+  coro_http_client client{};
+  client.set_conn_timeout(std::chrono::seconds{1});
+  client.set_req_timeout(std::chrono::seconds{1});
+
+  auto result =
+      client.get("http://127.0.0.1:" + std::to_string(server.port()) + "/");
+  CHECK(result.status == 200);
+  CHECK(result.resp_body == "dual stack ok");
+
+  server.stop();
+}
+
 template <typename View>
 bool create_file(View filename, size_t file_size = 1024) {
   CINATRA_LOG_DEBUG << "begin to open file: " << filename << "\n";

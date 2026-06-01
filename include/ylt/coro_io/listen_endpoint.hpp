@@ -11,6 +11,11 @@
 
 namespace coro_io::detail {
 
+inline bool is_ipv6_any_address(const std::string& address) {
+  return address == "::" || address == "::0" || address == "::0.0.0.0" ||
+         address == "0:0:0:0:0:0:0:0" || address == "[::]";
+}
+
 // Resolve a string address into a TCP endpoint.
 // - If `address` is a numeric IP literal (e.g. "::", "0.0.0.0", "127.0.0.1"),
 //   it is parsed directly via `asio::ip::make_address` to avoid the ambiguity

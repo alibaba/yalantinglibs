@@ -69,9 +69,11 @@ struct server_acceptor_base {
 
     address_ = std::string{address};
   }
+  void set_ipv6_dual_stack(bool v) noexcept { ipv6_dual_stack_ = v; }
   uint16_t port_;
   std::string address_;
   coro_io::io_context_pool* pool_ = nullptr;
+  bool ipv6_dual_stack_ = false;
 };
 
 struct tcp_server_acceptor : public server_acceptor_base {
@@ -98,7 +100,14 @@ struct tcp_server_acceptor : public server_acceptor_base {
 #ifdef __GNUC__
     acceptor_->set_option(tcp::acceptor::reuse_address(true), ec);
 #endif
-    if (auto opt_ec = detail::set_ipv6_only_false(*acceptor_, *endpoint);
+    if (ipv6_dual_stack_ && endpoint->protocol() == tcp::v6()) {
+      // Dual-stack mode: IPv6-only socket, separate IPv4 acceptor handles IPv4.
+      acceptor_->set_option(asio::ip::v6_only(true), ec);
+      if (ec) {
+        ELOG_WARN << "set v6_only(true) for dual-stack failed: " << ec.message();
+      }
+    }
+    else if (auto opt_ec = detail::set_ipv6_only_false(*acceptor_, *endpoint);
         opt_ec) {
       ELOG_WARN << "set v6_only(false) failed: " << opt_ec.message();
     }

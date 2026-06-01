@@ -44,6 +44,24 @@ void test_rdma_multi_dev_server() {
 #endif
 
 TEST_CASE("test server acceptor") {
+  SUBCASE("test ipv6 any acceptor layout") {
+    coro_rpc_server server(static_cast<size_t>(1),
+                           static_cast<unsigned short>(8826),
+                           std::string("::"));
+    const auto &acceptors = server.get_acceptors();
+#if defined(__linux__)
+    REQUIRE(acceptors.size() == 2);
+    CHECK(acceptors[0]->address() == "::");
+    CHECK(acceptors[1]->address() == "0.0.0.0");
+    CHECK(acceptors[0]->port() == 8826);
+    CHECK(acceptors[1]->port() == 8826);
+#else
+    REQUIRE(acceptors.size() == 1);
+    CHECK(acceptors[0]->address() == "::");
+    CHECK(acceptors[0]->port() == 8826);
+#endif
+  }
+
   SUBCASE("test multi server acceptor") {
     std::vector<std::unique_ptr<coro_io::server_acceptor_base>> acceptors;
     acceptors.emplace_back(
