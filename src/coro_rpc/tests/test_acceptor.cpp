@@ -62,6 +62,33 @@ TEST_CASE("test server acceptor") {
 #endif
   }
 
+  SUBCASE("test ipv6 any accepts ipv4 and ipv6 rpc clients") {
+    coro_rpc_server server(static_cast<size_t>(1),
+                           static_cast<unsigned short>(0),
+                           std::string("::"));
+    server.register_handler<hello>();
+
+    auto res = server.async_start();
+    CHECK_MESSAGE(!res.hasResult(), "server start timeout");
+    REQUIRE(server.port() > 0);
+
+    const auto port = std::to_string(server.port());
+
+    coro_rpc_client client_v4;
+    auto ec = syncAwait(client_v4.connect("127.0.0.1", port));
+    CHECK_MESSAGE(!ec, ec.message());
+    auto result = syncAwait(client_v4.call<hello>());
+    CHECK_MESSAGE(result.has_value(), result.error().msg);
+
+    coro_rpc_client client_v6;
+    ec = syncAwait(client_v6.connect("::1", port));
+    CHECK_MESSAGE(!ec, ec.message());
+    result = syncAwait(client_v6.call<hello>());
+    CHECK_MESSAGE(result.has_value(), result.error().msg);
+
+    server.stop();
+  }
+
   SUBCASE("test multi server acceptor") {
     std::vector<std::unique_ptr<coro_io::server_acceptor_base>> acceptors;
     acceptors.emplace_back(
