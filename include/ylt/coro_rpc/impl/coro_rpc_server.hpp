@@ -70,6 +70,12 @@ class coro_rpc_server_base {
     stop       // server is stopping/stopped
   };
 
+  void add_dual_stack_acceptor(uint16_t port) {
+    auto v4_acc = std::make_unique<coro_io::tcp_server_acceptor>("0.0.0.0", port);
+    acceptors_.push_back(std::move(v4_acc));
+    ELOG_INFO << "Dual-stack: added IPv4 acceptor on 0.0.0.0:" << port;
+  }
+
  public:
   /*!
    * TODO: add doc
@@ -90,8 +96,20 @@ class coro_rpc_server_base {
         flag_{stat::init},
         is_enable_tcp_no_delay_(is_enable_tcp_no_delay),
         conn_timeout_duration_(conn_timeout_duration) {
-    acceptors_.push_back(
-        std::make_unique<coro_io::tcp_server_acceptor>(address, port));
+#if defined(__linux__)
+    if (port > 0 && coro_io::detail::is_ipv6_any_address(address)) {
+      auto acc = std::make_unique<coro_io::tcp_server_acceptor>(address, port);
+      acc->set_ipv6_dual_stack(true);
+      acceptors_.push_back(std::move(acc));
+      add_dual_stack_acceptor(port);
+    }
+    else {
+#endif
+      acceptors_.push_back(
+          std::make_unique<coro_io::tcp_server_acceptor>(address, port));
+#if defined(__linux__)
+    }
+#endif
   }
 
   coro_rpc_server_base(size_t thread_num, std::string address,
@@ -136,10 +154,23 @@ class coro_rpc_server_base {
     if (!acceptors.empty()) {
       acceptors_ = std::move(acceptors);
     }
+    else
+#if defined(__linux__)
+    if (config.port > 0 &&
+             coro_io::detail::is_ipv6_any_address(config.address)) {
+      auto acc = std::make_unique<coro_io::tcp_server_acceptor>(
+          config.address, config.port);
+      acc->set_ipv6_dual_stack(true);
+      acceptors_.push_back(std::move(acc));
+      add_dual_stack_acceptor(config.port);
+    }
     else {
+#endif
       acceptors_.push_back(std::make_unique<coro_io::tcp_server_acceptor>(
           config.address, config.port));
+#if defined(__linux__)
     }
+#endif
   }
 
   ~coro_rpc_server_base() {
