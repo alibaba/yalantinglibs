@@ -104,11 +104,12 @@ struct tcp_server_acceptor : public server_acceptor_base {
       // Dual-stack mode: IPv6-only socket, separate IPv4 acceptor handles IPv4.
       acceptor_->set_option(asio::ip::v6_only(true), ec);
       if (ec) {
-        ELOG_WARN << "set v6_only(true) for dual-stack failed: " << ec.message();
+        ELOG_WARN << "set v6_only(true) for dual-stack failed: "
+                  << ec.message();
       }
     }
     else if (auto opt_ec = detail::set_ipv6_only_false(*acceptor_, *endpoint);
-        opt_ec) {
+             opt_ec) {
       ELOG_WARN << "set v6_only(false) failed: " << opt_ec.message();
     }
     acceptor_->bind(*endpoint, ec);

@@ -71,7 +71,8 @@ class coro_rpc_server_base {
   };
 
   void add_dual_stack_acceptor(uint16_t port) {
-    auto v4_acc = std::make_unique<coro_io::tcp_server_acceptor>("0.0.0.0", port);
+    auto v4_acc =
+        std::make_unique<coro_io::tcp_server_acceptor>("0.0.0.0", port);
     acceptors_.push_back(std::move(v4_acc));
     ELOG_INFO << "Dual-stack: added IPv4 acceptor on 0.0.0.0:" << port;
   }
@@ -156,10 +157,10 @@ class coro_rpc_server_base {
     }
     else
 #if defined(__linux__)
-    if (config.port > 0 &&
-             coro_io::detail::is_ipv6_any_address(config.address)) {
-      auto acc = std::make_unique<coro_io::tcp_server_acceptor>(
-          config.address, config.port);
+        if (config.port > 0 &&
+            coro_io::detail::is_ipv6_any_address(config.address)) {
+      auto acc = std::make_unique<coro_io::tcp_server_acceptor>(config.address,
+                                                                config.port);
       acc->set_ipv6_dual_stack(true);
       acceptors_.push_back(std::move(acc));
       add_dual_stack_acceptor(config.port);
@@ -217,7 +218,7 @@ class coro_rpc_server_base {
   }
 
  public:
-  const std::vector<std::unique_ptr<coro_io::server_acceptor_base>> &
+  const std::vector<std::unique_ptr<coro_io::server_acceptor_base>>&
   get_acceptors() const noexcept {
     return acceptors_;
   }
@@ -261,7 +262,7 @@ class coro_rpc_server_base {
         }
       }
       if (!errc_) {
-        if constexpr (requires(typename server_config::executor_pool_t &pool) {
+        if constexpr (requires(typename server_config::executor_pool_t& pool) {
                         pool.run();
                       }) {
           thd_ = std::thread([this] {

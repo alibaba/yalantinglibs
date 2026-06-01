@@ -127,10 +127,11 @@ TEST_CASE("coro_server example, will block") {
 }
 
 TEST_CASE("http listen on ipv6 any accepts ipv4 and ipv6 connections") {
-  coro_http_server server(static_cast<size_t>(1), static_cast<unsigned short>(0),
-                          std::string("::"), false);
+  coro_http_server server(static_cast<size_t>(1),
+                          static_cast<unsigned short>(0), std::string("::"),
+                          false);
   server.set_http_handler<GET>(
-      "/", [](coro_http_request &req, coro_http_response &resp) {
+      "/", [](coro_http_request& req, coro_http_response& resp) {
         resp.set_status_and_content(status_type::ok, "dual stack ok");
       });
 

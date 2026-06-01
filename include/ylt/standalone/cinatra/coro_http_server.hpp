@@ -219,20 +219,21 @@ class coro_http_server {
 
       if (acceptor_v4_) {
         accept(*acceptor_v4_, acceptor_v4_close_waiter_)
-            .via(out_ctx_ == nullptr ? pool_->get_executor() : out_executor_.get())
+            .via(out_ctx_ == nullptr ? pool_->get_executor()
+                                     : out_executor_.get())
             .detach();
       }
 
-      accept(acceptor_, acceptor_close_waiter_).start(
-          [p = std::move(promise), this](auto &&res) mutable {
-        if (res.hasError()) {
-          errc_ = std::make_error_code(std::errc::io_error);
-          p.setValue(errc_);
-        }
-        else {
-          p.setValue(res.value());
-        }
-      });
+      accept(acceptor_, acceptor_close_waiter_)
+          .start([p = std::move(promise), this](auto&& res) mutable {
+            if (res.hasError()) {
+              errc_ = std::make_error_code(std::errc::io_error);
+              p.setValue(errc_);
+            }
+            else {
+              p.setValue(res.value());
+            }
+          });
     }
     else {
       promise.setValue(errc_);
@@ -923,7 +924,7 @@ class coro_http_server {
   }
 
   async_simple::coro::Lazy<std::error_code> accept(
-      asio::ip::tcp::acceptor &acceptor, std::promise<void> &close_waiter) {
+      asio::ip::tcp::acceptor& acceptor, std::promise<void>& close_waiter) {
     for (;;) {
       coro_io::ExecutorWrapper<> *executor;
       if (out_ctx_ == nullptr) {
