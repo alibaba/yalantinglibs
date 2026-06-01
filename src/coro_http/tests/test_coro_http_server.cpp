@@ -126,7 +126,7 @@ TEST_CASE("coro_server example, will block") {
   CHECK(server.port() > 0);
 }
 
-TEST_CASE("http listen on ipv6 any accepts ipv4 connections") {
+TEST_CASE("http listen on ipv6 any accepts ipv4 and ipv6 connections") {
   coro_http_server server(static_cast<size_t>(1), static_cast<unsigned short>(0),
                           std::string("::"), false);
   server.set_http_handler<GET>(
@@ -144,10 +144,15 @@ TEST_CASE("http listen on ipv6 any accepts ipv4 connections") {
   client.set_conn_timeout(std::chrono::seconds{1});
   client.set_req_timeout(std::chrono::seconds{1});
 
-  auto result =
+  auto result_v4 =
       client.get("http://127.0.0.1:" + std::to_string(server.port()) + "/");
-  CHECK(result.status == 200);
-  CHECK(result.resp_body == "dual stack ok");
+  CHECK(result_v4.status == 200);
+  CHECK(result_v4.resp_body == "dual stack ok");
+
+  auto result_v6 =
+      client.get("http://[::1]:" + std::to_string(server.port()) + "/");
+  CHECK(result_v6.status == 200);
+  CHECK(result_v6.resp_body == "dual stack ok");
 
   server.stop();
 }
