@@ -307,7 +307,7 @@ void make_sge_impl(std::vector<ibv_sge>& sge, std::span<T> buffers) {
       continue;
     }
     int gpu_id = -1;
-    if constexpr (requires { buffers.gpu_id(); }) {
+    if constexpr (requires { buffer.gpu_id(); }) {
       gpu_id = buffer.gpu_id();
     }
     for (std::size_t i = 0; i < buffer.size(); i += UINT32_MAX) {

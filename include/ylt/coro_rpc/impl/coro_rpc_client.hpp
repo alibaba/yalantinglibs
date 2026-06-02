@@ -1622,7 +1622,7 @@ class coro_rpc_client {
               coro_io::data_view{
                   std::span<char>{controller->resp_buffer_.read_buf_.data(),
                                   body_len},
-                  0},
+                  -1},
               attachment_buffer};
           ret = co_await coro_io::async_read(socket, iov);
         }
