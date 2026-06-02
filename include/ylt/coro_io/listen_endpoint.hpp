@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include "asio/error_code.hpp"
 #include "asio/ip/address.hpp"
@@ -11,9 +12,21 @@
 
 namespace coro_io::detail {
 
-inline bool is_ipv6_any_address(const std::string& address) {
+inline bool is_ipv6_any_address(std::string_view address) {
   return address == "::" || address == "::0" || address == "::0.0.0.0" ||
          address == "0:0:0:0:0:0:0:0" || address == "[::]";
+}
+
+inline bool should_create_dual_stack_acceptor(
+    std::string_view address, const asio::ip::tcp::endpoint& endpoint) {
+#if defined(__linux__)
+  return endpoint.protocol() == asio::ip::tcp::v6() &&
+         is_ipv6_any_address(address);
+#else
+  (void)address;
+  (void)endpoint;
+  return false;
+#endif
 }
 
 // Resolve a string address into a TCP endpoint.
@@ -62,6 +75,20 @@ inline asio::error_code set_ipv6_only_false(
     acceptor.set_option(asio::ip::v6_only(false), ec);
   }
   return ec;
+}
+
+inline asio::error_code set_ipv6_only(asio::ip::tcp::acceptor& acceptor,
+                                      const asio::ip::tcp::endpoint& endpoint,
+                                      bool enabled) {
+  asio::error_code ec;
+  if (endpoint.protocol() == asio::ip::tcp::v6()) {
+    acceptor.set_option(asio::ip::v6_only(enabled), ec);
+  }
+  return ec;
+}
+
+inline asio::ip::tcp::endpoint make_ipv4_any_endpoint(uint16_t port) {
+  return {asio::ip::make_address_v4("0.0.0.0"), port};
 }
 
 }  // namespace coro_io::detail
