@@ -221,7 +221,7 @@ class cuda_stream_handler_t {
   cuda_device_t& get_device() { return *device_; }
 
  private:
-  CUstream stream_;
+  CUstream stream_ = nullptr;
   std::shared_ptr<cuda_device_t> device_;
 };
 }  // namespace coro_io
