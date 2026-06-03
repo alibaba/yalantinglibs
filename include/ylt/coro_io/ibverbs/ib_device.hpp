@@ -465,7 +465,7 @@ class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
     }
 
     // Debug: print all valid GID entries
-    ELOG_WARN << this->name_ << " GID table has " << valid_entries.size()
+    ELOG_INFO << this->name_ << " GID table has " << valid_entries.size()
               << " valid entries (total table size: " << attr_.gid_tbl_len
               << ")";
     for (auto& entry : valid_entries) {
@@ -476,14 +476,14 @@ class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
                              : entry.gid_type == IBV_GID_TYPE_ROCE_V1
                                  ? "RoCEv1"
                                  : "Unknown";
-      ELOG_WARN << "  gid[" << entry.gid_index << "] type=" << type_str
+      ELOG_INFO << "  gid[" << entry.gid_index << "] type=" << type_str
                 << " ndev_ifindex=" << entry.ndev_ifindex
                 << " addr=" << gid_str;
     }
 
     int best = select_best_gid(valid_entries);
     if (best >= 0) {
-      ELOG_WARN << "Selected best GID index: " << best;
+      ELOG_INFO << "Selected best GID index: " << best;
       return best;
     }
 #endif
