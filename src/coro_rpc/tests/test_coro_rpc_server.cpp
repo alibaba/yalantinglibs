@@ -31,9 +31,11 @@
 #include "rpc_api.hpp"
 #include "ylt/coro_http/coro_http_client.hpp"
 #include "ylt/coro_http/coro_http_server.hpp"
+#ifdef YLT_ENABLE_BAREX
 #include "ylt/coro_io/barex/barex_acceptor.hpp"
 #include "ylt/coro_io/barex/barex_device.hpp"
 #include "ylt/coro_io/barex/barex_server_acceptor.hpp"
+#endif
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_io/server_acceptor.hpp"
 #include "ylt/coro_rpc/impl/default_config/coro_rpc_config.hpp"
