@@ -190,6 +190,11 @@ class coro_rpc_server_base {
   get_acceptors() const noexcept {
     return acceptors_;
   }
+
+  std::size_t connection_count() const noexcept {
+    std::unique_lock lock(conns_mtx_);
+    return conns_.size();
+  }
   async_simple::Future<coro_rpc::err_code> async_start() noexcept {
     {
       std::unique_lock lock(start_mtx_);
@@ -618,7 +623,7 @@ class coro_rpc_server_base {
 
   std::mutex start_mtx_;
   std::unordered_map<uint64_t, std::weak_ptr<coro_connection>> conns_;
-  std::mutex conns_mtx_;
+  mutable std::mutex conns_mtx_;
 
   typename server_config::rpc_protocol::router router_;
 
