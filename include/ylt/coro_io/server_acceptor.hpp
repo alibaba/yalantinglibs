@@ -3,6 +3,7 @@
 #include <async_simple/coro/Lazy.h>
 
 #include <asio/ip/tcp.hpp>
+#include <atomic>
 #include <charconv>
 #include <cstdint>
 #include <optional>
@@ -61,14 +62,14 @@ struct server_acceptor_base {
 
 struct tcp_server_acceptor : public server_acceptor_base {
   virtual listen_errc listen() override {
-    acceptor_ =
-        asio::ip::tcp::acceptor{pool_->get_executor()->get_asio_executor()};
+    executor_ = pool_->get_executor();
+    acceptor_ = asio::ip::tcp::acceptor{executor_->get_asio_executor()};
     ELOG_INFO << "begin to listen";
     using asio::ip::tcp;
     asio::error_code ec;
 
-    auto endpoint = detail::resolve_listen_endpoint(acceptor_->get_executor(),
-                                                    address_, port_, ec);
+    auto endpoint = detail::resolve_listen_endpoint(
+        executor_->get_asio_executor(), address_, port_, ec);
     if (!endpoint) {
       ELOG_ERROR << "resolve address " << address_
                  << " error: " << ec.message();
@@ -110,11 +111,12 @@ struct tcp_server_acceptor : public server_acceptor_base {
   virtual async_simple::coro::Lazy<
       ylt::expected<coro_io::socket_wrapper_t, std::error_code>>
   accept() override {
-    accept_started_ = true;
+    accept_started_.store(true, std::memory_order_release);
     assert(acceptor_ != std::nullopt);
-    auto executor = pool_->get_executor();
-    asio::ip::tcp::socket socket(executor->get_asio_executor());
+    auto socket_executor = pool_->get_executor();
+    asio::ip::tcp::socket socket(socket_executor->get_asio_executor());
     ELOG_TRACE << "start accepting from acceptor: " << address_ << ":" << port_;
+    co_await coro_io::dispatch(executor_->get_asio_executor());
     auto error = co_await coro_io::async_accept(*acceptor_, socket);
     ELOG_TRACE << "get connection from acceptor: " << address_ << ":" << port_;
     if (error) {
@@ -132,7 +134,7 @@ struct tcp_server_acceptor : public server_acceptor_base {
           ylt::unexpected<std::error_code>{error}};
     }
     else {
-      co_return coro_io::socket_wrapper_t{std::move(socket), executor};
+      co_return coro_io::socket_wrapper_t{std::move(socket), socket_executor};
     }
   }
 
@@ -140,12 +142,20 @@ struct tcp_server_acceptor : public server_acceptor_base {
     if (!acceptor_) {
       return;
     }
-    detail::close_acceptor_now(*acceptor_);
+    if (!accept_started_.load(std::memory_order_acquire)) {
+      detail::close_acceptor_now(*acceptor_);
+      return;
+    }
+    asio::dispatch(executor_->get_asio_executor(), [this]() {
+      if (acceptor_) {
+        detail::close_acceptor_now(*acceptor_);
+      }
+    });
   }
 
   virtual void close() override {
     close_now();
-    if (accept_started_) {
+    if (accept_started_.load(std::memory_order_acquire)) {
       acceptor_close_future_.wait();
     }
   }
@@ -153,9 +163,10 @@ struct tcp_server_acceptor : public server_acceptor_base {
   using server_acceptor_base::server_acceptor_base;
 
   std::optional<asio::ip::tcp::acceptor> acceptor_;
+  coro_io::ExecutorWrapper<>* executor_ = nullptr;
   std::promise<void> acceptor_close_waiter_;
   std::future<void> acceptor_close_future_ =
       acceptor_close_waiter_.get_future();
-  bool accept_started_ = false;
+  std::atomic<bool> accept_started_ = false;
 };
 }  // namespace coro_io

@@ -1631,15 +1631,17 @@ TEST_CASE("test coro_http_client connect/request timeout") {
 
 TEST_CASE("test out io_contex server") {
   auto executor = coro_io::get_global_executor()->get_asio_executor();
-  coro_http_server server(executor.context(), "0.0.0.0:8002");
+  coro_http_server server(executor.context(), "127.0.0.1:0");
   server.set_no_delay(true);
   server.set_http_handler<GET>("/", [](request &req, response &res) {
     res.set_status_and_content(status_type::ok, "hello");
   });
   server.async_start();
+  REQUIRE(server.port() > 0);
 
   coro_http_client client{};
-  auto result = client.get("http://127.0.0.1:8002/");
+  auto result =
+      client.get("http://127.0.0.1:" + std::to_string(server.port()) + "/");
   CHECK(result.status == 200);
   server.stop();
 }
