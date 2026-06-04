@@ -1,9 +1,11 @@
 #pragma once
 
+#include <charconv>
 #include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <system_error>
 
 #include "asio/error_code.hpp"
 #include "asio/ip/address.hpp"
@@ -12,18 +14,66 @@
 
 namespace coro_io::detail {
 
-inline bool is_ipv6_any_address(std::string_view address) {
-  return address == "::" || address == "::0" || address == "::0.0.0.0" ||
-         address == "0:0:0:0:0:0:0:0" || address == "[::]";
+struct listen_address {
+  std::string address;
+  uint16_t port = 0;
+};
+
+inline listen_address parse_listen_address(std::string_view address,
+                                           uint16_t default_port = 0) {
+  listen_address parsed{std::string(address), default_port};
+  if (address.empty()) {
+    return parsed;
+  }
+
+  if (address.front() == '[') {
+    auto close = address.find(']');
+    if (close != std::string_view::npos) {
+      parsed.address = std::string(address.substr(1, close - 1));
+      if (close + 1 < address.size() && address[close + 1] == ':') {
+        auto port_sv = address.substr(close + 2);
+        uint16_t port = 0;
+        auto [ptr, ec] = std::from_chars(port_sv.data(),
+                                         port_sv.data() + port_sv.size(), port);
+        if (ec == std::errc{}) {
+          parsed.port = port;
+        }
+      }
+      return parsed;
+    }
+  }
+
+  asio::error_code ec;
+  (void)asio::ip::make_address(address, ec);
+  if (!ec) {
+    parsed.address = std::string(address);
+    return parsed;
+  }
+
+  if (size_t pos = address.rfind(':'); pos != std::string_view::npos) {
+    auto port_sv = address.substr(pos + 1);
+    uint16_t port = 0;
+    auto [ptr, parse_ec] =
+        std::from_chars(port_sv.data(), port_sv.data() + port_sv.size(), port);
+    if (parse_ec == std::errc{}) {
+      parsed.address = std::string(address.substr(0, pos));
+      parsed.port = port;
+    }
+  }
+
+  return parsed;
+}
+
+inline bool is_ipv6_any_endpoint(const asio::ip::tcp::endpoint& endpoint) {
+  return endpoint.address().is_v6() &&
+         endpoint.address().to_v6().is_unspecified();
 }
 
 inline bool should_create_dual_stack_acceptor(
-    std::string_view address, const asio::ip::tcp::endpoint& endpoint) {
+    const asio::ip::tcp::endpoint& endpoint) {
 #if defined(__linux__)
-  return endpoint.protocol() == asio::ip::tcp::v6() &&
-         is_ipv6_any_address(address);
+  return is_ipv6_any_endpoint(endpoint);
 #else
-  (void)address;
   (void)endpoint;
   return false;
 #endif
@@ -67,22 +117,63 @@ inline std::optional<asio::ip::tcp::endpoint> resolve_listen_endpoint(
 // cannot be set (e.g. on platforms that disallow toggling V6ONLY at runtime).
 // Callers are expected to log a warning on failure rather than abort, since
 // the listen socket can still serve IPv6 connections.
-inline asio::error_code set_ipv6_only_false(
-    asio::ip::tcp::acceptor& acceptor,
-    const asio::ip::tcp::endpoint& endpoint) {
+enum class ipv6_only_mode {
+  keep,
+  enable,
+  disable,
+};
+
+inline asio::error_code set_ipv6_only(asio::ip::tcp::acceptor& acceptor,
+                                      const asio::ip::tcp::endpoint& endpoint,
+                                      ipv6_only_mode mode) {
   asio::error_code ec;
-  if (endpoint.protocol() == asio::ip::tcp::v6()) {
-    acceptor.set_option(asio::ip::v6_only(false), ec);
+  if (endpoint.protocol() == asio::ip::tcp::v6() &&
+      mode != ipv6_only_mode::keep) {
+    acceptor.set_option(asio::ip::v6_only(mode == ipv6_only_mode::enable), ec);
   }
   return ec;
 }
 
-inline asio::error_code set_ipv6_only(asio::ip::tcp::acceptor& acceptor,
-                                      const asio::ip::tcp::endpoint& endpoint,
-                                      bool enabled) {
+inline asio::error_code set_ipv6_only_false(
+    asio::ip::tcp::acceptor& acceptor,
+    const asio::ip::tcp::endpoint& endpoint) {
+  return set_ipv6_only(acceptor, endpoint, ipv6_only_mode::disable);
+}
+
+inline void close_acceptor_now(asio::ip::tcp::acceptor& acceptor) {
   asio::error_code ec;
-  if (endpoint.protocol() == asio::ip::tcp::v6()) {
-    acceptor.set_option(asio::ip::v6_only(enabled), ec);
+  acceptor.cancel(ec);
+  acceptor.close(ec);
+}
+
+inline asio::error_code init_tcp_acceptor(
+    asio::ip::tcp::acceptor& acceptor, const asio::ip::tcp::endpoint& endpoint,
+    ipv6_only_mode mode) {
+  using asio::ip::tcp;
+  asio::error_code ec;
+
+  acceptor.open(endpoint.protocol(), ec);
+  if (ec) {
+    return ec;
+  }
+#ifdef __GNUC__
+  acceptor.set_option(tcp::acceptor::reuse_address(true), ec);
+#endif
+  if (auto opt_ec = set_ipv6_only(acceptor, endpoint, mode); opt_ec) {
+    close_acceptor_now(acceptor);
+    return opt_ec;
+  }
+  acceptor.bind(endpoint, ec);
+  if (ec) {
+    close_acceptor_now(acceptor);
+    return ec;
+  }
+#ifdef _MSC_VER
+  acceptor.set_option(tcp::acceptor::reuse_address(true));
+#endif
+  acceptor.listen(asio::socket_base::max_listen_connections, ec);
+  if (ec) {
+    close_acceptor_now(acceptor);
   }
   return ec;
 }

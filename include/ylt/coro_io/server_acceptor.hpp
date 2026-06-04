@@ -32,6 +32,7 @@ struct server_acceptor_base {
   uint16_t port() const noexcept { return port_; }
   std::string_view address() const { return address_; }
   virtual void close() = 0;
+  virtual void close_now() = 0;
   virtual listen_errc listen() = 0;
   virtual async_simple::coro::Lazy<
       ylt::expected<coro_io::socket_wrapper_t, std::error_code>>
@@ -46,30 +47,12 @@ struct server_acceptor_base {
       pool_ = pool;
   }
   void init_address(std::string_view address) {
-    if (port_ == 0) {
-      if (size_t pos = address.rfind(':'); pos != std::string::npos) {
-        auto port_sv = std::string_view(address).substr(pos + 1);
-
-        uint16_t port;
-        auto [ptr, ec] = std::from_chars(
-            port_sv.data(), port_sv.data() + port_sv.size(), port, 10);
-        if (ec != std::errc{}) {
-          address_ = std::string{address};
-          return;
-        }
-
-        port_ = port;
-        address = address.substr(0, pos);
-        if (address.front() == '[') {
-          if (address.size() > 2)
-            address = address.substr(1, address.size() - 2);
-        }
-      }
-    }
-
-    address_ = std::string{address};
+    auto parsed = detail::parse_listen_address(address, port_);
+    address_ = std::move(parsed.address);
+    port_ = parsed.port;
   }
   void set_ipv6_dual_stack(bool v) noexcept { ipv6_dual_stack_ = v; }
+  bool ipv6_dual_stack() const noexcept { return ipv6_dual_stack_; }
   uint16_t port_;
   std::string address_;
   coro_io::io_context_pool* pool_ = nullptr;
@@ -92,41 +75,24 @@ struct tcp_server_acceptor : public server_acceptor_base {
       return listen_errc::bad_address;
     }
 
-    acceptor_->open(endpoint->protocol(), ec);
+    auto mode = ipv6_dual_stack_ ? detail::ipv6_only_mode::enable
+                                 : detail::ipv6_only_mode::disable;
+    ec = detail::init_tcp_acceptor(*acceptor_, *endpoint, mode);
     if (ec) {
-      ELOG_ERROR << "open failed, error: " << ec.message();
-      return listen_errc::open_error;
-    }
-#ifdef __GNUC__
-    acceptor_->set_option(tcp::acceptor::reuse_address(true), ec);
-#endif
-    if (ipv6_dual_stack_ && endpoint->protocol() == tcp::v6()) {
-      // Dual-stack mode: IPv6-only socket, separate IPv4 acceptor handles IPv4.
-      if (auto opt_ec = detail::set_ipv6_only(*acceptor_, *endpoint, true);
-          opt_ec) {
-        ELOG_WARN << "set v6_only(true) for dual-stack failed: "
-                  << opt_ec.message();
+      ELOG_ERROR << "listen init failed, error: " << ec.message();
+      if (ec == asio::error::address_in_use) {
+        return listen_errc::address_in_used;
       }
-    }
-    else if (auto opt_ec = detail::set_ipv6_only_false(*acceptor_, *endpoint);
-             opt_ec) {
-      ELOG_WARN << "set v6_only(false) failed: " << opt_ec.message();
-    }
-    acceptor_->bind(*endpoint, ec);
-    if (ec) {
-      ELOG_ERROR << "bind port " << port_ << " error: " << ec.message();
-      acceptor_->cancel(ec);
-      acceptor_->close(ec);
-      return listen_errc::address_in_used;
-    }
-#ifdef _MSC_VER
-    acceptor_->set_option(tcp::acceptor::reuse_address(true));
-#endif
-    acceptor_->listen(asio::socket_base::max_listen_connections, ec);
-    if (ec) {
-      ELOG_ERROR << "port " << port_ << " listen error: " << ec.message();
-      acceptor_->cancel(ec);
-      acceptor_->close(ec);
+      if (ec == asio::error::invalid_argument ||
+          ec == asio::error::address_family_not_supported ||
+          ec == asio::error::fault) {
+        return listen_errc::bad_address;
+      }
+      if (ec == asio::error::already_open ||
+          ec == asio::error::operation_not_supported ||
+          ec == asio::error::no_descriptors) {
+        return listen_errc::open_error;
+      }
       return listen_errc::listen_error;
     }
 
@@ -144,6 +110,7 @@ struct tcp_server_acceptor : public server_acceptor_base {
   virtual async_simple::coro::Lazy<
       ylt::expected<coro_io::socket_wrapper_t, std::error_code>>
   accept() override {
+    accept_started_ = true;
     assert(acceptor_ != std::nullopt);
     auto executor = pool_->get_executor();
     asio::ip::tcp::socket socket(executor->get_asio_executor());
@@ -169,18 +136,26 @@ struct tcp_server_acceptor : public server_acceptor_base {
     }
   }
 
+  virtual void close_now() override {
+    if (!acceptor_) {
+      return;
+    }
+    detail::close_acceptor_now(*acceptor_);
+  }
+
   virtual void close() override {
-    asio::dispatch(acceptor_->get_executor(), [this]() {
-      asio::error_code ec;
-      (void)acceptor_->cancel(ec);
-      (void)acceptor_->close(ec);
-    });
-    acceptor_close_waiter_.get_future().wait();
+    close_now();
+    if (accept_started_) {
+      acceptor_close_future_.wait();
+    }
   }
   virtual ~tcp_server_acceptor() = default;
   using server_acceptor_base::server_acceptor_base;
 
   std::optional<asio::ip::tcp::acceptor> acceptor_;
   std::promise<void> acceptor_close_waiter_;
+  std::future<void> acceptor_close_future_ =
+      acceptor_close_waiter_.get_future();
+  bool accept_started_ = false;
 };
 }  // namespace coro_io
