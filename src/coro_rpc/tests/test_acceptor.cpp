@@ -131,6 +131,26 @@ TEST_CASE("test server acceptor") {
 #endif
   }
 
+  SUBCASE("test ipv6 any address string with port 0 creates dual acceptors") {
+    coro_rpc_server server(static_cast<size_t>(1), std::string("[::]:0"));
+    server.register_handler<hello>();
+
+    auto res = server.async_start();
+    CHECK_MESSAGE(!res.hasResult(), "server start timeout");
+    REQUIRE(server.port() > 0);
+
+#if defined(__linux__)
+    const auto& acceptors = server.get_acceptors();
+    REQUIRE(acceptors.size() == 2);
+    CHECK(acceptors[0]->address() == "::");
+    CHECK(acceptors[1]->address() == "0.0.0.0");
+    CHECK(acceptors[0]->port() == server.port());
+    CHECK(acceptors[1]->port() == server.port());
+#endif
+
+    server.stop();
+  }
+
 #if defined(__linux__)
   SUBCASE("test failed second acceptor closes primary acceptor") {
     asio::io_context ctx;
