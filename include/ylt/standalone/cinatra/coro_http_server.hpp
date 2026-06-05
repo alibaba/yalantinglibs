@@ -744,46 +744,10 @@ class coro_http_server {
   std::error_code init_acceptor(asio::ip::tcp::acceptor& acceptor,
                                 const asio::ip::tcp::endpoint& endpoint,
                                 bool ipv6_only = false) {
-    using asio::ip::tcp;
-    asio::error_code ec;
-
-    acceptor.open(endpoint.protocol(), ec);
-    if (ec) {
-      return ec;
-    }
-#ifdef __GNUC__
-    acceptor.set_option(tcp::acceptor::reuse_address(true), ec);
-#endif
-    if (ipv6_only) {
-      if (auto opt_ec =
-              coro_io::detail::set_ipv6_only(acceptor, endpoint, true);
-          opt_ec) {
-        CINATRA_LOG_WARNING << "set v6_only(true) failed: " << opt_ec.message();
-      }
-    }
-    else if (auto opt_ec =
-                 coro_io::detail::set_ipv6_only_false(acceptor, endpoint);
-             opt_ec) {
-      CINATRA_LOG_WARNING << "set v6_only(false) failed: " << opt_ec.message();
-    }
-    acceptor.bind(endpoint, ec);
-    if (ec) {
-      std::error_code ignore_ec;
-      acceptor.cancel(ignore_ec);
-      acceptor.close(ignore_ec);
-      return ec;
-    }
-#ifdef _MSC_VER
-    acceptor.set_option(tcp::acceptor::reuse_address(true));
-#endif
-    acceptor.listen(asio::socket_base::max_listen_connections, ec);
-    if (ec) {
-      std::error_code ignore_ec;
-      acceptor.cancel(ignore_ec);
-      acceptor.close(ignore_ec);
-      return ec;
-    }
-    return {};
+    return coro_io::detail::init_tcp_acceptor(
+        acceptor, endpoint,
+        ipv6_only ? coro_io::detail::ipv6_only_mode::enable
+                  : coro_io::detail::ipv6_only_mode::disable);
   }
 
   std::error_code listen() {
@@ -803,7 +767,7 @@ class coro_http_server {
     }
 
     bool need_dual_stack =
-        coro_io::detail::should_create_dual_stack_acceptor(address_, *endpoint);
+        coro_io::detail::should_create_dual_stack_acceptor(*endpoint);
     if (auto init_ec = init_acceptor(acceptor_, *endpoint, need_dual_stack);
         init_ec) {
       CINATRA_LOG_ERROR << "acceptor open failed"
@@ -826,6 +790,7 @@ class coro_http_server {
           init_ec) {
         CINATRA_LOG_ERROR << "IPv4 acceptor init failed"
                           << " error: " << init_ec.message();
+        coro_io::detail::close_acceptor_now(acceptor_);
         acceptor_v4_.reset();
         return init_ec;
       }
@@ -1186,38 +1151,14 @@ class coro_http_server {
     response.set_delay(true);
   }
 
-  bool is_ip_v6(std::string_view address) {
-    asio::ip::address_v6::bytes_type bytes;
-    unsigned long scope_id = 0;
-
-    asio::error_code ec;
-    return asio::detail::socket_ops::inet_pton(ASIO_OS_DEF(AF_INET6),
-                                               address.data(), &bytes[0],
-                                               &scope_id, ec) > 0;
-  }
-
   void init_address(std::string address) {
 #if __has_include(<ylt/easylog.hpp>)
     easylog::logger<>::instance();  // init easylog singleton to make sure
                                     // server destruct before easylog.
 #endif
-    if (size_t pos = address.find(':');
-        pos != std::string::npos && !is_ip_v6(address)) {
-      auto port_sv = std::string_view(address).substr(pos + 1);
-
-      uint16_t port;
-      auto [ptr, ec] = std::from_chars(
-          port_sv.data(), port_sv.data() + port_sv.size(), port, 10);
-      if (ec != std::errc{}) {
-        address_ = std::move(address);
-        return;
-      }
-
-      port_ = port;
-      address = address.substr(0, pos);
-    }
-
-    address_ = std::move(address);
+    auto parsed = coro_io::detail::parse_listen_address(address, port_);
+    address_ = std::move(parsed.address);
+    port_ = parsed.port;
   }
 
  private:

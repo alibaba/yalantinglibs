@@ -78,15 +78,39 @@ class coro_rpc_server_base {
   }
 
   void init_acceptors(std::string_view address, uint16_t port) {
+    auto parsed = coro_io::detail::parse_listen_address(address, port);
 #if defined(__linux__)
-    if (port > 0 && coro_io::detail::is_ipv6_any_address(address)) {
-      add_acceptor(address, port, true);
-      add_acceptor("0.0.0.0", port);
-      ELOG_INFO << "Dual-stack: added IPv4 acceptor on 0.0.0.0:" << port;
+    asio::error_code ec;
+    asio::io_context ctx;
+    if (auto endpoint = coro_io::detail::resolve_listen_endpoint(
+            ctx.get_executor(), parsed.address, parsed.port, ec);
+        endpoint &&
+        coro_io::detail::should_create_dual_stack_acceptor(*endpoint)) {
+      add_acceptor(parsed.address, parsed.port, true);
+      if (parsed.port > 0) {
+        add_acceptor("0.0.0.0", parsed.port);
+        ELOG_INFO << "Dual-stack: added IPv4 acceptor on 0.0.0.0:"
+                  << parsed.port;
+      }
       return;
     }
 #endif
-    add_acceptor(address, port);
+    add_acceptor(parsed.address, parsed.port);
+  }
+
+  coro_rpc::err_code map_listen_error(coro_io::listen_errc ec) const noexcept {
+    switch (ec) {
+      case coro_io::listen_errc::address_in_used:
+        return coro_rpc::err_code{coro_rpc::errc::address_in_used};
+      case coro_io::listen_errc::bad_address:
+        return coro_rpc::err_code{coro_rpc::errc::bad_address};
+      case coro_io::listen_errc::open_error:
+        return coro_rpc::err_code{coro_rpc::errc::open_error};
+      case coro_io::listen_errc::listen_error:
+        return coro_rpc::err_code{coro_rpc::errc::listen_error};
+      default:
+        return coro_rpc::err_code{coro_rpc::errc::io_error};
+    }
   }
 
  public:
@@ -120,8 +144,7 @@ class coro_rpc_server_base {
         flag_{stat::init},
         is_enable_tcp_no_delay_(is_enable_tcp_no_delay),
         conn_timeout_duration_(conn_timeout_duration) {
-    acceptors_.push_back(
-        std::make_unique<coro_io::tcp_server_acceptor>(address));
+    init_acceptors(address, 0);
   }
 
   coro_rpc_server_base(
@@ -220,31 +243,29 @@ class coro_rpc_server_base {
         return make_error_future(
             coro_rpc::err_code{coro_rpc::errc::server_has_ran});
       }
-      for (auto& acceptor : acceptors_) {
+      for (size_t i = 0; i < acceptors_.size(); ++i) {
+        auto& acceptor = acceptors_[i];
         acceptor->set_io_threads_pool(&pool_);
         auto ec = acceptor->listen();
-        if (ec != coro_io::listen_errc ::ok) {
-          switch (ec) {
-            case coro_io::listen_errc::address_in_used:
-              errc_ = coro_rpc::err_code{coro_rpc::errc::address_in_used};
-              break;
-            case coro_io::listen_errc::bad_address:
-              errc_ = coro_rpc::err_code{coro_rpc::errc::bad_address};
-              break;
-            case coro_io::listen_errc::open_error:
-              errc_ = coro_rpc::err_code{coro_rpc::errc::open_error};
-              break;
-            case coro_io::listen_errc::listen_error:
-              errc_ = coro_rpc::err_code{coro_rpc::errc::listen_error};
-              break;
-            default:
-              errc_ = coro_rpc::err_code{coro_rpc::errc::io_error};
-              break;
+        if (ec != coro_io::listen_errc::ok) {
+          errc_ = map_listen_error(ec);
+          for (auto& opened : acceptors_) {
+            opened->close_now();
           }
-        }
-        if (errc_) {
           break;
         }
+#if defined(__linux__)
+        bool needs_ipv4_acceptor = acceptor->ipv6_dual_stack() &&
+                                   acceptor->port() > 0 &&
+                                   acceptors_.size() == 1;
+        auto acceptor_port = acceptor->port();
+        if (needs_ipv4_acceptor) {
+          add_acceptor("0.0.0.0", acceptor_port);
+          acceptors_.back()->set_io_threads_pool(&pool_);
+          ELOG_INFO << "Dual-stack: added IPv4 acceptor on 0.0.0.0:"
+                    << acceptor_port;
+        }
+#endif
       }
       if (!errc_) {
         if constexpr (requires(typename server_config::executor_pool_t& pool) {

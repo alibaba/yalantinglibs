@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <asio/io_context.hpp>
+#include <asio/ip/v6_only.hpp>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -26,6 +28,25 @@
 #include "ylt/coro_rpc/impl/default_config/coro_rpc_config.hpp"
 
 using namespace coro_rpc;
+
+namespace {
+asio::error_code bind_ipv6_only_probe(uint16_t port) {
+  asio::io_context ctx;
+  asio::ip::tcp::acceptor probe(ctx);
+  asio::error_code ec;
+  probe.open(asio::ip::tcp::v6(), ec);
+  if (ec) {
+    return ec;
+  }
+  probe.set_option(asio::ip::v6_only(true), ec);
+  if (ec) {
+    return ec;
+  }
+  probe.bind({asio::ip::address_v6::any(), port}, ec);
+  return ec;
+}
+}  // namespace
+
 #ifdef YLT_ENABLE_IBV
 std::string addr;
 void test_rdma_multi_dev_server() {
@@ -85,8 +106,73 @@ TEST_CASE("test server acceptor") {
     result = syncAwait(client_v6.call<hello>());
     CHECK_MESSAGE(result.has_value(), result.error().msg);
 
+#if defined(__linux__)
+    CHECK(server.get_acceptors().size() == 2);
+    CHECK(server.get_acceptors()[1]->address() == "0.0.0.0");
+    CHECK(server.get_acceptors()[1]->port() == server.port());
+#endif
+
     server.stop();
   }
+
+  SUBCASE("test ipv6 any address string creates dual acceptors") {
+    coro_rpc_server server(static_cast<size_t>(1), std::string("[::]:8827"));
+    const auto& acceptors = server.get_acceptors();
+#if defined(__linux__)
+    REQUIRE(acceptors.size() == 2);
+    CHECK(acceptors[0]->address() == "::");
+    CHECK(acceptors[1]->address() == "0.0.0.0");
+    CHECK(acceptors[0]->port() == 8827);
+    CHECK(acceptors[1]->port() == 8827);
+#else
+    REQUIRE(acceptors.size() == 1);
+    CHECK(acceptors[0]->address() == "::");
+    CHECK(acceptors[0]->port() == 8827);
+#endif
+  }
+
+  SUBCASE("test ipv6 any address string with port 0 creates dual acceptors") {
+    coro_rpc_server server(static_cast<size_t>(1), std::string("[::]:0"));
+    server.register_handler<hello>();
+
+    auto res = server.async_start();
+    CHECK_MESSAGE(!res.hasResult(), "server start timeout");
+    REQUIRE(server.port() > 0);
+
+#if defined(__linux__)
+    const auto& acceptors = server.get_acceptors();
+    REQUIRE(acceptors.size() == 2);
+    CHECK(acceptors[0]->address() == "::");
+    CHECK(acceptors[1]->address() == "0.0.0.0");
+    CHECK(acceptors[0]->port() == server.port());
+    CHECK(acceptors[1]->port() == server.port());
+#endif
+
+    server.stop();
+  }
+
+#if defined(__linux__)
+  SUBCASE("test failed second acceptor closes primary acceptor") {
+    asio::io_context ctx;
+    asio::ip::tcp::acceptor ipv4_blocker(ctx);
+    asio::error_code ec;
+    ipv4_blocker.open(asio::ip::tcp::v4(), ec);
+    REQUIRE(!ec);
+    ipv4_blocker.bind({asio::ip::address_v4::any(), 0}, ec);
+    REQUIRE(!ec);
+    ipv4_blocker.listen(asio::socket_base::max_listen_connections, ec);
+    REQUIRE(!ec);
+
+    auto port = ipv4_blocker.local_endpoint().port();
+
+    coro_rpc_server server(static_cast<size_t>(1), port, std::string("::"));
+    auto start_error = server.async_start().get();
+    REQUIRE(start_error);
+
+    auto probe_error = bind_ipv6_only_probe(port);
+    CHECK_MESSAGE(!probe_error, probe_error.message());
+  }
+#endif
 
   SUBCASE("test multi server acceptor") {
     std::vector<std::unique_ptr<coro_io::server_acceptor_base>> acceptors;
@@ -120,7 +206,7 @@ TEST_CASE("test server acceptor") {
 #ifdef YLT_ENABLE_IBV
   SUBCASE("test multi rdma device for server") {
     std::vector<std::shared_ptr<coro_io::ib_device_t>> ibv_dev_lists;
-    for (auto &dev : coro_io::g_ib_device_manager()->get_dev_list()) {
+    for (auto& dev : coro_io::g_ib_device_manager()->get_dev_list()) {
       ibv_dev_lists.push_back(dev.second);
     }
     coro_rpc_server server(
