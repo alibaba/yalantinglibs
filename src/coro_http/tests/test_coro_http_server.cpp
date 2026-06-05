@@ -178,6 +178,37 @@ TEST_CASE("http listen on ipv6 any accepts ipv4 and ipv6 connections") {
   server.stop();
 }
 
+TEST_CASE("http ipv6 any address string accepts ipv4 and ipv6 connections") {
+  coro_http_server server(static_cast<size_t>(1), std::string("[::]:0"),
+                          false);
+  server.set_http_handler<GET>(
+      "/", [](coro_http_request& req, coro_http_response& resp) {
+        resp.set_status_and_content(status_type::ok, "dual stack string ok");
+      });
+
+  auto start_result = server.async_start();
+  CHECK(!start_result.hasResult());
+  REQUIRE(server.port() > 0);
+
+  std::this_thread::sleep_for(100ms);
+
+  coro_http_client client{};
+  client.set_conn_timeout(std::chrono::seconds{1});
+  client.set_req_timeout(std::chrono::seconds{1});
+
+  auto result_v4 =
+      client.get("http://127.0.0.1:" + std::to_string(server.port()) + "/");
+  CHECK(result_v4.status == 200);
+  CHECK(result_v4.resp_body == "dual stack string ok");
+
+  auto result_v6 =
+      client.get("http://[::1]:" + std::to_string(server.port()) + "/");
+  CHECK(result_v6.status == 200);
+  CHECK(result_v6.resp_body == "dual stack string ok");
+
+  server.stop();
+}
+
 #if defined(__linux__)
 TEST_CASE("http failed second acceptor closes primary acceptor") {
   asio::io_context ctx;
