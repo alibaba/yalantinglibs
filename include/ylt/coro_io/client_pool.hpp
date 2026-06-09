@@ -43,6 +43,8 @@
 #include <ylt/util/expected.hpp>
 
 #include "async_simple/Future.h"
+#include "async_simple/Signal.h"
+#include "async_simple/coro/LazyLocalBase.h"
 #include "async_simple/coro/Mutex.h"
 #include "coro_io.hpp"
 #include "detail/client_queue.hpp"
@@ -78,7 +80,11 @@ class client_pool : public std::enable_shared_from_this<
     while (true) {
       clients.reselect();
       self = nullptr;
-      co_await coro_io::sleep_for(sleep_time);
+      auto is_canceled = co_await coro_io::sleep_for(sleep_time);
+      if (!is_canceled) {
+        ELOG_TRACE << "coroutine destroyed, stop collect timeout client";
+        break;
+      }
       if ((self = self_weak.lock()) == nullptr) {
         break;
       }
@@ -336,6 +342,8 @@ class client_pool : public std::enable_shared_from_this<
             this->weak_from_this(), clients,
             (std::max)(collect_time, std::chrono::milliseconds{50}),
             pool_config_.idle_queue_per_max_clear_count)
+            .setLazyLocal(
+                async_simple::coro::LazyLocalBase{signal_.get()})
             .directlyStart(
                 [](auto&&) {
                 },
@@ -565,6 +573,7 @@ class client_pool : public std::enable_shared_from_this<
   }
 
   const pool_config& get_pool_config() const noexcept { return pool_config_; }
+  ~client_pool() { signal_->emits(async_simple::SignalType::Terminate); }
 
  private:
   template <typename, typename>
@@ -623,6 +632,8 @@ class client_pool : public std::enable_shared_from_this<
   std::atomic<uint64_t> timepoint_;
   ylt::util::atomic_shared_ptr<std::vector<asio::ip::tcp::endpoint>> eps_;
   async_simple::coro::Mutex dns_cache_update_mutex_;
+  std::shared_ptr<async_simple::Signal> signal_ =
+      async_simple::Signal::create();
 };
 
 template <typename client_t,
