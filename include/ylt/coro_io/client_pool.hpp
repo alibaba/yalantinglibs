@@ -102,14 +102,7 @@ class client_pool : public std::enable_shared_from_this<
                    free_client_cnt
             << " parallel request cnt:"
             << self->parallel_request_cnt_.load(std::memory_order::relaxed);
-        if (!is_all_cleared) [[unlikely]] {
-          try {
-            co_await async_simple::coro::Yield{};
-          } catch (std::exception& e) {
-            ELOG_ERROR << "unexcepted yield exception: " << e.what();
-          }
-        }
-        else {
+        if (is_all_cleared) {
           break;
         }
       }
@@ -342,12 +335,9 @@ class client_pool : public std::enable_shared_from_this<
             this->weak_from_this(), clients,
             (std::max)(collect_time, std::chrono::milliseconds{50}),
             pool_config_.idle_queue_per_max_clear_count)
-            .setLazyLocal(
-                async_simple::coro::LazyLocalBase{signal_.get()})
-            .directlyStart(
-                [](auto&&) {
-                },
-                coro_io::get_global_executor());
+            .setLazyLocal(async_simple::coro::LazyLocalBase{signal_.get()})
+            .sstart([](auto&&) {
+            });
       }
     }
   }
