@@ -336,7 +336,7 @@ class client_pool : public std::enable_shared_from_this<
             (std::max)(collect_time, std::chrono::milliseconds{50}),
             pool_config_.idle_queue_per_max_clear_count)
             .setLazyLocal(async_simple::coro::LazyLocalBase{signal_.get()})
-            .sstart([](auto&&) {
+            .start([](auto&&) {
             });
       }
     }
