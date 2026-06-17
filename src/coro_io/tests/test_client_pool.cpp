@@ -12,6 +12,7 @@
 #include <future>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <string_view>
 #include <system_error>
 #include <thread>
@@ -29,12 +30,37 @@
 #include "async_simple/coro/Sleep.h"
 #include "async_simple/coro/SpinLock.h"
 #include "ylt/coro_http/coro_http_client.hpp"
+#include "ylt/coro_http/coro_http_server.hpp"
 #include "ylt/coro_rpc/impl/coro_rpc_client.hpp"
 #include "ylt/coro_rpc/impl/default_config/coro_rpc_config.hpp"
 #include "ylt/coro_rpc/impl/expected.hpp"
 #include "ylt/struct_pack.hpp"
 using namespace std::chrono_literals;
 using namespace async_simple::coro;
+
+class local_http_server {
+ public:
+  local_http_server() : server_(1, std::string{"127.0.0.1:0"}) {
+    server_.set_http_handler<cinatra::GET>(
+        "/", [](cinatra::request&, cinatra::response& res) {
+          res.set_status_and_content(cinatra::status_type::ok, "ok");
+        });
+    server_.async_start();
+    REQUIRE(server_.port() > 0);
+  }
+
+  ~local_http_server() { server_.stop(); }
+
+  std::string url() const {
+    return "http://127.0.0.1:" + std::to_string(server_.port());
+  }
+
+  uint16_t port() const { return server_.port(); }
+
+ private:
+  coro_http::coro_http_server server_;
+};
+
 template <typename T = coro_rpc::coro_rpc_client>
 async_simple::coro::Lazy<bool> event(
     int lim, coro_io::client_pool<T> &pool, ConditionVariable<SpinLock> &cv,
@@ -246,9 +272,10 @@ TEST_CASE("test client pools parallel r/w") {
 }
 
 TEST_CASE("test client pools dns cache") {
-  async_simple::coro::syncAwait([]() -> async_simple::coro::Lazy<void> {
+  local_http_server server;
+  async_simple::coro::syncAwait([&]() -> async_simple::coro::Lazy<void> {
     auto pool = coro_io::client_pool<coro_http::coro_http_client>::create(
-        "http://www.baidu.com",
+        server.url(),
         coro_io::client_pool<coro_http::coro_http_client>::pool_config{
             .dns_cache_update_duration = 600s});
     auto eps_init = pool->get_remote_endpoints();
@@ -261,7 +288,7 @@ TEST_CASE("test client pools dns cache") {
     auto eps = pool->get_remote_endpoints();
     CHECK(!eps->empty());
     CHECK(eps.get() != eps_init.get());
-    CHECK(eps->front().port() == 80);
+    CHECK(eps->front().port() == server.port());
     co_await pool->send_request(
         [](coro_http::coro_http_client &cli) -> Lazy<void> {
           cli.close();
@@ -273,9 +300,10 @@ TEST_CASE("test client pools dns cache") {
 }
 
 TEST_CASE("test client pools dns refresh") {
-  async_simple::coro::syncAwait([]() -> async_simple::coro::Lazy<void> {
+  local_http_server server;
+  async_simple::coro::syncAwait([&]() -> async_simple::coro::Lazy<void> {
     auto pool = coro_io::client_pool<coro_http::coro_http_client>::create(
-        "http://www.baidu.com",
+        server.url(),
         coro_io::client_pool<coro_http::coro_http_client>::pool_config{
             .dns_cache_update_duration = 0s});
     auto eps_init = pool->get_remote_endpoints();
@@ -288,7 +316,7 @@ TEST_CASE("test client pools dns refresh") {
     auto eps = pool->get_remote_endpoints();
     CHECK(!eps->empty());
     CHECK(eps.get() != eps_init.get());
-    CHECK(eps->front().port() == 80);
+    CHECK(eps->front().port() == server.port());
     co_await pool->send_request(
         [](coro_http::coro_http_client &cli) -> Lazy<void> {
           co_return;
@@ -299,9 +327,10 @@ TEST_CASE("test client pools dns refresh") {
 }
 
 TEST_CASE("test client pools dns parallel refresh") {
-  async_simple::coro::syncAwait([]() -> async_simple::coro::Lazy<void> {
+  local_http_server server;
+  async_simple::coro::syncAwait([&]() -> async_simple::coro::Lazy<void> {
     auto pool = coro_io::client_pool<coro_http::coro_http_client>::create(
-        "http://www.baidu.com",
+        server.url(),
         coro_io::client_pool<coro_http::coro_http_client>::pool_config{
             .dns_cache_update_duration = 0s});
     auto eps_init = pool->get_remote_endpoints();
@@ -309,7 +338,7 @@ TEST_CASE("test client pools dns parallel refresh") {
     std::vector<
         async_simple::coro::RescheduleLazy<ylt::expected<void, std::errc>>>
         results;
-    std::atomic<int> err_cnt;
+    std::atomic<int> err_cnt{0};
     for (int i = 0; i < 100; ++i) {
       results.push_back(
           pool->send_request(
@@ -328,9 +357,10 @@ TEST_CASE("test client pools dns parallel refresh") {
 }
 
 TEST_CASE("test client pools dns don't refresh") {
-  async_simple::coro::syncAwait([]() -> async_simple::coro::Lazy<void> {
+  local_http_server server;
+  async_simple::coro::syncAwait([&]() -> async_simple::coro::Lazy<void> {
     auto pool = coro_io::client_pool<coro_http::coro_http_client>::create(
-        "http://www.baidu.com",
+        server.url(),
         coro_io::client_pool<coro_http::coro_http_client>::pool_config{
             .dns_cache_update_duration = -1s});
     auto eps_init = pool->get_remote_endpoints();
@@ -347,9 +377,10 @@ TEST_CASE("test client pools dns don't refresh") {
 }
 
 TEST_CASE("test client pools client pool") {
-  async_simple::coro::syncAwait([]() -> async_simple::coro::Lazy<void> {
+  local_http_server server;
+  async_simple::coro::syncAwait([&]() -> async_simple::coro::Lazy<void> {
     auto pool = coro_io::client_pool<coro_http::coro_http_client>::create(
-        "http://www.baidu.com",
+        server.url(),
         coro_io::client_pool<coro_http::coro_http_client>::pool_config{
             .max_connection_life_time = 0s});
     co_await pool->send_request(
