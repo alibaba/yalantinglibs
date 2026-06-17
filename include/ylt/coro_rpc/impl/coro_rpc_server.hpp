@@ -70,6 +70,49 @@ class coro_rpc_server_base {
     stop       // server is stopping/stopped
   };
 
+  void add_acceptor(std::string_view address, uint16_t port,
+                    bool ipv6_dual_stack = false) {
+    auto acc = std::make_unique<coro_io::tcp_server_acceptor>(address, port);
+    acc->set_ipv6_dual_stack(ipv6_dual_stack);
+    acceptors_.push_back(std::move(acc));
+  }
+
+  void init_acceptors(std::string_view address, uint16_t port) {
+    auto parsed = coro_io::detail::parse_listen_address(address, port);
+#if defined(__linux__)
+    asio::error_code ec;
+    asio::io_context ctx;
+    if (auto endpoint = coro_io::detail::resolve_listen_endpoint(
+            ctx.get_executor(), parsed.address, parsed.port, ec);
+        endpoint &&
+        coro_io::detail::should_create_dual_stack_acceptor(*endpoint)) {
+      add_acceptor(parsed.address, parsed.port, true);
+      if (parsed.port > 0) {
+        add_acceptor("0.0.0.0", parsed.port);
+        ELOG_INFO << "Dual-stack: added IPv4 acceptor on 0.0.0.0:"
+                  << parsed.port;
+      }
+      return;
+    }
+#endif
+    add_acceptor(parsed.address, parsed.port);
+  }
+
+  coro_rpc::err_code map_listen_error(coro_io::listen_errc ec) const noexcept {
+    switch (ec) {
+      case coro_io::listen_errc::address_in_used:
+        return coro_rpc::err_code{coro_rpc::errc::address_in_used};
+      case coro_io::listen_errc::bad_address:
+        return coro_rpc::err_code{coro_rpc::errc::bad_address};
+      case coro_io::listen_errc::open_error:
+        return coro_rpc::err_code{coro_rpc::errc::open_error};
+      case coro_io::listen_errc::listen_error:
+        return coro_rpc::err_code{coro_rpc::errc::listen_error};
+      default:
+        return coro_rpc::err_code{coro_rpc::errc::io_error};
+    }
+  }
+
  public:
   /*!
    * TODO: add doc
@@ -90,8 +133,7 @@ class coro_rpc_server_base {
         flag_{stat::init},
         is_enable_tcp_no_delay_(is_enable_tcp_no_delay),
         conn_timeout_duration_(conn_timeout_duration) {
-    acceptors_.push_back(
-        std::make_unique<coro_io::tcp_server_acceptor>(address, port));
+    init_acceptors(address, port);
   }
 
   coro_rpc_server_base(size_t thread_num, std::string address,
@@ -102,8 +144,7 @@ class coro_rpc_server_base {
         flag_{stat::init},
         is_enable_tcp_no_delay_(is_enable_tcp_no_delay),
         conn_timeout_duration_(conn_timeout_duration) {
-    acceptors_.push_back(
-        std::make_unique<coro_io::tcp_server_acceptor>(address));
+    init_acceptors(address, 0);
   }
 
   coro_rpc_server_base(
@@ -137,8 +178,7 @@ class coro_rpc_server_base {
       acceptors_ = std::move(acceptors);
     }
     else {
-      acceptors_.push_back(std::make_unique<coro_io::tcp_server_acceptor>(
-          config.address, config.port));
+      init_acceptors(config.address, config.port);
     }
   }
 
@@ -148,18 +188,18 @@ class coro_rpc_server_base {
   }
 
 #ifdef YLT_ENABLE_SSL
-  void init_ssl(const ssl_configure &conf) {
+  void init_ssl(const ssl_configure& conf) {
     use_ssl_ = init_ssl_context_helper(context_, conf);
   }
 #ifdef YLT_ENABLE_NTLS
-  void init_ntls(const ssl_ntls_configure &conf) {
+  void init_ntls(const ssl_ntls_configure& conf) {
     use_ssl_ = init_ntls_context_helper(context_, conf);
   }
 #endif  // YLT_ENABLE_NTLS
 #endif
 #ifdef YLT_ENABLE_IBV
   void init_ibv(
-      const coro_io::ib_socket_t::config_t &conf = {},
+      const coro_io::ib_socket_t::config_t& conf = {},
       std::vector<std::shared_ptr<coro_io::ib_device_t>> ibv_dev_lists = {}) {
     ibv_config_ = conf;
     ibv_dev_lists_ = std::move(ibv_dev_lists);
@@ -179,14 +219,14 @@ class coro_rpc_server_base {
 
  private:
   async_simple::Future<coro_rpc::err_code> make_error_future(
-      coro_rpc::err_code &&err) {
+      coro_rpc::err_code&& err) {
     async_simple::Promise<coro_rpc::err_code> p;
     p.setValue(std::move(err));
     return p.getFuture();
   }
 
  public:
-  const std::vector<std::unique_ptr<coro_io::server_acceptor_base>> &
+  const std::vector<std::unique_ptr<coro_io::server_acceptor_base>>&
   get_acceptors() const noexcept {
     return acceptors_;
   }
@@ -208,34 +248,32 @@ class coro_rpc_server_base {
         return make_error_future(
             coro_rpc::err_code{coro_rpc::errc::server_has_ran});
       }
-      for (auto &acceptor : acceptors_) {
+      for (size_t i = 0; i < acceptors_.size(); ++i) {
+        auto& acceptor = acceptors_[i];
         acceptor->set_io_threads_pool(&pool_);
         auto ec = acceptor->listen();
-        if (ec != coro_io::listen_errc ::ok) {
-          switch (ec) {
-            case coro_io::listen_errc::address_in_used:
-              errc_ = coro_rpc::err_code{coro_rpc::errc::address_in_used};
-              break;
-            case coro_io::listen_errc::bad_address:
-              errc_ = coro_rpc::err_code{coro_rpc::errc::bad_address};
-              break;
-            case coro_io::listen_errc::open_error:
-              errc_ = coro_rpc::err_code{coro_rpc::errc::open_error};
-              break;
-            case coro_io::listen_errc::listen_error:
-              errc_ = coro_rpc::err_code{coro_rpc::errc::listen_error};
-              break;
-            default:
-              errc_ = coro_rpc::err_code{coro_rpc::errc::io_error};
-              break;
+        if (ec != coro_io::listen_errc::ok) {
+          errc_ = map_listen_error(ec);
+          for (auto& opened : acceptors_) {
+            opened->close_now();
           }
-        }
-        if (errc_) {
           break;
         }
+#if defined(__linux__)
+        bool needs_ipv4_acceptor = acceptor->ipv6_dual_stack() &&
+                                   acceptor->port() > 0 &&
+                                   acceptors_.size() == 1;
+        auto acceptor_port = acceptor->port();
+        if (needs_ipv4_acceptor) {
+          add_acceptor("0.0.0.0", acceptor_port);
+          acceptors_.back()->set_io_threads_pool(&pool_);
+          ELOG_INFO << "Dual-stack: added IPv4 acceptor on 0.0.0.0:"
+                    << acceptor_port;
+        }
+#endif
       }
       if (!errc_) {
-        if constexpr (requires(typename server_config::executor_pool_t &pool) {
+        if constexpr (requires(typename server_config::executor_pool_t& pool) {
                         pool.run();
                       }) {
           thd_ = std::thread([this] {
@@ -252,12 +290,12 @@ class coro_rpc_server_base {
       async_simple::Promise<coro_rpc::err_code> promise;
       auto future = promise.getFuture();
       accept().start([this, p = std::move(promise)](
-                         async_simple::Try<coro_rpc::err_code> &&res) mutable {
+                         async_simple::Try<coro_rpc::err_code>&& res) mutable {
         ELOG_INFO << "server quit!";
         if (res.hasError()) {
           try {
             std::rethrow_exception(res.getException());
-          } catch (const std::exception &e) {
+          } catch (const std::exception& e) {
             ELOG_ERROR << "server quit with exception: " << e.what();
           }
           stop();
@@ -265,7 +303,7 @@ class coro_rpc_server_base {
           p.setValue(errc_);
         }
         else {
-          auto &value = res.value();
+          auto& value = res.value();
           if (value.ec == coro_rpc::errc::operation_canceled) {
             ELOG_INFO << "server quit: " << value.message();
           }
@@ -296,11 +334,11 @@ class coro_rpc_server_base {
     ELOG_INFO << "begin to stop coro_rpc_server";
 
     if (flag_ == stat::started) {
-      for (auto &acceptor : acceptors_) acceptor->close();
+      for (auto& acceptor : acceptors_) acceptor->close();
       {
         std::unique_lock lock(conns_mtx_);
         ELOG_INFO << "total connection count: " << conns_.size();
-        for (auto &conn_weak : conns_) {
+        for (auto& conn_weak : conns_) {
           auto conn = conn_weak.second.lock();
           if (conn && !conn->has_closed()) {
             conn->async_close();
@@ -336,17 +374,17 @@ class coro_rpc_server_base {
 
   template <typename... ServerType>
   void add_subserver(
-      std::function<void(coro_io::socket_wrapper_t &&socket,
-                         std::string_view magic_number, ServerType &...server)>
+      std::function<void(coro_io::socket_wrapper_t&& socket,
+                         std::string_view magic_number, ServerType&... server)>
           dispatcher,
       std::unique_ptr<ServerType>... server) {
     connection_transfer_ = [dispatcher = std::move(dispatcher),
                             server = std::make_tuple(std::move(server)...)](
-                               coro_io::socket_wrapper_t &&socket,
+                               coro_io::socket_wrapper_t&& socket,
                                std::string_view magic_number,
                                int index = -1) mutable {
       std::apply(
-          [&dispatcher, &socket, magic_number](auto &...server) {
+          [&dispatcher, &socket, magic_number](auto&... server) {
             dispatcher(std::move(socket), magic_number, *server...);
           },
           server);
@@ -383,13 +421,13 @@ class coro_rpc_server_base {
    */
 
   template <auto first, auto... functions>
-  void register_handler(util::class_type_t<decltype(first)> *self) {
+  void register_handler(util::class_type_t<decltype(first)>* self) {
     router_.template register_handler<first, functions...>(self);
   }
 
   template <auto first>
-  void register_handler(util::class_type_t<decltype(first)> *self,
-                        const auto &key) {
+  void register_handler(util::class_type_t<decltype(first)>* self,
+                        const auto& key) {
     router_.template register_handler<first>(self, key);
   }
 
@@ -423,11 +461,11 @@ class coro_rpc_server_base {
   }
 
   template <auto func>
-  void register_handler(const auto &key) {
+  void register_handler(const auto& key) {
     router_.template register_handler<func>(key);
   }
 
-  auto &get_io_context_pool() noexcept { return pool_; }
+  auto& get_io_context_pool() noexcept { return pool_; }
 
   /*!
    * Set client filter callback
@@ -435,7 +473,7 @@ class coro_rpc_server_base {
    *               true to allow connection, false to reject
    */
   void client_filter(
-      std::function<bool(const asio::ip::tcp::endpoint &)> filter) {
+      std::function<bool(const asio::ip::tcp::endpoint&)> filter) {
     client_filter_ = std::move(filter);
   }
 
@@ -444,7 +482,7 @@ class coro_rpc_server_base {
     std::vector<async_simple::coro::Lazy<coro_rpc::err_code>> tasks;
     acceptors_[0]->address();
     acceptors_[0]->port();
-    for (auto &acceptor : acceptors_) {
+    for (auto& acceptor : acceptors_) {
       tasks.emplace_back(accept_impl(*acceptor));
     }
     auto results = co_await async_simple::coro::collectAny(std::move(tasks));
@@ -459,7 +497,7 @@ class coro_rpc_server_base {
     return ++global_conn_id;
   }
   async_simple::coro::Lazy<coro_rpc::err_code> accept_impl(
-      coro_io::server_acceptor_base &acceptor) {
+      coro_io::server_acceptor_base& acceptor) {
     ELOG_INFO << "begin to accept looping";
     for (;;) {
       auto result = co_await acceptor.accept();
@@ -467,7 +505,7 @@ class coro_rpc_server_base {
 #ifdef UNIT_TEST_INJECT
       if (result.has_value()) {
         if (g_action == inject_action::force_inject_server_accept_error) {
-          coro_io::socket_wrapper_t &wrapper = result.value();
+          coro_io::socket_wrapper_t& wrapper = result.value();
           asio::error_code ignored_ec;
           wrapper.close();
           g_action = inject_action::nothing;
@@ -491,7 +529,7 @@ class coro_rpc_server_base {
         }
         continue;
       }
-      coro_io::socket_wrapper_t &wrapper = result.value();
+      coro_io::socket_wrapper_t& wrapper = result.value();
 
       // Client filter check
       if (client_filter_) {
@@ -514,7 +552,7 @@ class coro_rpc_server_base {
                 << wrapper.remote_endpoint() << "], local addr["
                 << wrapper.local_endpoint() << "]";
 
-      if (auto &socket = wrapper.socket(); socket) {
+      if (auto& socket = wrapper.socket(); socket) {
         if (is_enable_tcp_no_delay_) {
           std::error_code error;
           socket->set_option(asio::ip::tcp::no_delay(true), error);
@@ -529,7 +567,7 @@ class coro_rpc_server_base {
       auto conn = std::make_shared<coro_connection>(std::move(wrapper),
                                                     conn_timeout_duration_);
       conn->set_quit_callback(
-          [this](const uint64_t &id) {
+          [this](const uint64_t& id) {
             std::unique_lock lock(conns_mtx_);
             conns_.erase(id);
           },
@@ -541,7 +579,7 @@ class coro_rpc_server_base {
       ELOG_TRACE << "start new connection, conn_id:" << conn_id;
       start_one(std::move(conn))
           .directlyStart(
-              [id = conn_id, this](async_simple::Try<void> &&res) {
+              [id = conn_id, this](async_simple::Try<void>&& res) {
                 ELOG_INFO << "connection over, conn id:" << id;
               },
               wrapper.get_executor());
@@ -557,9 +595,9 @@ class coro_rpc_server_base {
                           ibv_dev_lists_.size()];
   }
 
-  async_simple::coro::Lazy<bool> update_to_rdma(coro_connection *conn) {
+  async_simple::coro::Lazy<bool> update_to_rdma(coro_connection* conn) {
     bool init_ok = true;
-    auto &wrapper = conn->socket_wrapper();
+    auto& wrapper = conn->socket_wrapper();
     try {
       if (!ibv_dev_lists_.empty()) {
         ibv_config_->device = get_rr_device();
@@ -633,7 +671,7 @@ class coro_rpc_server_base {
   coro_rpc::err_code errc_ = {};
   std::chrono::steady_clock::duration conn_timeout_duration_;
 
-  async_simple::util::move_only_function<void(coro_io::socket_wrapper_t &&soc,
+  async_simple::util::move_only_function<void(coro_io::socket_wrapper_t&& soc,
                                               std::string_view magic_number)>
       connection_transfer_;
 
@@ -647,6 +685,6 @@ class coro_rpc_server_base {
   std::atomic<std::size_t> rr_index_ = 0;
 #endif
 
-  std::function<bool(const asio::ip::tcp::endpoint &)> client_filter_;
+  std::function<bool(const asio::ip::tcp::endpoint&)> client_filter_;
 };
 }  // namespace coro_rpc
