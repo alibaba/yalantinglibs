@@ -143,6 +143,7 @@ struct ib_buffer_t {
 };
 
 class ib_buffer_pool_t : public std::enable_shared_from_this<ib_buffer_pool_t> {
+public:
   struct ib_buffer_mem_control_t {
     std::atomic<std::size_t> now_usage;
     std::atomic<std::size_t> history_max_usage;
