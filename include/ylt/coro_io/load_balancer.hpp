@@ -206,6 +206,20 @@ class load_balancer {
    */
   std::size_t size() const noexcept { return client_pools_.size(); }
 
+  /**
+   * @brief Clear free clients in all client pools, return total cleared count.
+   * It's an approximation because of concurrency.
+   *
+   * @return std::size_t
+   */
+  std::size_t clear() noexcept {
+    std::size_t cnt = 0;
+    for (auto& pool : client_pools_) {
+      cnt += pool->clear();
+    }
+    return cnt;
+  }
+
  private:
   void init(const std::vector<std::string_view>& hosts,
             const load_balancer_config& config, const std::vector<int>& weights,

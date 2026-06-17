@@ -562,6 +562,24 @@ class client_pool : public std::enable_shared_from_this<
     return eps_.load(std::memory_order_acquire);
   }
 
+  /**
+   * @brief clear free clients in client pools, return cleared client count.
+   * It's an approximation because of concurrency.
+   *
+   * @return std::size_t
+   */
+  std::size_t clear() noexcept {
+    std::unique_ptr<client_t> c;
+    std::size_t cnt = 0;
+    while (short_connect_clients_.try_dequeue(c)) {
+      ++cnt;
+    }
+    while (free_clients_.try_dequeue(c)) {
+      ++cnt;
+    }
+    return cnt;
+  }
+
   const pool_config& get_pool_config() const noexcept { return pool_config_; }
   ~client_pool() { signal_->emits(async_simple::SignalType::Terminate); }
 

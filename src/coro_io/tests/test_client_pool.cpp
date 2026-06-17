@@ -32,6 +32,7 @@
 #include "ylt/coro_http/coro_http_client.hpp"
 #include "ylt/coro_http/coro_http_server.hpp"
 #include "ylt/coro_rpc/impl/coro_rpc_client.hpp"
+#include "ylt/coro_rpc/impl/coro_rpc_server.hpp"
 #include "ylt/coro_rpc/impl/default_config/coro_rpc_config.hpp"
 #include "ylt/coro_rpc/impl/expected.hpp"
 #include "ylt/struct_pack.hpp"
@@ -389,5 +390,52 @@ TEST_CASE("test client pools client pool") {
           co_return;
         });
     CHECK(pool->free_client_count() == 0);
+  }());
+}
+
+void hello_for_pool_test() {}
+
+TEST_CASE("test client_pool clear") {
+  async_simple::coro::syncAwait([]() -> async_simple::coro::Lazy<void> {
+    coro_rpc::coro_rpc_server server(1, 0);
+    server.register_handler<hello_for_pool_test>();
+    auto res = server.async_start();
+    REQUIRE_MESSAGE(!res.hasResult(), "server start failed");
+    auto port = server.port();
+    std::string host = "127.0.0.1:" + std::to_string(port);
+
+    auto pool = coro_io::client_pool<coro_rpc::coro_rpc_client>::create(host);
+
+    // Clear on empty pool should return 0
+    CHECK(pool->clear() == 0);
+    CHECK(pool->free_client_count() == 0);
+
+    // Make concurrent requests to populate the pool with multiple connections
+    std::vector<Lazy<coro_rpc::expected<void, std::errc>>> tasks;
+    for (int i = 0; i < 5; ++i) {
+      tasks.push_back(pool->send_request(
+          [](coro_rpc::coro_rpc_client &client) -> Lazy<void> {
+            co_await client.call<hello_for_pool_test>();
+            co_return;
+          }));
+    }
+    auto results = co_await collectAll(std::move(tasks));
+    for (auto &result : results) {
+      CHECK(result.value().has_value());
+    }
+
+    // After concurrent requests, free pool should have multiple clients
+    CHECK(pool->free_client_count() > 0);
+    CHECK(server.connection_count() > 0);
+
+    // Clear should drain all free clients
+    auto cleared = pool->clear();
+    CHECK(cleared > 0);
+    CHECK(pool->free_client_count() == 0);
+
+    // Clear again should return 0
+    CHECK(pool->clear() == 0);
+
+    server.stop();
   }());
 }
