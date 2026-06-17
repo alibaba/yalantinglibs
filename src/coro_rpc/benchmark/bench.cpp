@@ -497,5 +497,6 @@ int main(int argc, char** argv) {
     else {
       async_simple::coro::syncAwait(request_no_pool(conf));
     }
+    coro_io::g_io_context_pool().stop(true);
   }
 }
