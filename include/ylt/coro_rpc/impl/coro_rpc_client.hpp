@@ -1002,6 +1002,21 @@ class coro_rpc_client {
 
   uint32_t get_client_id() const { return config_.client_id; }
 
+#ifdef YLT_ENABLE_CUDA
+  // Reuse the cuda stream handler owned by the underlying ib_socket.
+  // Returns nullptr when the connection is not RDMA/ib based.
+  coro_io::cuda_stream_handler_t* get_cuda_stream_handler() noexcept {
+    coro_io::cuda_stream_handler_t* handler = nullptr;
+    control_->socket_wrapper_.visit([&](auto &socket) {
+      using socket_type = std::decay_t<decltype(socket)>;
+      if constexpr (std::is_same_v<socket_type, coro_io::ib_socket_t>) {
+        handler = &socket.get_cuda_stream_handler();
+      }
+    });
+    return handler;
+  }
+#endif
+
   void close() { close_socket_async(control_); }
 
  public:
