@@ -170,6 +170,63 @@ void rpc_function() {
 
 GPU-direct RDMA 消除了网络传输过程中的 CPU-GPU 内存复制，减少了延迟和 CPU 开销。数据直接从 GPU 内存流向网络接口，反之亦然，这使其非常适合高性能计算和 AI 应用程序，其中大量 GPU 数据需要跨节点共享。
 
+## GPU CRC32 异步计算（基于 nvCOMP）
+
+`coro_io::cuda_crc32_async` 在 GPU stream 上异步计算单个 device buffer 的 CRC32，调用方通过 `stream.record().get()` 同步后读取结果。底层使用 [NVIDIA nvCOMP](https://docs.nvidia.com/cuda/nvcomp/) 提供的 `nvcompBatchedCRC32Async`，默认 CRC-32/PKZIP 多项式，也可传 `nvcompCRC32_C`（iSCSI）/`nvcompCRC32_BZIP2` 等其他预设。
+
+### 启用方式（CMake 宏）
+
+该功能需要 nvCOMP 库（v4.0 及以上）。先在系统上安装：
+
+```bash
+# RHEL / Alibaba Cloud Linux
+sudo yum install -y nvcomp-cuda-12   # 或 nvcomp-cuda-11 / nvcomp-cuda-13
+
+# Ubuntu / Debian
+sudo apt-get install -y nvcomp-cuda-12
+```
+
+然后在 CMake 配置时**同时**打开 `YLT_ENABLE_CUDA` 和 `YLT_ENABLE_NVCOMP`，并**显式指定** nvCOMP 的头文件和库路径（不自动搜索，因为不同 CUDA 大版本的 yum 包安装目录不同）：
+
+```bash
+cmake -B build \
+  -DYLT_ENABLE_CUDA=ON \
+  -DYLT_ENABLE_NVCOMP=ON \
+  -DNVCOMP_INCLUDE_DIR=/usr/include/nvcomp_12 \
+  -DNVCOMP_LIB=/usr/lib64/libnvcomp.so
+```
+
+需要传入的宏：
+
+| 宏 | 必填 | 说明 |
+|----|------|------|
+| `YLT_ENABLE_CUDA` | 是 | 启用 coro_io 的 CUDA 支持（链接 `CUDA::cuda_driver`） |
+| `YLT_ENABLE_NVCOMP` | 是 | 启用 nvCOMP 集成（定义 `YLT_ENABLE_NVCOMP` 宏） |
+| `NVCOMP_INCLUDE_DIR` | 是 | nvCOMP 头文件目录，例如 `/usr/include/nvcomp_12`（yum 包按 CUDA 主版本号分子目录） |
+| `NVCOMP_LIB` | 是 | nvCOMP 库文件路径，例如 `/usr/lib64/libnvcomp.so` |
+
+> 若 `YLT_ENABLE_NVCOMP=ON` 但漏传 `NVCOMP_INCLUDE_DIR` 或 `NVCOMP_LIB`，CMake 会直接 `FATAL_ERROR` 并提示用法。
+
+### 用法
+
+```cpp
+#include <ylt/coro_io/cuda/cuda_crc32.hpp>
+
+coro_io::cuda_stream_handler_t stream{0};  // 必须显式指定 gpu_id
+auto d_data = coro_io::cuda_malloc_async(stream, len);   // device 输入
+auto d_crc  = (uint32_t*)coro_io::cuda_malloc_async(stream, sizeof(uint32_t));
+
+coro_io::cuda_crc32_async(stream, (void*)d_data, len, d_crc);              // 默认 PKZIP
+// coro_io::cuda_crc32_async(stream, (void*)d_data, len, d_crc, nvcompCRC32_C);  // 或 iSCSI
+
+YLT_CHECK_CUDA_ERR(stream.record().get());  // 同步后再读 *d_crc
+```
+
+调用约定（与 `cuda_copy_async` 一致）：
+- `device_data` 与 `device_out` 都必须在 device 内存中
+- 函数返回时 CRC32 尚未计算完成，必须同步 stream 后才能读取 `*device_out`
+- 默认 CRC-32/PKZIP 多项式；可传 nvCOMP 预设常量切换算法
+
 ## RDMA性能优化
 
 ### RDMA内存池

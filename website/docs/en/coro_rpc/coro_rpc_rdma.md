@@ -170,6 +170,63 @@ void rpc_function() {
 
 GPU-direct RDMA eliminates CPU-GPU memory copying during network transmission, reducing latency and CPU overhead. Data flows directly from GPU memory to the network interface and vice versa, making it ideal for high-performance computing and AI applications where large amounts of GPU data need to be shared across nodes.
 
+## GPU CRC32 Async Computation (via nvCOMP)
+
+`coro_io::cuda_crc32_async` asynchronously computes the CRC32 of a single device buffer on a GPU stream; the caller reads the result after `stream.record().get()`. It is backed by `nvcompBatchedCRC32Async` from [NVIDIA nvCOMP](https://docs.nvidia.com/cuda/nvcomp/) and defaults to the CRC-32/PKZIP polynomial — pass `nvcompCRC32_C` (iSCSI), `nvcompCRC32_BZIP2`, or any other preset to switch algorithms.
+
+### Enabling (CMake options)
+
+This feature requires nvCOMP v4.0 or newer. Install it on the system first:
+
+```bash
+# RHEL / Alibaba Cloud Linux
+sudo yum install -y nvcomp-cuda-12   # or nvcomp-cuda-11 / nvcomp-cuda-13
+
+# Ubuntu / Debian
+sudo apt-get install -y nvcomp-cuda-12
+```
+
+Then enable **both** `YLT_ENABLE_CUDA` and `YLT_ENABLE_NVCOMP` at CMake configure time, and **explicitly specify** the nvCOMP include / library paths (no auto-search, because the install location differs across CUDA major versions):
+
+```bash
+cmake -B build \
+  -DYLT_ENABLE_CUDA=ON \
+  -DYLT_ENABLE_NVCOMP=ON \
+  -DNVCOMP_INCLUDE_DIR=/usr/include/nvcomp_12 \
+  -DNVCOMP_LIB=/usr/lib64/libnvcomp.so
+```
+
+Required options:
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `YLT_ENABLE_CUDA` | yes | Enables coro_io CUDA support (links `CUDA::cuda_driver`) |
+| `YLT_ENABLE_NVCOMP` | yes | Enables nvCOMP integration (defines `YLT_ENABLE_NVCOMP`) |
+| `NVCOMP_INCLUDE_DIR` | yes | nvCOMP include directory, e.g. `/usr/include/nvcomp_12` (yum package uses a per-CUDA-version subdirectory) |
+| `NVCOMP_LIB` | yes | Path to nvCOMP library, e.g. `/usr/lib64/libnvcomp.so` |
+
+> If `YLT_ENABLE_NVCOMP=ON` but `NVCOMP_INCLUDE_DIR` or `NVCOMP_LIB` is not set, CMake fails with a `FATAL_ERROR` showing the expected usage.
+
+### Usage
+
+```cpp
+#include <ylt/coro_io/cuda/cuda_crc32.hpp>
+
+coro_io::cuda_stream_handler_t stream{0};  // gpu_id must be explicit
+auto d_data = coro_io::cuda_malloc_async(stream, len);   // device input
+auto d_crc  = (uint32_t*)coro_io::cuda_malloc_async(stream, sizeof(uint32_t));
+
+coro_io::cuda_crc32_async(stream, (void*)d_data, len, d_crc);              // default PKZIP
+// coro_io::cuda_crc32_async(stream, (void*)d_data, len, d_crc, nvcompCRC32_C);  // or iSCSI
+
+YLT_CHECK_CUDA_ERR(stream.record().get());  // sync before reading *d_crc
+```
+
+Calling conventions (same as `cuda_copy_async`):
+- `device_data` and `device_out` must reside in device memory
+- The CRC32 result is not yet available when the function returns; the stream must be synchronized before reading `*device_out`
+- Default polynomial is CRC-32/PKZIP; pass any nvCOMP preset constant to switch algorithms
+
 ## RDMA Performance Optimization
 
 ### RDMA Memory Pool
