@@ -1,5 +1,6 @@
 #include <chrono>
 #include <cstddef>
+#include <cstring>
 #include <iostream>
 #include <thread>
 #include <ylt/coro_io/cuda/cuda_memory.hpp>
@@ -8,6 +9,10 @@
 #include "ylt/coro_io/cuda/cuda_device.hpp"
 #include "ylt/coro_io/cuda/cuda_stream.hpp"
 #include "ylt/easylog.hpp"
+
+#ifdef YLT_ENABLE_NVCOMP
+#include <ylt/coro_io/cuda/cuda_crc32.hpp>
+#endif
 
 void sync_memtest() {
   ELOG_DEBUG << "test sync memtest";
@@ -50,7 +55,7 @@ void async_memtest() {
   char data[1024 * 256], data2[1024 * 256];
   memset(data, 'A', sizeof(data));
   memset(data + sizeof(data) / 2, 'B', sizeof(data) - sizeof(data) / 2);
-  coro_io::cuda_stream_handler_t stream_handler{};
+  coro_io::cuda_stream_handler_t stream_handler{0};
   auto ptr = coro_io::cuda_malloc_async(stream_handler, sizeof(data));
   auto ptr2 = coro_io::cuda_malloc_async(stream_handler, sizeof(data));
   coro_io::cuda_copy_async(stream_handler, (void*)ptr, 0, data, -1,
@@ -69,8 +74,8 @@ void async_memtest2() {
   char data[1024 * 256], data2[1024 * 256];
   memset(data, 'A', sizeof(data));
   memset(data + sizeof(data) / 2, 'B', sizeof(data) - sizeof(data) / 2);
-  coro_io::cuda_stream_handler_t stream_handler{};
-  coro_io::cuda_stream_handler_t stream_handler2{};
+  coro_io::cuda_stream_handler_t stream_handler{0};
+  coro_io::cuda_stream_handler_t stream_handler2{0};
   auto ptr = coro_io::cuda_malloc_async(stream_handler, sizeof(data) / 2);
   auto ptr2 = coro_io::cuda_malloc_async(stream_handler, sizeof(data) / 2);
   coro_io::cuda_copy_async(stream_handler, (void*)ptr, 0, data, -1,
@@ -112,6 +117,34 @@ void async_memtest_p2p() {
   }
 }
 
+#ifdef YLT_ENABLE_NVCOMP
+void async_crc32_test() {
+  ELOG_DEBUG << "test async crc32";
+  // CRC-32/PKZIP of "123456789" is the canonical check value 0xCBF43926.
+  static const char kInput[] = "123456789";
+  constexpr std::size_t kLen = sizeof(kInput) - 1;
+  constexpr uint32_t kExpected = 0xCBF43926u;
+
+  coro_io::cuda_stream_handler_t stream_handler{0};
+  auto d_data = coro_io::cuda_malloc_async(stream_handler, kLen);
+  auto d_crc =
+      (uint32_t*)coro_io::cuda_malloc_async(stream_handler, sizeof(uint32_t));
+
+  coro_io::cuda_copy_async(stream_handler, (void*)d_data, 0, kInput, -1, kLen);
+  coro_io::cuda_crc32_async(stream_handler, (void*)d_data, kLen, d_crc);
+
+  uint32_t host_crc = 0;
+  coro_io::cuda_copy_async(stream_handler, &host_crc, -1, (void*)d_crc, 0,
+                           sizeof(uint32_t));
+  YLT_CHECK_CUDA_ERR(stream_handler.record().get());
+
+  ELOG_INFO << "crc32(\"" << kInput << "\") = 0x" << std::hex << host_crc
+            << " (expected 0x" << kExpected << ")";
+  async_simple::logicAssert(host_crc == kExpected,
+                            "cuda_crc32_async result mismatch");
+}
+#endif
+
 int main() {
   sync_memtest();
   sync_memtest_p2p();
@@ -121,6 +154,9 @@ int main() {
   async_memtest();
   async_memtest2();
   async_memtest_p2p();
+#ifdef YLT_ENABLE_NVCOMP
+  async_crc32_test();
+#endif
   ELOG_INFO << "finished!";
 
   return 0;

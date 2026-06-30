@@ -90,6 +90,34 @@ if (YLT_ENABLE_CUDA)
     endif ()
 endif()
 
+option(YLT_ENABLE_NVCOMP "Enable nvCOMP (CRC32 etc.) support" OFF)
+if (YLT_ENABLE_NVCOMP)
+    message(STATUS "Enable nvCOMP support")
+    # Paths must be provided explicitly. yum package nvcomp-cuda-<X> installs
+    # headers under /usr/include/nvcomp_<X>/ and lib as /usr/lib64/libnvcomp.so
+    # (the <X> suffix varies across CUDA major versions).
+    # Example:
+    #   cmake -DYLT_ENABLE_NVCOMP=ON \
+    #         -DNVCOMP_INCLUDE_DIR=/usr/include/nvcomp_12 \
+    #         -DNVCOMP_LIB=/usr/lib64/libnvcomp.so ...
+    if (NOT NVCOMP_INCLUDE_DIR OR NOT NVCOMP_LIB)
+        message(FATAL_ERROR
+            "YLT_ENABLE_NVCOMP=ON but NVCOMP_INCLUDE_DIR / NVCOMP_LIB are not set.\n"
+            "Install via 'yum install nvcomp-cuda-<X>' and pass:\n"
+            "  -DNVCOMP_INCLUDE_DIR=/usr/include/nvcomp_<X>\n"
+            "  -DNVCOMP_LIB=/usr/lib64/libnvcomp.so")
+    endif()
+    if(CMAKE_PROJECT_NAME STREQUAL "yaLanTingLibs")
+        add_compile_definitions("YLT_ENABLE_NVCOMP")
+        link_libraries(${NVCOMP_LIB})
+        include_directories(${NVCOMP_INCLUDE_DIR})
+    else ()
+        target_compile_definitions(${ylt_target_name} INTERFACE "YLT_ENABLE_NVCOMP")
+        target_link_libraries(${ylt_target_name} INTERFACE ${NVCOMP_LIB})
+        target_include_directories(${ylt_target_name} INTERFACE ${NVCOMP_INCLUDE_DIR})
+    endif ()
+endif()
+
 option(YLT_ENABLE_PMR "Enable pmr support" OFF)
 message(STATUS "YLT_ENABLE_PMR: ${YLT_ENABLE_PMR}")
 if (YLT_ENABLE_PMR)
