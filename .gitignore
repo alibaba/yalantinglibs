@@ -57,3 +57,6 @@ cdb.json
 
 # website
 website/docs/zh/*/images/
+
+# AI
+.claude
