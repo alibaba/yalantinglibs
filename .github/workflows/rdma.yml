@@ -1,0 +1,97 @@
+name: RDMA (SoftRoCE)
+
+# Exercises the ibverbs stack and the RDMA code paths inside coro_rpc by
+# standing up a virtual SoftRoCE (rdma_rxe) device on a standard GitHub-hosted
+# ubuntu-22.04 runner, then building with -DYLT_ENABLE_IBV=ON.
+#
+# NOTE: GitHub-hosted runners do not ship the rdma_rxe kernel module. We pull it
+# in via linux-modules-extra-$(uname -r) and modprobe it. If a runner-image
+# update ever breaks modprobe rdma_rxe, the setup step below fails fast and the
+# obvious fallback is to switch `runs-on` to a self-hosted runner that already
+# has SoftRoCE configured — the rest of the workflow is unchanged.
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    - cron: '17 17 * * *'   # daily ~01:15 CST, off-the-hour
+  workflow_dispatch:
+  workflow_call:
+
+env:
+  ccache: ON
+
+jobs:
+  rdma_softroce:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            openssl libssl-dev \
+            libibverbs-dev librdmacm-dev rdma-core \
+            iproute2 ninja-build
+
+      - name: Set up SoftRoCE (rdma_rxe) virtual RDMA device
+        run: |
+          # The ubuntu-22.04 runner kernel exposes rdma_rxe only via the
+          # linux-modules-extra package. Install it, load the modules, then
+          # create an rxe device bound to the primary non-loopback interface.
+          sudo apt-get install -y "linux-modules-extra-$(uname -r)"
+          sudo modprobe ib_core
+          sudo modprobe rdma_rxe
+
+          DEV=$(ip -o link show | awk -F': ' '$2 != "lo" {print $2; exit}')
+          if [ -z "$DEV" ]; then
+            echo "::error::No usable netdev found for SoftRoCE"
+            exit 1
+          fi
+          echo "Binding rxe0 to netdev: $DEV"
+          sudo rdma link add rxe0 type rxe netdev "$DEV"
+
+          # Verify — hard fail if no RDMA device came up so we never run the
+          # test suite against a broken/missing device.
+          rdma link show
+          ibv_devices
+          # ibv_devices -l prints a header line plus one line per device.
+          test "$(ibv_devices -l 2>/dev/null | wc -l)" -gt 2
+
+      - name: Install ninja-build tool
+        uses: seanmiddleditch/gha-setup-ninja@master
+
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ github.job }}
+
+      - name: Configure
+        run: |
+          CXX=g++ CC=gcc
+          cmake -B ${{github.workspace}}/build -G Ninja \
+                -DCMAKE_BUILD_TYPE=Debug \
+                -DYLT_ENABLE_IBV=ON \
+                -DYLT_ENABLE_SSL=OFF \
+                -DUSE_CCACHE=${{env.ccache}}
+
+      - name: Build
+        run: cmake --build ${{github.workspace}}/build --config Debug
+
+      - name: Run ibverbs tests
+        working-directory: ${{github.workspace}}/build
+        run: ctest -R ibverbs -C Debug -j 1 -V
+
+      - name: Run coro_rpc RDMA integration cases
+        working-directory: ${{github.workspace}}/build
+        run: |
+          # Only the RDMA-specific doctest cases — running the whole coro_rpc
+          # suite is heavy and out of scope for this job. An empty filter match
+          # (0 assertions) exits non-zero, which surfaces a missing-YLT_ENABLE_IBV
+          # regression on the test binary.
+          ./output/tests/coro_rpc_test -tc="*rdma*" -rf=console
