@@ -278,7 +278,7 @@ class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
     gid_index_ = conf.use_best_gid_index ? find_best_gid_index(conf.gid_index)
                                          : conf.gid_index;
 
-    ELOG_WARN << name_ << " Active MTU: " << detail::mtu_str(attr_.active_mtu)
+    ELOG_INFO << name_ << " Active MTU: " << detail::mtu_str(attr_.active_mtu)
               << ", "
               << "Max MTU: " << detail::mtu_str(attr_.max_mtu)
               << ", gid index: " << gid_index_;
