@@ -30,15 +30,19 @@
 #include "ylt/coro_io/detail/client_queue.hpp"
 #include "ylt/easylog.hpp"
 
-#define YLT_CHECK_CUDA_ERR(err)                                       \
-  do {                                                                \
-    if (err != CUDA_SUCCESS && err != CUDA_ERROR_DEINITIALIZED) {     \
-      const char* err_str;                                            \
-      cuGetErrorString(err, &err_str);                                \
-      std::string tmp = "CUDA Driver error: " + std::string(err_str); \
-      ELOG_ERROR << tmp;                                              \
-      throw std::runtime_error(tmp);                                  \
-    }                                                                 \
+#define YLT_CHECK_CUDA_ERR(err)                                               \
+  do {                                                                        \
+    if (err != CUDA_SUCCESS && err != CUDA_ERROR_DEINITIALIZED) {             \
+      const char* err_str = nullptr;                                          \
+      CUresult desc_err = cuGetErrorString(err, &err_str);                    \
+      std::string tmp =                                                       \
+          "CUDA Driver error: code " + std::to_string(static_cast<int>(err)); \
+      if (desc_err == CUDA_SUCCESS && err_str != nullptr) {                   \
+        tmp += " (" + std::string(err_str) + ")";                             \
+      }                                                                       \
+      ELOG_ERROR << tmp;                                                      \
+      throw std::runtime_error(tmp);                                          \
+    }                                                                         \
   } while (0)
 
 namespace coro_io {
