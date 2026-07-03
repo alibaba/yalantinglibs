@@ -51,6 +51,9 @@
 #ifdef YLT_ENABLE_IBV
 #include "ylt/coro_io/ibverbs/ib_socket.hpp"
 #endif
+#ifdef YLT_ENABLE_ND
+#include "ylt/coro_io/networkdirect/nd_socket.hpp"
+#endif
 namespace coro_io {
 
 struct client_reuse_hint {};
@@ -504,6 +507,12 @@ class client_pool : public std::enable_shared_from_this<
       // rdma
 #ifdef YLT_ENABLE_IBV
       if (std::holds_alternative<coro_io::ib_socket_t::config_t>(
+              cli.get_config().socket_config)) {
+        limit = rdma_reuse_limit;
+      }
+#endif
+#ifdef YLT_ENABLE_ND
+      if (std::holds_alternative<coro_io::nd_socket_t::config_t>(
               cli.get_config().socket_config)) {
         limit = rdma_reuse_limit;
       }

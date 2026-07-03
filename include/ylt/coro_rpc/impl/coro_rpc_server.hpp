@@ -42,6 +42,9 @@
 #include "coro_connection.hpp"
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
+#ifdef YLT_ENABLE_ND
+#include "nd_server_acceptor.hpp"
+#endif
 #include "ylt/coro_rpc/impl/expected.hpp"
 namespace coro_rpc {
 /*!
@@ -118,6 +121,14 @@ class coro_rpc_server_base {
       init_ibv(config.ibv_config);
     }
 #endif
+#ifdef YLT_ENABLE_ND
+    if constexpr (requires { config.nd_config; config.nd_port;
+                             config.nd_address; }) {
+      if (config.nd_config) {
+        init_nd(config.nd_config.value(), config.nd_port, config.nd_address);
+      }
+    }
+#endif
     init_address(config.address);
   }
 
@@ -134,6 +145,12 @@ class coro_rpc_server_base {
 #ifdef YLT_ENABLE_IBV
   void init_ibv(const coro_io::ib_socket_t::config_t &conf = {}) {
     ibv_config_ = conf;
+  }
+#endif
+#ifdef YLT_ENABLE_ND
+  void init_nd(const coro_io::nd_socket_t::config_t &conf = {},
+               uint16_t nd_port = 0, std::string nd_address = {}) {
+    nd_acceptor_.init(conf, nd_port, std::move(nd_address));
   }
 #endif
 
@@ -188,6 +205,13 @@ class coro_rpc_server_base {
     if (!errc_) {
       async_simple::Promise<coro_rpc::err_code> promise;
       auto future = promise.getFuture();
+#ifdef YLT_ENABLE_ND
+      if (nd_acceptor_.enabled()) {
+        nd_acceptor_.start_accept(pool_, conn_timeout_duration_, router_,
+                                  conn_id_, conns_, conns_mtx_,
+                                  connection_transfer_);
+      }
+#endif
       accept().start([this, p = std::move(promise)](auto &&res) mutable {
         ELOG_INFO << "server quit!";
         if (res.hasError()) {
@@ -233,6 +257,9 @@ class coro_rpc_server_base {
         conns_.clear();
       }
 
+#ifdef YLT_ENABLE_ND
+      nd_acceptor_.stop_contexts();
+#endif
       ELOG_INFO << "wait for server's thread-pool finish all work.";
       pool_.stop();
       ELOG_INFO << "server's thread-pool finished.";
@@ -401,6 +428,16 @@ class coro_rpc_server_base {
     port_ = end_point.port();
 
     ELOG_INFO << "listen port " << port_.load() << " successfully";
+#ifdef YLT_ENABLE_ND
+    if (nd_acceptor_.enabled()) {
+      auto nd_errc = nd_acceptor_.listen(pool_, address_, port_.load());
+      if (nd_errc) {
+        acceptor_.cancel(ec);
+        acceptor_.close(ec);
+        return nd_errc;
+      }
+    }
+#endif
     return {};
   }
 
@@ -492,7 +529,13 @@ class coro_rpc_server_base {
       (void)acceptor_.cancel(ec);
       (void)acceptor_.close(ec);
     });
+#ifdef YLT_ENABLE_ND
+    nd_acceptor_.cancel();
+#endif
     acceptor_close_waiter_.get_future().wait();
+#ifdef YLT_ENABLE_ND
+    nd_acceptor_.wait_accept_finished();
+#endif
   }
 
   void init_address(std::string address) {
@@ -522,7 +565,7 @@ class coro_rpc_server_base {
   stat flag_;
 
   std::mutex start_mtx_;
-  uint64_t conn_id_ = 0;
+  std::atomic<uint64_t> conn_id_ = 0;
   std::unordered_map<uint64_t, std::shared_ptr<coro_connection>> conns_;
   std::mutex conns_mtx_;
 
@@ -544,6 +587,9 @@ class coro_rpc_server_base {
 #endif
 #ifdef YLT_ENABLE_IBV
   std::optional<coro_io::ib_socket_t::config_t> ibv_config_;
+#endif
+#ifdef YLT_ENABLE_ND
+  nd_server_acceptor<server_config> nd_acceptor_;
 #endif
 };
 }  // namespace coro_rpc

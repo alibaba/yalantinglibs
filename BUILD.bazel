@@ -40,6 +40,29 @@ cc_test(
     deps = [":ylt"],
 )
 
+cc_test(
+    name = "networkdirect_test",
+    srcs = [
+        "src/coro_io/tests/networkdirect/main.cpp",
+        "src/coro_io/tests/networkdirect/test_nd_buffer_pool.cpp",
+        "src/coro_io/tests/networkdirect/test_nd_socket.cpp",
+    ],
+    copts = YA_BIN_COPT,
+    defines = ["YLT_ENABLE_ND"],
+    includes = [
+        "include",
+        "include/ylt/thirdparty",
+        "include/ylt/standalone",
+        "src/include",
+    ],
+    linkopts = [
+        "ws2_32.lib",
+        "mswsock.lib",
+    ],
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [":ylt"],
+)
+
 cc_binary(
     name = "easylog_benchmark",
     srcs = [

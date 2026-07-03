@@ -55,6 +55,9 @@
 #ifdef YLT_ENABLE_IBV
 #include "ylt/coro_io/ibverbs/ib_socket.hpp"
 #endif
+#ifdef YLT_ENABLE_ND
+#include "ylt/coro_io/networkdirect/nd_socket.hpp"
+#endif
 #include "ylt/coro_io/io_context_pool.hpp"
 #include "ylt/coro_io/socket_wrapper.hpp"
 #include "ylt/coro_rpc/impl/errno.h"
@@ -206,6 +209,10 @@ class coro_rpc_client {
                  ,
                  coro_io::ib_socket_t::config_t
 #endif
+#ifdef YLT_ENABLE_ND
+                 ,
+                 coro_io::nd_socket_t::config_t
+#endif
                  >
         socket_config;
     config()
@@ -254,6 +261,12 @@ class coro_rpc_client {
 #ifdef YLT_ENABLE_IBV
   [[nodiscard]] bool init_socket_wrapper(
       const coro_io::ib_socket_t::config_t &config) {
+    return control_->socket_wrapper_.init_client(config);
+  }
+#endif
+#ifdef YLT_ENABLE_ND
+  [[nodiscard]] bool init_socket_wrapper(
+      const coro_io::nd_socket_t::config_t &config) {
     return control_->socket_wrapper_.init_client(config);
   }
 #endif
@@ -407,6 +420,14 @@ class coro_rpc_client {
     config_.socket_config = config;
     return init_socket_wrapper(
         std::get<coro_io::ib_socket_t::config_t>(config_.socket_config));
+  }
+#endif
+#ifdef YLT_ENABLE_ND
+  [[nodiscard]] bool init_nd(
+      const coro_io::nd_socket_t::config_t &config = {}) {
+    config_.socket_config = config;
+    return init_socket_wrapper(
+        std::get<coro_io::nd_socket_t::config_t>(config_.socket_config));
   }
 #endif
 

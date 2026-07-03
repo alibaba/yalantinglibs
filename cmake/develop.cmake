@@ -29,6 +29,9 @@ endif()
 option(GENERATE_BENCHMARK_DATA "Generate benchmark data" ON)
 message(STATUS "GENERATE_BENCHMARK_DATA: ${GENERATE_BENCHMARK_DATA}")
 
+if(MSVC)
+    add_compile_options(/utf-8)
+endif()
 
 # Enable coro_rpc user define protocol example
 option(CORO_RPC_USE_OTHER_RPC "coro_rpc extend to support other rpc" OFF)

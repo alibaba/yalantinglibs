@@ -17,10 +17,14 @@
 
 #include <chrono>
 #include <optional>
+#include <string>
 #include <thread>
 
 #ifdef YLT_ENABLE_IBV
 #include "ylt/coro_io/ibverbs/ib_socket.hpp"
+#endif
+#ifdef YLT_ENABLE_ND
+#include "ylt/coro_io/networkdirect/nd_socket.hpp"
 #endif
 
 #include "ylt/coro_io/io_context_pool.hpp"
@@ -42,6 +46,11 @@ struct config_base {
 #endif
 #ifdef YLT_ENABLE_IBV
   std::optional<coro_io::ib_socket_t::config_t> ibv_config = std::nullopt;
+#endif
+#ifdef YLT_ENABLE_ND
+  std::optional<coro_io::nd_socket_t::config_t> nd_config = std::nullopt;
+  uint16_t nd_port = 0;
+  std::string nd_address;
 #endif
 };
 

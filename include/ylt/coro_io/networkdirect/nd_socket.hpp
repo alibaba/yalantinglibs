@@ -256,6 +256,7 @@ class nd_socket_t {
     std::uint16_t recv_buffer_cnt = 8;
     std::uint16_t send_buffer_cnt = 4;
     std::size_t buffer_size = 256 * 1024;
+    nd_buffer_pool_t::config_t buffer_pool_config;
     nd_device_ptr device;
   };
 
@@ -517,7 +518,8 @@ class nd_socket_t {
       return false;
     }
     buffer_size_ =
-        (std::min<std::size_t>)(conf_.buffer_size, info.buffer_size);
+        (std::min<std::size_t>)(buffer_pool()->buffer_size(),
+                                info.buffer_size);
     remote_port_ = info.port;
     try {
       if (info.address_size == 4) {
@@ -576,9 +578,9 @@ class nd_socket_t {
       }
     }
 
-    auto pool = nd_buffer_pool_t::create(
-        conf_.device, nd_buffer_pool_t::config_t{.buffer_size =
-                                                     conf_.buffer_size});
+    auto pool_config = conf_.buffer_pool_config;
+    pool_config.buffer_size = conf_.buffer_size;
+    auto pool = nd_buffer_pool_t::create(conf_.device, pool_config);
     state_ = std::make_shared<detail::nd_socket_shared_state_t>(
         executor_, conf_.device, std::move(pool), conf_.recv_buffer_cnt);
   }

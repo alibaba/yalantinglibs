@@ -3,6 +3,7 @@ if(YLT_ENABLE_ND)
   set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output/tests)
 
   add_executable(networkdirect_test
+    test_nd_buffer_pool.cpp
     test_nd_socket.cpp
     main.cpp
   )

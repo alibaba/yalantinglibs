@@ -10,6 +10,9 @@ set(TEST_SRCS
         test_variadic.cpp
         test_parallel.cpp
         )
+if(YLT_ENABLE_ND)
+        list(APPEND TEST_SRCS test_networkdirect_rpc.cpp)
+endif()
 set(TEST_COMMON
         rpc_api.cpp
         main.cpp
@@ -30,6 +33,9 @@ add_custom_command(
         ${CMAKE_BINARY_DIR}/output/openssl_files)
 target_compile_definitions(coro_rpc_test PRIVATE UNIT_TEST_INJECT)
 target_compile_definitions(coro_rpc_test PRIVATE STRUCT_PACK_ENABLE_UNPORTABLE_TYPE)
+if(YLT_ENABLE_ND)
+  target_link_libraries(coro_rpc_test PRIVATE ws2_32 mswsock)
+endif()
 
 add_test(NAME coro_rpc_test COMMAND coro_rpc_test)
 
