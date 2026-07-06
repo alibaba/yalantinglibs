@@ -20,6 +20,6 @@ if (YLT_ENABLE_CUDA)
   add_executable(ibverbs_gdr_test
   test_gdr.cpp     
   main.cpp)
-  add_test(NAME ibvberbs_gdr_test COMMAND ibvberbs_gdr_test)
+  add_test(NAME ibverbs_gdr_test COMMAND ibverbs_gdr_test)
 endif()
 endif()

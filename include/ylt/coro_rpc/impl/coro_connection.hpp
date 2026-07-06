@@ -90,6 +90,7 @@ struct context_info_t {
   void set_response_attachment(std::function<std::string_view()> attachment);
   void set_response_attachment2(std::function<coro_io::data_view()> attachment);
   void set_response_attachment2(coro_io::data_view attachment);
+  void set_response_attachment2(coro_io::heterogeneous_buffer &&attachment);
   /* set a handler which will be called when data was serialized and write to
    * socket*/
   /* std::error_code: socket write result*/
@@ -797,6 +798,16 @@ template <typename rpc_protocol>
 void context_info_t<rpc_protocol>::set_response_attachment2(
     std::function<coro_io::data_view()> attachment) {
   resp_attachment_ = std::move(attachment);
+}
+
+template <typename rpc_protocol>
+void context_info_t<rpc_protocol>::set_response_attachment2(
+    coro_io::heterogeneous_buffer &&attachment) {
+  set_response_attachment2(
+      [attachment = std::make_shared<coro_io::heterogeneous_buffer>(
+           std::move(attachment))] {
+        return coro_io::data_view{*attachment};
+      });
 }
 
 template <typename rpc_protocol>

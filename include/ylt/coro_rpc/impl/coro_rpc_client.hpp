@@ -942,7 +942,7 @@ class coro_rpc_client {
     return call<func>(request_config_t{{},
                                        req_attachment_,
                                        (std::span<char>)resp_attachment_buffer_,
-                                       resp_attachment_.gpu_id(),
+                                       req_attachment_.gpu_id(),
                                        resp_attachment_buffer_.gpu_id()},
                       std::forward<Args>(args)...);
   }
@@ -964,7 +964,7 @@ class coro_rpc_client {
     return call<func>(
         request_config_t{request_timeout_duration, req_attachment_,
                          (std::span<char>)resp_attachment_buffer_,
-                         resp_attachment_.gpu_id(),
+                         req_attachment_.gpu_id(),
                          resp_attachment_buffer_.gpu_id()},
         std::forward<Args>(args)...);
   }
@@ -1277,11 +1277,11 @@ class coro_rpc_client {
 
   /*
    * buffer layout
-   * 閳瑰备鏀㈤埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞顑芥敘閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳?
-   * 閳逛拷eq_header      閳逛繘rgs            閳?
-   * 閳规壕鏀㈤埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞灏栨敘閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳?
-   * 閳逛縼EQ_HEADER_LEN  閳瑰€俛riable length 閳?
-   * 閳规柡鏀㈤埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞鈧埞绮规敘閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳光偓閳?
+   * +------------------+-------------------+
+   * | req_header       | args              |
+   * +------------------+-------------------+
+   * | REQ_HEADER_LEN   | variable length   |
+   * +------------------+-------------------+
    */
   template <auto func, typename... Args>
   std::vector<std::byte> prepare_buffer(uint32_t &id,
@@ -1643,7 +1643,7 @@ class coro_rpc_client {
                 *buffer,
                 std::max<uint64_t>(header.attach_length, sizeof(std::string)));
             attachment_buffer = {
-                std::span<char>{buffer->data(), header.attach_length}, 0};
+                std::span<char>{buffer->data(), header.attach_length}, -1};
           }
         }
         else if (attachment_buffer.size() > header.attach_length) {

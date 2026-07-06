@@ -31,6 +31,10 @@
 #include "rpc_api.hpp"
 #include "ylt/coro_http/coro_http_client.hpp"
 #include "ylt/coro_http/coro_http_server.hpp"
+#ifdef YLT_ENABLE_CUDA
+#include "ylt/coro_io/cuda/cuda_memory.hpp"
+#endif
+#include "ylt/easylog/record.hpp"
 #ifdef YLT_ENABLE_BAREX
 #include "ylt/coro_io/barex/barex_acceptor.hpp"
 #include "ylt/coro_io/barex/barex_device.hpp"
@@ -75,6 +79,12 @@ struct CoroServerTester : ServerTester {
 #ifdef YLT_ENABLE_IBV
     if (use_rdma) {
       server.init_ibv();
+    }
+#endif
+#if defined(YLT_ENABLE_IBV) && defined(YLT_ENABLE_CUDA)
+    if (use_gdr) {
+      server.init_ibv(coro_io::ib_socket_t::config_t{.device = get_gdr_dev()},
+                      {get_gdr_dev()});
     }
 #endif
     auto res = server.async_start();
@@ -200,23 +210,43 @@ struct CoroServerTester : ServerTester {
     server.register_handler<&CoroServerTester::get_value>(this);
   }
 
+  void attachment_cmp(coro_io::data_view attachment, std::string_view data) {
+    if (attachment.is_cpu_memory()) {
+      CHECK(std::string{attachment} == data);
+    }
+    else {
+#ifdef YLT_ENABLE_CUDA
+      std::string s;
+      s.resize(attachment.size());
+      std::cout << "start copying!" << std::endl;
+      coro_io::cuda_copy(s.data(), -1, attachment.data(), attachment.gpu_id(),
+                         attachment.size());
+      std::cout << "expected: " << s << ",got: " << data << std::endl;
+      CHECK(s == data);
+#endif
+    }
+  }
+
   void test_context_func() {
     auto client = create_client();
     ELOGV(INFO, "run %s, client_id %d", __func__, client->get_client_id());
     client->set_req_attachment("1234567890987654321234567890");
     auto result = syncAwait(client->call<test_context>());
     CHECK(result);
-    CHECK(client->get_resp_attachment() == "1234567890987654321234567890");
+    attachment_cmp(client->get_resp_attachment2(),
+                   "1234567890987654321234567890");
 
     client->set_req_attachment("12345678909876543212345678901");
     result = syncAwait(client->call<test_callback_context>());
     CHECK(result);
-    CHECK(client->get_resp_attachment() == "12345678909876543212345678901");
+    attachment_cmp(client->get_resp_attachment2(),
+                   "12345678909876543212345678901");
 
     client->set_req_attachment("01234567890987654321234567890");
     result = syncAwait(client->call<test_lazy_context>());
     CHECK(result);
-    CHECK(client->get_resp_attachment() == "01234567890987654321234567890");
+    attachment_cmp(client->get_resp_attachment2(),
+                   "01234567890987654321234567890");
   }
   void test_return_err_by_throw_exception() {
     {
@@ -327,6 +357,8 @@ struct CoroServerTester : ServerTester {
   HelloService hello_service_;
 };
 TEST_CASE("testing coro rpc server") {
+  easylog::logger<>::instance().set_min_severity(easylog::Severity::TRACE);
+  easylog::logger<>::instance().set_async(false);
   ELOGV(INFO, "run testing coro rpc server");
   unsigned short server_port = 8810;
   auto conn_timeout_duration = 500ms;
@@ -335,14 +367,18 @@ TEST_CASE("testing coro rpc server") {
 #ifdef YLT_ENABLE_SSL
                                ,
                                1
-#endif
 #ifdef YLT_ENABLE_IBV
+#endif
                                ,
                                2
 #endif
 #ifdef YLT_ENABLE_BAREX
                                ,
                                3
+#endif
+#if defined(YLT_ENABLE_IBV) && defined(YLT_ENABLE_CUDA)
+                               ,
+                               4
 #endif
   };
   for (auto enable_heartbeat : enable_heartbeat) {
@@ -354,21 +390,31 @@ TEST_CASE("testing coro rpc server") {
         config.use_ssl = false;
         config.use_rdma = false;
         config.use_barex = false;
+        config.use_gdr = false;
       }
       else if (type == 1) {
         config.use_ssl = true;
         config.use_rdma = false;
         config.use_barex = false;
+        config.use_gdr = false;
       }
       else if (type == 2) {
         config.use_ssl = false;
         config.use_rdma = true;
         config.use_barex = false;
+        config.use_gdr = false;
       }
       else if (type == 3) {
         config.use_ssl = false;
         config.use_rdma = false;
         config.use_barex = true;
+        config.use_gdr = false;
+      }
+      else if (type == 4) {
+        config.use_ssl = false;
+        config.use_rdma = false;
+        config.use_barex = false;
+        config.use_gdr = true;
       }
       config.sync_client = false;
       config.use_outer_io_context = false;
