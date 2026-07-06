@@ -25,6 +25,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <stdexcept>
 #include <string_view>
 #include <system_error>
 #include <type_traits>
@@ -122,14 +123,23 @@ inline std::size_t copy(cuda_stream_handler_t* handler, std::span<ibv_sge> src,
                         ibv_sge dst) {
   std::size_t transfer_total = 0;
   for (auto& sge : src) {
-    if (!handler) {
+    if (!handler && sge.lkey == -1) {
       memcpy((void*)(dst.addr + transfer_total), (void*)sge.addr, sge.length);
     }
     else {
 #ifdef YLT_ENABLE_CUDA
-      cuda_copy_async(*handler, (void*)(dst.addr + transfer_total),
-                      handler->get_device().get_gpu_id(), (void*)sge.addr,
-                      sge.lkey, sge.length);
+      if (handler) {
+        cuda_copy_async(*handler, (void*)(dst.addr + transfer_total),
+                        handler->get_device().get_gpu_id(), (void*)sge.addr,
+                        sge.lkey, sge.length);
+      }
+      else {
+        cuda_copy((void*)(dst.addr + transfer_total), -1, (void*)sge.addr,
+                  sge.lkey, sge.length);
+      }
+#else
+      ELOG_WARN << "cuda is not enabled, gpu_id = " << sge.lkey;
+      std::runtime_error("cuda is not enabled")
 #endif
     }
     transfer_total += sge.length;
@@ -141,14 +151,24 @@ inline void copy(cuda_stream_handler_t* handler, ibv_sge src,
                  std::span<ibv_sge> dst) {
   std::size_t transfer_total = 0;
   for (auto& sge : dst) {
-    if (!handler) {
+    if (!handler && sge.lkey == -1) {
       memcpy((void*)sge.addr, (void*)(src.addr + transfer_total), sge.length);
     }
     else {
 #ifdef YLT_ENABLE_CUDA
-      cuda_copy_async(*handler, (void*)sge.addr, sge.lkey,
-                      (void*)(src.addr + transfer_total),
-                      handler->get_device().get_gpu_id(), sge.length);
+      if (handler) {
+        cuda_copy_async(*handler, (void*)sge.addr, sge.lkey,
+                        (void*)(src.addr + transfer_total),
+                        handler->get_device().get_gpu_id(), sge.length);
+      }
+      else {
+        cuda_copy((void*)sge.addr, sge.lkey, (void*)(src.addr + transfer_total),
+                  -1, sge.length);
+      }
+
+#else
+      ELOG_WARN << "cuda is not enabled, gpu_id = " << sge.lkey;
+      std::runtime_error("cuda is not enabled")
 #endif
     }
     transfer_total += sge.length;
