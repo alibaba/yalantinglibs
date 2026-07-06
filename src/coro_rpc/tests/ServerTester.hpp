@@ -31,6 +31,17 @@
 #include "ylt/coro_io/io_context_pool.hpp"
 #include "ylt/coro_rpc/impl/errno.h"
 
+#if defined(YLT_ENABLE_IBV) && defined(YLT_ENABLE_CUDA)
+#include "ylt/coro_io/ibverbs/ib_device.hpp"
+#include "ylt/coro_io/ibverbs/ib_socket.hpp"
+// Create GDR device, buffer pool uses GPU 0 memory
+inline std::shared_ptr<coro_io::ib_device_t> get_gdr_dev() {
+  static auto dev = coro_io::ib_device_t::create(coro_io::ib_device_t::config_t{
+      .buffer_pool_config{.buffer_size = 8 * 1024, .gpu_id = 0}});
+  return dev;
+}
+#endif
+
 #ifdef _MSC_VER
 #define CORO_RPC_FUNCTION_SIGNATURE __FUNCSIG__
 #else
@@ -48,6 +59,7 @@ struct TesterConfig {
     enable_heartbeat = c.enable_heartbeat;
     use_ssl = c.use_ssl;
     use_rdma = c.use_rdma;
+    use_gdr = c.use_gdr;
     sync_client = c.sync_client;
     use_outer_io_context = c.use_outer_io_context;
     port = c.port;
@@ -57,6 +69,7 @@ struct TesterConfig {
   bool use_ssl;
   bool use_rdma;
   bool sync_client;
+  bool use_gdr;
   bool use_outer_io_context;
   unsigned short port;
   std::string address = "0.0.0.0";
@@ -69,6 +82,7 @@ struct TesterConfig {
     os << " enable_heartbeat: " << config.enable_heartbeat << ";"
        << " use_ssl: " << config.use_ssl << ";"
        << " use_rdma: " << config.use_rdma << ";"
+       << " use_gdr: " << config.use_gdr << ";"
        << " sync_client: " << config.sync_client << ";"
        << " use_outer_io_context: " << config.use_outer_io_context << ";"
        << " port: " << config.port << ";"
@@ -157,6 +171,14 @@ struct ServerTester : TesterConfig {
         bool ok = client->init_ibv();
         REQUIRE_MESSAGE(ok == true,
                         "init ibv fail, please check ibverbs config");
+      }
+#endif
+#if defined(YLT_ENABLE_IBV) && defined(YLT_ENABLE_CUDA)
+      if (use_gdr) {
+        bool ok = client->init_ibv(
+            coro_io::ib_socket_t::config_t{.device = get_gdr_dev()});
+        REQUIRE_MESSAGE(ok == true,
+                        "init ibv gdr fail, please check ibverbs/cuda config");
       }
 #endif
       g_action = action;
@@ -381,6 +403,14 @@ struct ServerTester : TesterConfig {
         bool ok = client->init_ibv();
         REQUIRE_MESSAGE(ok == true,
                         "init ibv fail, please check ibverbs config");
+      }
+#endif
+#if defined(YLT_ENABLE_IBV) && defined(YLT_ENABLE_CUDA)
+      if (use_gdr) {
+        bool ok = client->init_ibv(
+            coro_io::ib_socket_t::config_t{.device = get_gdr_dev()});
+        REQUIRE_MESSAGE(ok == true,
+                        "init ibv gdr fail, please check ibverbs/cuda config");
       }
 #endif
       return client;

@@ -49,7 +49,7 @@ inline void cuda_copy(void* dst, int dst_gpu_id, const void* src,
   if (len == 0)
     return;
 
-  // 必须一端是 host (-1)，另一端是 device (>=0)
+  // One end must be host (-1), the other must be device (>=0)
   if ((dst_gpu_id == -1) && (src_gpu_id == -1)) {
     memcpy(dst, src, len);
     return;
@@ -92,7 +92,7 @@ inline void cuda_copy(void* dst, int dst_gpu_id, const void* src,
   }
 }
 
-// 模拟 cudaMalloc 的函数（Driver API 版）
+// Equivalent of cudaMalloc (Driver API version)
 inline CUdeviceptr cuda_malloc(size_t size, int gpu_id = 0,
                                bool enable_gdr = false) {
   CUdeviceptr d_ptr;
@@ -106,7 +106,7 @@ inline CUdeviceptr cuda_malloc(size_t size, int gpu_id = 0,
   return d_ptr;
 }
 
-// 模拟 cudaMalloc 的函数（Driver API 版）
+// Equivalent of cudaMalloc (Driver API version)
 inline CUdeviceptr cuda_malloc(size_t size, cuda_device_t& dev,
                                bool enable_gdr = false) {
   CUdeviceptr d_ptr;
@@ -120,7 +120,7 @@ inline CUdeviceptr cuda_malloc(size_t size, cuda_device_t& dev,
   return d_ptr;
 }
 
-// 模拟 cudaFree
+// Equivalent of cudaFree
 inline void cuda_free(void* d_ptr, int gpu_id = 0) {
   detail::time_guard guard("cuda_free");
   cuda_device_t::get_cuda_device(gpu_id)->set_context();
@@ -134,7 +134,6 @@ inline void cuda_free(void* d_ptr, cuda_device_t& dev) {
              << dev.get_gpu_id() << ")";
   YLT_CHECK_CUDA_ERR(cuMemFree((CUdeviceptr)d_ptr));
 }
-
 inline void cuda_copy_async(cuda_stream_handler_t& stream, void* dst,
                             int dst_gpu_id, const void* src, int src_gpu_id,
                             std::size_t len) {

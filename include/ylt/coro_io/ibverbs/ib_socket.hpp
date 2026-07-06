@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #pragma once
+#include <infiniband/mlx5dv.h>
 #include <infiniband/verbs.h>
 #include <sys/stat.h>
 
@@ -918,7 +919,7 @@ class ib_socket_t {
         std::max<uint32_t>(conf_.cap.max_recv_wr, conf_.recv_buffer_cnt);
     conf_.cq_size =
         std::max(conf_.cap.max_send_wr + conf_.cap.max_recv_wr, conf_.cq_size);
-    if (!conf_.device->is_support_inline_data()) {
+    if (gpu_id_ >= 0 || !conf_.device->is_support_inline_data()) {
       conf_.cap.max_inline_data = 0;
     }
     ELOG_INFO << "send wr:" << conf_.cap.max_send_wr
@@ -958,6 +959,36 @@ class ib_socket_t {
     qp_init_attr.recv_cq = state_->cq_.get();
     qp_init_attr.cap = conf_.cap;
     ibv_qp* qp;
+#ifdef YLT_ENABLE_CUDA
+    if (gpu_id_ >= 0 &&
+        mlx5dv_is_supported(state_->device_->context()->device)) {
+      struct ibv_qp_init_attr_ex qp_init_attr_ex;
+      memset(&qp_init_attr_ex, 0, sizeof(qp_init_attr_ex));
+      qp_init_attr_ex.qp_type = conf_.qp_type;
+      qp_init_attr_ex.sq_sig_all = 1;
+      qp_init_attr_ex.send_cq = state_->cq_.get();
+      qp_init_attr_ex.recv_cq = state_->cq_.get();
+      qp_init_attr_ex.cap = conf_.cap;
+      qp_init_attr_ex.pd = state_->device_->pd();
+      qp_init_attr_ex.comp_mask = IBV_QP_INIT_ATTR_PD;
+
+      struct mlx5dv_qp_init_attr mlx5_qp_attr;
+      memset(&mlx5_qp_attr, 0, sizeof(mlx5_qp_attr));
+      mlx5_qp_attr.comp_mask = MLX5DV_QP_INIT_ATTR_MASK_QP_CREATE_FLAGS;
+      mlx5_qp_attr.create_flags = MLX5DV_QP_CREATE_DISABLE_SCATTER_TO_CQE;
+
+      qp = mlx5dv_create_qp(state_->device_->context(), &qp_init_attr_ex,
+                            &mlx5_qp_attr);
+      if (qp == nullptr) {
+        auto err_code = std::make_error_code(std::errc{errno});
+        ELOG_ERROR << "mlx5dv_create_qp (disable scatter-to-cqe) failed: "
+                   << err_code.message();
+        throw std::system_error(err_code);
+      }
+      state_->qp_.reset(qp);
+      return;
+    }
+#endif
     do {
       qp = ibv_create_qp(state_->device_->pd(), &qp_init_attr);
       if (qp == nullptr) {
