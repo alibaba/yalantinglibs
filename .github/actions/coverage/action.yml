@@ -82,7 +82,7 @@ runs:
         mkdir -p build
         cd build
         CC=clang-17 CXX=clang++-17 cmake .. -DCOVERAGE_TEST=ON -DYLT_ENABLE_SSL=ON -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARK=OFF
-        make -j
+        make -j$(($(nproc)/2 + 1))
         export LLVM_PROFILE_FILE="test_ylt-%m.profraw"
         cd output/tests
         find . -maxdepth 1 -type f -executable | xargs -I {} sh -c '{}'

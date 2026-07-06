@@ -72,7 +72,7 @@ class packer {
     using Type = get_args_type<T, Args...>;
     if constexpr (serialize_static_config<Type>::has_compatible) {
       constexpr std::size_t sz = compatible_version_number<Type>.size();
-      return serialize_expand_compatible_helper<size_type, T, Args...>(
+      return serialize_expand_compatible_helper<size_type, T>(
           t, std::make_index_sequence<sz>{}, args...);
     }
   }
@@ -139,13 +139,9 @@ class packer {
   }
 
   template <std::size_t size_type, uint64_t version,
-            std::uint64_t parent_tag = 0, typename First, typename... Args>
-  constexpr void STRUCT_PACK_INLINE serialize_many(const First &first_item,
-                                                   const Args &...items) {
-    serialize_one<size_type, version, parent_tag>(first_item);
-    if constexpr (sizeof...(items) > 0) {
-      serialize_many<size_type, version, parent_tag>(items...);
-    }
+            std::uint64_t parent_tag = 0, typename... Args>
+  constexpr void STRUCT_PACK_INLINE serialize_many(const Args &...items) {
+    (serialize_one<size_type, version, parent_tag>(items), ...);
   }
   constexpr void STRUCT_PACK_INLINE write_padding(std::size_t sz) {
     if (sz > 0) {

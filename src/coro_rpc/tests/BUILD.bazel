@@ -9,6 +9,7 @@ cc_test(
             "main.cpp",
             "rpc_api.hpp",
             "rpc_api.cpp",
+            "test_acceptor.cpp",
             "test_connection.cpp",
             "test_coro_rpc_client.cpp",
             "test_coro_rpc_server.cpp",

@@ -26,9 +26,12 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <sstream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -43,6 +46,7 @@
 #include "asio/buffer.hpp"
 #include "asio/dispatch.hpp"
 #include "asio/registered_buffer.hpp"
+#include "async_simple/Common.h"
 #include "async_simple/Executor.h"
 #include "async_simple/Promise.h"
 #include "async_simple/coro/Mutex.h"
@@ -52,12 +56,15 @@
 #include "expected.hpp"
 #include "protocol/coro_rpc_protocol.hpp"
 #include "ylt/coro_io/coro_io.hpp"
+#include "ylt/coro_io/data_view.hpp"
 #ifdef YLT_ENABLE_IBV
+#include "ylt/coro_io/ibverbs/ib_buffer.hpp"
 #include "ylt/coro_io/ibverbs/ib_socket.hpp"
 #endif
 #ifdef YLT_ENABLE_ND
 #include "ylt/coro_io/networkdirect/nd_socket.hpp"
 #endif
+#include "ylt/coro_io/heterogeneous_buffer.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
 #include "ylt/coro_io/socket_wrapper.hpp"
 #include "ylt/coro_rpc/impl/errno.h"
@@ -69,6 +76,10 @@
 #include "ylt/util/utils.hpp"
 #ifdef UNIT_TEST_INJECT
 #include "inject_action.hpp"
+#endif
+
+#ifdef YLT_ENABLE_SSL
+#include <openssl/ssl.h>
 #endif
 
 #ifdef GENERATE_BENCHMARK_DATA
@@ -85,6 +96,8 @@ struct request_config_t {
   std::optional<std::chrono::milliseconds> request_timeout_duration;
   std::string_view request_attachment;
   std::span<char> resp_attachment_buf;
+  // only meaningless if YLT_ENABLE_CUDA, -1 means use memory
+  int request_attachment_gpu_id = -1, resp_attachment_buf_gpu_id = -1;
 };
 
 #ifdef GENERATE_BENCHMARK_DATA
@@ -104,19 +117,21 @@ struct rpc_return_type<void> {
 
 struct resp_body {
   std::string read_buf_;
-  std::string resp_attachment_buf_;
+  coro_io::heterogeneous_buffer resp_attachment_buf_;
 };
 namespace detail {
 struct async_rpc_result_base {
  private:
   resp_body buffer_;
-  std::string_view attachment_;
+  coro_io::data_view attachment_;
 
  public:
   async_rpc_result_base() = default;
-  async_rpc_result_base(resp_body &&buffer, std::string_view attachment)
+  async_rpc_result_base(resp_body &&buffer, coro_io::data_view attachment)
       : buffer_(std::move(buffer)), attachment_(attachment) {}
   std::string_view get_attachment() const noexcept { return attachment_; }
+
+  int get_attachment_gpu_id() const noexcept { return attachment_.gpu_id(); }
   bool is_attachment_in_external_buf() const noexcept {
     return buffer_.resp_attachment_buf_.data() == attachment_.data();
   }
@@ -130,10 +145,10 @@ struct async_rpc_result_value_t : public detail::async_rpc_result_base {
   T result_;
 
  public:
-  async_rpc_result_value_t(T &&result, resp_body &&buffer,
-                           std::string_view attachment)
-      : result_(std::move(result)),
-        async_rpc_result_base(std::move(buffer), attachment) {}
+  async_rpc_result_value_t(T&& result, resp_body&& buffer,
+                           coro_io::data_view attachment)
+      : async_rpc_result_base(std::move(buffer), attachment),
+        result_(std::move(result)) {}
   async_rpc_result_value_t(T &&result) : result_(std::move(result)) {}
   T &result() noexcept { return result_; }
   const T &result() const noexcept { return result_; }
@@ -187,7 +202,34 @@ class coro_rpc_client {
     bool enable_tcp_no_delay = true;
     std::filesystem::path ssl_cert_path{};
     std::string ssl_domain{};
+    std::filesystem::path
+        client_cert_file{};  // Client certificate for mutual authentication
+    std::filesystem::path
+        client_key_file{};  // Client private key for mutual authentication
   };
+#ifdef YLT_ENABLE_NTLS
+  struct tcp_with_ntls_config {
+    bool enable_tcp_no_delay = true;
+    std::filesystem::path base_path{};
+
+    // TLCP dual certificate configuration (GB/T 38636-2020)
+    std::filesystem::path sign_cert_path{};
+    std::filesystem::path sign_key_path{};
+    std::filesystem::path enc_cert_path{};
+    std::filesystem::path enc_key_path{};
+
+    // TLS 1.3 + GM single certificate configuration (RFC 8998)
+    std::filesystem::path gm_cert_path{};
+    std::filesystem::path gm_key_path{};
+
+    // Common configuration
+    std::filesystem::path ca_cert_path{};
+    std::string ssl_domain{};
+    std::string cipher_suites{};
+    ntls_mode mode = ntls_mode::tlcp_dual_cert;
+    bool enable_client_verify = false;
+  };
+#endif  // YLT_ENABLE_NTLS
 #endif
   struct config {
     static inline uint64_t get_global_client_id() {
@@ -204,6 +246,10 @@ class coro_rpc_client {
 #ifdef YLT_ENABLE_SSL
                  ,
                  tcp_with_ssl_config
+#ifdef YLT_ENABLE_NTLS
+                 ,
+                 tcp_with_ntls_config
+#endif  // YLT_ENABLE_NTLS
 #endif
 #ifdef YLT_ENABLE_IBV
                  ,
@@ -236,12 +282,12 @@ class coro_rpc_client {
    * @param executor coro_io's executor, default executor is come
    */
   coro_rpc_client(
-      coro_io::ExecutorWrapper<> *executor = coro_io::get_global_executor(),
+      coro_io::ExecutorWrapper<>* executor = coro_io::get_global_executor(),
       config conf = {})
-      : control_(std::make_shared<control_t>(executor, false, conf.local_ip)),
-        timer_(std::make_unique<coro_io::period_timer>(
-            executor->get_asio_executor())) {
-    if (!init_config(config{})) [[unlikely]] {
+      : timer_(std::make_unique<coro_io::period_timer>(
+            executor->get_asio_executor())),
+        control_(std::make_shared<control_t>(executor, false, conf.local_ip)) {
+    if (!init_config(conf)) [[unlikely]] {
       close();
     }
   }
@@ -277,6 +323,13 @@ class coro_rpc_client {
       ELOG_INFO << "init ssl: " << config.ssl_domain;
       auto &cert_file = config.ssl_cert_path;
       ELOG_INFO << "current path: " << std::filesystem::current_path().string();
+
+      // Set lower security level for test certificates (OpenSSL 3.0
+      // compatibility)
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+      SSL_CTX_set_security_level(ssl_ctx_.native_handle(), 0);
+#endif
+
       if (file_exists(cert_file)) {
         ELOG_INFO << "load " << cert_file.string();
         ssl_ctx_.load_verify_file(cert_file.string());
@@ -285,9 +338,48 @@ class coro_rpc_client {
         ELOG_INFO << "no certificate file " << cert_file.string();
         return ssl_init_ret_;
       }
+
+      // Load client certificate and key for mutual authentication
+      if (!config.client_cert_file.empty() || !config.client_key_file.empty()) {
+        if (config.client_cert_file.empty() || config.client_key_file.empty()) {
+          ELOG_ERROR << "Both client certificate and key must be provided for "
+                        "mutual authentication";
+          return ssl_init_ret_;
+        }
+
+        if (file_exists(config.client_cert_file)) {
+          ELOG_INFO << "load client certificate: "
+                    << config.client_cert_file.string();
+          ssl_ctx_.use_certificate_chain_file(config.client_cert_file.string());
+        }
+        else {
+          ELOG_ERROR << "client certificate file not found: "
+                     << config.client_cert_file.string();
+          return ssl_init_ret_;
+        }
+
+        if (file_exists(config.client_key_file)) {
+          ELOG_INFO << "load client private key: "
+                    << config.client_key_file.string();
+          ssl_ctx_.use_private_key_file(config.client_key_file.string(),
+                                        asio::ssl::context::pem);
+        }
+        else {
+          ELOG_ERROR << "client key file not found: "
+                     << config.client_key_file.string();
+          return ssl_init_ret_;
+        }
+        ELOG_INFO << "client certificate loaded for mutual authentication";
+      }
+
       ssl_ctx_.set_verify_mode(asio::ssl::verify_peer);
-      ssl_ctx_.set_verify_callback(
-          asio::ssl::host_name_verification(config.ssl_domain));
+      // Set hostname verification for DNS names (skip for IP addresses and
+      // empty)
+      if (!config.ssl_domain.empty() && config.ssl_domain != "127.0.0.1" &&
+          config.ssl_domain != "localhost") {
+        ssl_ctx_.set_verify_callback(
+            asio::ssl::host_name_verification(config.ssl_domain));
+      }
       auto init_result = control_->socket_wrapper_.init_client(
           ssl_ctx_, config.enable_tcp_no_delay);
       if (!init_result) {
@@ -299,11 +391,225 @@ class coro_rpc_client {
     }
     return ssl_init_ret_;
   }
+#ifdef YLT_ENABLE_NTLS
+  [[nodiscard]] bool init_socket_wrapper(const tcp_with_ntls_config &config) {
+    try {
+      ssl_init_ret_ = false;
+      ELOG_INFO << "init NTLS: " << config.ssl_domain;
+
+      // Configure based on NTLS mode
+      if (config.mode == ntls_mode::tls13_single_cert) {
+        // Create SSL context with TLCP server method
+        ssl_ctx_ = asio::ssl::context(SSL_CTX_new(TLS_method()));
+
+        // Enable strict SM TLS 1.3 (Tongsuo)
+        SSL_CTX_enable_sm_tls13_strict(ssl_ctx_.native_handle());
+        // RFC 8998 TLS 1.3 + GM single certificate mode
+        ELOG_INFO
+            << "Configuring RFC 8998 TLS 1.3 + GM single certificate mode";
+
+        // Set TLS 1.3 version
+        if (SSL_CTX_set_min_proto_version(ssl_ctx_.native_handle(),
+                                          TLS1_3_VERSION) != 1) {
+          ELOG_ERROR << "Failed to set minimum TLS version to 1.3";
+          return false;
+        }
+        if (SSL_CTX_set_max_proto_version(ssl_ctx_.native_handle(),
+                                          TLS1_3_VERSION) != 1) {
+          ELOG_ERROR << "Failed to set maximum TLS version to 1.3";
+          return false;
+        }
+
+        // Set TLS 1.3 GM cipher suites
+        std::string cipher_suites = config.cipher_suites.empty()
+                                        ? "TLS_SM4_GCM_SM3:TLS_SM4_CCM_SM3"
+                                        : config.cipher_suites;
+        if (SSL_CTX_set_ciphersuites(ssl_ctx_.native_handle(),
+                                     cipher_suites.c_str()) != 1) {
+          ELOG_ERROR << "Failed to set TLS 1.3 GM cipher suites: "
+                     << cipher_suites;
+          return false;
+        }
+        ELOG_INFO << "TLS 1.3 GM cipher suites set to: " << cipher_suites;
+
+        //// Set supported curves for SM2
+        // if (SSL_CTX_set1_curves_list(ssl_ctx_.native_handle(),
+        // "SM2:X25519:prime256v1") != 1) {
+        //  ELOG_ERROR << "Failed to set SM2 curves";
+        //  return false;
+        //}
+      }
+      else {
+        // Create SSL context with TLCP client method for NTLS
+        ssl_ctx_ = asio::ssl::context(SSL_CTX_new(NTLS_client_method()));
+
+        // Enable NTLS mode - Tongsuo will handle protocol version automatically
+        SSL_CTX_enable_ntls(ssl_ctx_.native_handle());
+        ELOG_INFO << "NTLS mode enabled successfully";
+
+        // GB/T 38636-2020 TLCP dual certificate mode (default)
+        ELOG_INFO << "Configuring GB/T 38636-2020 TLCP dual certificate mode";
+
+        // Set TLCP cipher suites for NTLS (SM2/SM3/SM4)
+        std::string cipher_suites =
+            config.cipher_suites.empty()
+                ? "ECC-SM2-SM4-GCM-SM3:ECC-SM2-SM4-CBC-SM3"
+                : config.cipher_suites;
+        if (!SSL_CTX_set_cipher_list(ssl_ctx_.native_handle(),
+                                     cipher_suites.c_str())) {
+          ELOG_WARN << "failed to set TLCP cipher suites: " << cipher_suites
+                    << ", using default";
+        }
+        else {
+          ELOG_INFO << "TLCP cipher suites set to: " << cipher_suites;
+        }
+      }
+      // Load certificates based on NTLS mode
+      if (config.mode == ntls_mode::tls13_single_cert) {
+        // RFC 8998 TLS 1.3 + GM single certificate mode
+        if (config.enable_client_verify) {
+          ELOG_INFO << "enable_client_verify: " << config.enable_client_verify;
+          if (config.gm_cert_path.empty() ||
+              !file_exists(config.gm_cert_path) || config.gm_key_path.empty() ||
+              !file_exists(config.gm_key_path)) {
+            ELOG_ERROR
+                << "client verify enabled, but GM cert or key file is missing";
+            return false;
+          }
+        }
+
+        // Load single GM certificate and key
+        if (!config.gm_cert_path.empty() && file_exists(config.gm_cert_path)) {
+          ELOG_INFO << "load GM certificate " << config.gm_cert_path.string();
+          if (!SSL_CTX_use_certificate_file(
+                  ssl_ctx_.native_handle(),
+                  config.gm_cert_path.string().c_str(), SSL_FILETYPE_PEM)) {
+            ELOG_ERROR << "failed to load GM certificate";
+            return false;
+          }
+        }
+
+        if (!config.gm_key_path.empty() && file_exists(config.gm_key_path)) {
+          ELOG_INFO << "load GM private key " << config.gm_key_path.string();
+          if (!SSL_CTX_use_PrivateKey_file(ssl_ctx_.native_handle(),
+                                           config.gm_key_path.string().c_str(),
+                                           SSL_FILETYPE_PEM)) {
+            ELOG_ERROR << "failed to load GM private key";
+            return false;
+          }
+        }
+      }
+      else {
+        // GB/T 38636-2020 TLCP dual certificate mode
+        if (config.enable_client_verify) {
+          ELOG_INFO << "enable_client_verify: " << config.enable_client_verify;
+          if (config.sign_cert_path.empty() ||
+              !file_exists(config.sign_cert_path) ||
+              config.sign_key_path.empty() ||
+              !file_exists(config.sign_key_path) ||
+              config.enc_cert_path.empty() ||
+              !file_exists(config.enc_cert_path) ||
+              config.enc_key_path.empty() ||
+              !file_exists(config.enc_key_path)) {
+            ELOG_ERROR
+                << "client verify enabled, but cert or key file is missing";
+            return false;
+          }
+        }
+
+        // Load dual certificates if provided
+        if (!config.sign_cert_path.empty() &&
+            file_exists(config.sign_cert_path)) {
+          ELOG_INFO << "load SM2 signing cert "
+                    << config.sign_cert_path.string();
+          if (!SSL_CTX_use_sign_certificate_file(
+                  ssl_ctx_.native_handle(),
+                  config.sign_cert_path.string().c_str(), SSL_FILETYPE_PEM)) {
+            ELOG_ERROR << "failed to load SM2 signing certificate";
+            return false;
+          }
+          if (!config.sign_key_path.empty() &&
+              file_exists(config.sign_key_path)) {
+            ELOG_INFO << "load SM2 signing private key "
+                      << config.sign_key_path.string();
+            if (!SSL_CTX_use_sign_PrivateKey_file(
+                    ssl_ctx_.native_handle(),
+                    config.sign_key_path.string().c_str(), SSL_FILETYPE_PEM)) {
+              ELOG_ERROR << "failed to load SM2 signing private key";
+              return false;
+            }
+          }
+        }
+
+        if (!config.enc_cert_path.empty() &&
+            file_exists(config.enc_cert_path)) {
+          ELOG_INFO << "load SM2 encryption cert "
+                    << config.enc_cert_path.string();
+          if (!SSL_CTX_use_enc_certificate_file(
+                  ssl_ctx_.native_handle(),
+                  config.enc_cert_path.string().c_str(), SSL_FILETYPE_PEM)) {
+            ELOG_ERROR << "failed to load SM2 encryption certificate";
+            return false;
+          }
+          if (!config.enc_key_path.empty() &&
+              file_exists(config.enc_key_path)) {
+            ELOG_INFO << "load SM2 encryption private key "
+                      << config.enc_key_path.string();
+            if (!SSL_CTX_use_enc_PrivateKey_file(
+                    ssl_ctx_.native_handle(),
+                    config.enc_key_path.string().c_str(), SSL_FILETYPE_PEM)) {
+              ELOG_ERROR << "failed to load SM2 encryption private key";
+              return false;
+            }
+          }
+        }
+      }
+
+      // Load CA certificate if provided
+      if (!config.ca_cert_path.empty() && file_exists(config.ca_cert_path)) {
+        ELOG_INFO << "load CA cert " << config.ca_cert_path.string();
+        if (!SSL_CTX_load_verify_locations(ssl_ctx_.native_handle(),
+                                           config.ca_cert_path.string().c_str(),
+                                           nullptr)) {
+          ELOG_WARN << "failed to load CA certificate";
+        }
+      }
+
+      // Set verification mode
+      if (config.enable_client_verify) {
+        ssl_ctx_.set_verify_mode(asio::ssl::verify_peer);
+        // Set hostname verification for DNS names (skip for IP addresses)
+        if (!config.ssl_domain.empty() && config.ssl_domain != "127.0.0.1" &&
+            config.ssl_domain != "localhost") {
+          ssl_ctx_.set_verify_callback(
+              asio::ssl::host_name_verification(config.ssl_domain));
+        }
+      }
+      else {
+        ssl_ctx_.set_verify_mode(asio::ssl::verify_none);
+      }
+
+      auto init_result = control_->socket_wrapper_.init_client(
+          ssl_ctx_, config.enable_tcp_no_delay);
+      if (!init_result) {
+        return false;
+      }
+      ssl_init_ret_ = true;
+
+      ELOG_INFO << "NTLS client context initialized successfully - protocol "
+                   "version will be negotiated automatically";
+    } catch (const std::exception &e) {
+      ELOG_ERROR << "init NTLS failed: " << e.what();
+    }
+    return ssl_init_ret_;
+  }
+#endif  // YLT_ENABLE_NTLS
 #endif
   [[nodiscard]] bool init_config(const config &conf) {
     create_tp_ = std::chrono::steady_clock::now();
     config_ = conf;
     control_->socket_wrapper_.set_local_ip(config_.local_ip);
+    control_->client_id = conf.client_id;
     return std::visit(
         [this](auto &socket_config) {
           return init_socket_wrapper(socket_config);
@@ -345,8 +651,14 @@ class coro_rpc_client {
       co_return err_code{};
       // do nothing, someone has reconnect the client
     }
-    if (!host.empty())
+    if (!host.empty()) {
+      if (host.front() == '[') {  // for ipv6
+        if (host.size() > 2)
+          host = host.substr(1, host.size() - 2);
+      }
       config_.host = std::move(host);
+    }
+
     if (!port.empty())
       config_.port = std::move(port);
 
@@ -367,7 +679,7 @@ class coro_rpc_client {
       std::string_view address,
       std::chrono::steady_clock::duration connect_timeout_duration,
       std::vector<asio::ip::tcp::endpoint> *eps = nullptr) {
-    auto pos = address.find(':');
+    auto pos = address.rfind(':');
     std::string host(address.substr(0, pos));
     std::string port(address.substr(pos + 1));
 
@@ -385,7 +697,7 @@ class coro_rpc_client {
   [[nodiscard]] async_simple::coro::Lazy<coro_rpc::err_code> connect(
       std::string_view address,
       std::vector<asio::ip::tcp::endpoint> *eps = nullptr) {
-    auto pos = address.find(':');
+    auto pos = address.rfind(':');
     std::string host(address.substr(0, pos));
     std::string port(address.substr(pos + 1));
 
@@ -399,20 +711,203 @@ class coro_rpc_client {
                               std::string_view domain = "localhost") {
     std::string ssl_domain = std::string{domain};
     std::string ssl_cert_path =
-        std::filesystem::path(cert_base_path).append(cert_file_name);
+        std::filesystem::path(cert_base_path).append(cert_file_name).string();
     if (config_.socket_config.index() != 1) {
       config_.socket_config =
           tcp_with_ssl_config{.ssl_cert_path = std::move(ssl_cert_path),
                               .ssl_domain = std::move(ssl_domain)};
     }
     else {
-      auto &conf = std::get<tcp_with_ssl_config>(config_.socket_config);
+      auto& conf = std::get<tcp_with_ssl_config>(config_.socket_config);
       conf.ssl_cert_path = std::move(ssl_cert_path);
       conf.ssl_domain = domain = std::move(ssl_domain);
     }
     return init_socket_wrapper(
         std::get<tcp_with_ssl_config>(config_.socket_config));
   }
+
+  /*!
+   * Initialize SSL with client certificate for mutual authentication
+   * @param cert_base_path Base path for certificate files
+   * @param cert_file_name CA certificate file name for server verification
+   * @param client_cert_file Client certificate file name for mutual
+   * authentication
+   * @param client_key_file Client private key file name for mutual
+   * authentication
+   * @param domain Server domain name
+   * @return true if initialization successful
+   */
+  [[nodiscard]] bool init_ssl(std::string_view cert_base_path,
+                              std::string_view cert_file_name,
+                              std::string_view client_cert_file,
+                              std::string_view client_key_file,
+                              std::string_view domain = "localhost") {
+    std::string ssl_domain = std::string{domain};
+    std::string ssl_cert_path =
+        std::filesystem::path(cert_base_path).append(cert_file_name).string();
+    std::string ssl_client_cert_path =
+        std::filesystem::path(cert_base_path).append(client_cert_file).string();
+    std::string ssl_client_key_path =
+        std::filesystem::path(cert_base_path).append(client_key_file).string();
+
+    if (config_.socket_config.index() != 1) {
+      config_.socket_config = tcp_with_ssl_config{
+          .ssl_cert_path = std::move(ssl_cert_path),
+          .ssl_domain = std::move(ssl_domain),
+          .client_cert_file = std::move(ssl_client_cert_path),
+          .client_key_file = std::move(ssl_client_key_path)};
+    }
+    else {
+      auto &conf = std::get<tcp_with_ssl_config>(config_.socket_config);
+      conf.ssl_cert_path = std::move(ssl_cert_path);
+      conf.ssl_domain = std::move(ssl_domain);
+      conf.client_cert_file = std::move(ssl_client_cert_path);
+      conf.client_key_file = std::move(ssl_client_key_path);
+    }
+    return init_socket_wrapper(
+        std::get<tcp_with_ssl_config>(config_.socket_config));
+  }
+#ifdef YLT_ENABLE_NTLS
+  [[nodiscard]] bool init_ntls(const ssl_ntls_configure &conf) {
+    if (conf.mode == ntls_mode::tls13_single_cert) {
+      // RFC 8998 TLS 1.3 + GM single certificate mode
+      if (config_.socket_config.index() != 2) {
+        config_.socket_config = tcp_with_ntls_config{
+            .enable_tcp_no_delay = true,
+            .base_path = conf.base_path,
+            .gm_cert_path =
+                std::filesystem::path(conf.base_path).append(conf.gm_cert_file),
+            .gm_key_path =
+                std::filesystem::path(conf.base_path).append(conf.gm_key_file),
+            .ca_cert_path = conf.ca_cert_file.empty()
+                                ? std::filesystem::path{}
+                                : std::filesystem::path(conf.base_path)
+                                      .append(conf.ca_cert_file),
+            .ssl_domain =
+                conf.server_name.empty() ? "localhost" : conf.server_name,
+            .cipher_suites = conf.cipher_suites,
+            .mode = ntls_mode::tls13_single_cert,
+            .enable_client_verify = conf.enable_client_verify};
+      }
+      else {
+        auto &config = std::get<tcp_with_ntls_config>(config_.socket_config);
+        config.base_path = conf.base_path;
+        config.gm_cert_path =
+            std::filesystem::path(conf.base_path).append(conf.gm_cert_file);
+        config.gm_key_path =
+            std::filesystem::path(conf.base_path).append(conf.gm_key_file);
+        config.ca_cert_path = conf.ca_cert_file.empty()
+                                  ? std::filesystem::path{}
+                                  : std::filesystem::path(conf.base_path)
+                                        .append(conf.ca_cert_file);
+        config.ssl_domain =
+            conf.server_name.empty() ? "localhost" : conf.server_name;
+        config.cipher_suites = conf.cipher_suites;
+        config.mode = ntls_mode::tls13_single_cert;
+        config.enable_client_verify = conf.enable_client_verify;
+      }
+    }
+    else {
+      // GB/T 38636-2020 TLCP dual certificate mode (default)
+      if (config_.socket_config.index() != 2) {
+        config_.socket_config = tcp_with_ntls_config{
+            .enable_tcp_no_delay = true,
+            .base_path = conf.base_path,
+            .sign_cert_path = std::filesystem::path(conf.base_path)
+                                  .append(conf.sign_cert_file),
+            .sign_key_path = std::filesystem::path(conf.base_path)
+                                 .append(conf.sign_key_file),
+            .enc_cert_path = std::filesystem::path(conf.base_path)
+                                 .append(conf.enc_cert_file),
+            .enc_key_path =
+                std::filesystem::path(conf.base_path).append(conf.enc_key_file),
+            .ca_cert_path = conf.ca_cert_file.empty()
+                                ? std::filesystem::path{}
+                                : std::filesystem::path(conf.base_path)
+                                      .append(conf.ca_cert_file),
+            .ssl_domain =
+                conf.server_name.empty() ? "localhost" : conf.server_name,
+            .cipher_suites = conf.cipher_suites,
+            .mode = ntls_mode::tlcp_dual_cert,
+            .enable_client_verify = conf.enable_client_verify};
+      }
+      else {
+        auto &config = std::get<tcp_with_ntls_config>(config_.socket_config);
+        config.base_path = conf.base_path;
+        config.sign_cert_path =
+            std::filesystem::path(conf.base_path).append(conf.sign_cert_file);
+        config.sign_key_path =
+            std::filesystem::path(conf.base_path).append(conf.sign_key_file);
+        config.enc_cert_path =
+            std::filesystem::path(conf.base_path).append(conf.enc_cert_file);
+        config.enc_key_path =
+            std::filesystem::path(conf.base_path).append(conf.enc_key_file);
+        config.ca_cert_path = conf.ca_cert_file.empty()
+                                  ? std::filesystem::path{}
+                                  : std::filesystem::path(conf.base_path)
+                                        .append(conf.ca_cert_file);
+        config.ssl_domain =
+            conf.server_name.empty() ? "localhost" : conf.server_name;
+        config.cipher_suites = conf.cipher_suites;
+        config.mode = ntls_mode::tlcp_dual_cert;
+        config.enable_client_verify = conf.enable_client_verify;
+      }
+    }
+    return init_socket_wrapper(
+        std::get<tcp_with_ntls_config>(config_.socket_config));
+  }
+
+  [[nodiscard]] bool init_ntls(std::string_view base_file,
+                               std::string_view sign_cert_file,
+                               std::string_view sign_key_file,
+                               std::string_view enc_cert_file,
+                               std::string_view enc_key_file,
+                               std::string_view ca_cert_file = "",
+                               std::string_view domain = "localhost",
+                               bool enable_client_verify = false) {
+    std::string ssl_domain = std::string{domain};
+    std::string sign_cert_path =
+        std::filesystem::path(base_file).append(sign_cert_file).string();
+    std::string sign_key_path =
+        std::filesystem::path(base_file).append(sign_key_file).string();
+    std::string enc_cert_path =
+        std::filesystem::path(base_file).append(enc_cert_file).string();
+    std::string enc_key_path =
+        std::filesystem::path(base_file).append(enc_key_file).string();
+    std::string ca_cert_path;
+
+    if (!ca_cert_file.empty()) {
+      ca_cert_path =
+          std::filesystem::path(base_file).append(ca_cert_file).string();
+    }
+
+    if (config_.socket_config.index() != 2) {
+      config_.socket_config =
+          tcp_with_ntls_config{.enable_tcp_no_delay = true,
+                               .base_path = std::move(base_file),
+                               .sign_cert_path = std::move(sign_cert_path),
+                               .sign_key_path = std::move(sign_key_path),
+                               .enc_cert_path = std::move(enc_cert_path),
+                               .enc_key_path = std::move(enc_key_path),
+                               .ca_cert_path = std::move(ca_cert_path),
+                               .ssl_domain = std::move(ssl_domain),
+                               .enable_client_verify = enable_client_verify};
+    }
+    else {
+      auto &conf = std::get<tcp_with_ntls_config>(config_.socket_config);
+      conf.base_path = std::move(base_file);
+      conf.sign_cert_path = std::move(sign_cert_path);
+      conf.sign_key_path = std::move(sign_key_path);
+      conf.enc_cert_path = std::move(enc_cert_path);
+      conf.enc_key_path = std::move(enc_key_path);
+      conf.ca_cert_path = std::move(ca_cert_path);
+      conf.ssl_domain = std::move(ssl_domain);
+      conf.enable_client_verify = enable_client_verify;
+    }
+    return init_socket_wrapper(
+        std::get<tcp_with_ntls_config>(config_.socket_config));
+  }
+#endif  // YLT_ENABLE_NTLS
 #endif
 #ifdef YLT_ENABLE_IBV
   [[nodiscard]] bool init_ibv(
@@ -444,9 +939,12 @@ class coro_rpc_client {
   template <auto func, typename... Args>
   async_simple::coro::Lazy<rpc_result<decltype(get_return_type<func>())>> call(
       Args &&...args) {
-    return call<func>(
-        request_config_t{{}, req_attachment_, resp_attachment_buffer_},
-        std::forward<Args>(args)...);
+    return call<func>(request_config_t{{},
+                                       req_attachment_,
+                                       (std::span<char>)resp_attachment_buffer_,
+                                       resp_attachment_.gpu_id(),
+                                       resp_attachment_buffer_.gpu_id()},
+                      std::forward<Args>(args)...);
   }
 
   /*!
@@ -465,7 +963,9 @@ class coro_rpc_client {
   call_for(auto request_timeout_duration, Args &&...args) {
     return call<func>(
         request_config_t{request_timeout_duration, req_attachment_,
-                         resp_attachment_buffer_},
+                         (std::span<char>)resp_attachment_buffer_,
+                         resp_attachment_.gpu_id(),
+                         resp_attachment_buffer_.gpu_id()},
         std::forward<Args>(args)...);
   }
 
@@ -478,7 +978,8 @@ class coro_rpc_client {
     req_attachment_ = {};
     resp_attachment_buffer_ = {};
     if (async_result) {
-      resp_attachment_ = async_result->get_attachment();
+      resp_attachment_ = {async_result->get_attachment(),
+                          async_result->get_attachment_gpu_id()};
       control_->resp_buffer_ = async_result->release_buffer();
       if constexpr (std::is_same_v<return_type, void>) {
         co_return expected<return_type, rpc_error>{};
@@ -501,24 +1002,81 @@ class coro_rpc_client {
 
   uint32_t get_client_id() const { return config_.client_id; }
 
-  void close() {
-    // ELOG_INFO << "client_id " << config_.client_id << " close";
-    close_socket_async(control_);
+#ifdef YLT_ENABLE_CUDA
+  // Reuse the cuda stream handler owned by the underlying ib_socket.
+  // Returns nullptr when the connection is not RDMA/ib based.
+  coro_io::cuda_stream_handler_t* get_cuda_stream_handler() noexcept {
+    coro_io::cuda_stream_handler_t* handler = nullptr;
+    control_->socket_wrapper_.visit([&](auto &socket) {
+      using socket_type = std::decay_t<decltype(socket)>;
+      if constexpr (std::is_same_v<socket_type, coro_io::ib_socket_t>) {
+        handler = &socket.get_cuda_stream_handler();
+      }
+    });
+    return handler;
   }
+#endif
 
-  bool set_req_attachment(std::string_view attachment) {
+  void close() { close_socket_async(control_); }
+
+ public:
+  /**
+   * @brief set req attachment for user
+   *
+   * @param attachment string_view for attachment
+   * @param gpu_id id for gpu device, -1 means cpu memory
+   * @return void
+   */
+  void set_req_attachment(std::string_view attachment) {
     if (attachment.size() > UINT32_MAX) {
-      ELOG_ERROR << "too large rpc attachment";
-      return false;
+      std::stringstream s;
+      s << "too large rpc attachment, client_id = " << config_.client_id
+        << ", attachment size = " << attachment.size();
+      ELOG_WARN << s;
+      throw std::logic_error(s.str());
     }
-    req_attachment_ = attachment;
-    return true;
-  }
-  void set_resp_attachment_buf(std::span<char> buffer) {
-    resp_attachment_buffer_ = buffer;
+    return set_req_attachment(attachment, -1);
   }
 
+  void set_req_attachment2(coro_io::data_view attachment) {
+    return set_req_attachment(std::string_view{attachment},
+                              attachment.gpu_id());
+  }
+  /**
+   * @brief set buffer of resp attachment for user. If the buffer is not enough,
+   * attachment will be stored in new buffer allocated in coro_rpc_client.
+   *
+   * @param buffer for resp attachment
+   * @param gpu_id id for buffer , -1 means cpu memory
+   * @return void
+   */
+  void set_resp_attachment_buf(std::span<char> buffer) {
+    return set_resp_attachment_buf(buffer, -1);
+  }
+  void set_resp_attachment_buf2(coro_io::data_view attachment) {
+    return set_resp_attachment_buf(std::span<char>{attachment},
+                                   attachment.gpu_id());
+  }
+
+ private:
+  void set_req_attachment(std::string_view attachment, int gpu_id) {
+    auto data = coro_io::data_view(attachment, gpu_id);
+    if (attachment.size() > UINT32_MAX) {
+      ELOG_ERROR << "too large rpc attachment, size = " << attachment.size()
+                 << ", client id:" << config_.client_id;
+      throw std::logic_error("too large rpc attachment");
+    }
+    req_attachment_ = data;
+  }
+  void set_resp_attachment_buf(std::span<char> buffer, int gpu_id) {
+    auto data = coro_io::data_view(buffer, gpu_id);
+    resp_attachment_buffer_ = data;
+  }
+
+ public:
   std::string_view get_resp_attachment() const { return resp_attachment_; }
+
+  coro_io::data_view get_resp_attachment2() const { return resp_attachment_; }
 
   bool is_resp_attachment_in_external_buf() const {
     return resp_attachment_.data() !=
@@ -526,6 +1084,21 @@ class coro_rpc_client {
   }
 
   std::string release_resp_attachment() {
+    if (!is_resp_attachment_in_external_buf()) {
+      auto *str = control_->resp_buffer_.resp_attachment_buf_.get_string();
+#ifdef YLT_ENABLE_CUDA
+      if SP_UNLIKELY (!str) {
+        throw std::logic_error(
+            "call release_resp_attachment, but attachment is in gpu memory, "
+            "you need call release_resp_attachment2()");
+      }
+#endif
+      return std::move(*str);
+    }
+    return {};
+  }
+
+  coro_io::heterogeneous_buffer release_resp_attachment2() {
     if (!is_resp_attachment_in_external_buf()) {
       return std::move(control_->resp_buffer_.resp_attachment_buf_);
     }
@@ -572,7 +1145,8 @@ class coro_rpc_client {
     }
 #ifdef YLT_ENABLE_SSL
     if (!ssl_init_ret_) {
-      ELOG_INFO << "ssl_init_ret_: " << ssl_init_ret_;
+      ELOG_INFO << "ssl_init_ret_: " << ssl_init_ret_
+                << ", client_id: " << config_.client_id;
       co_return errc::not_connected;
     }
 #endif
@@ -593,7 +1167,7 @@ class coro_rpc_client {
     asio::ip::tcp::resolver::iterator iter;
     if (eps->empty()) {
       ELOG_TRACE << "start resolve host: " << config_.host << ":"
-                 << config_.port;
+                 << config_.port << ", client_id: " << config_.client_id;
       std::tie(ec, iter) = co_await coro_io::async_resolve(
           control_->executor_, config_.host, config_.port);
       if (ec) {
@@ -613,8 +1187,15 @@ class coro_rpc_client {
     ELOG_TRACE << "start connect to endpoint lists. total endpoint count:"
                << eps->size()
                << ", the first endpoint is: " << (*eps)[0].address().to_string()
-               << ":" << std::to_string((*eps)[0].port());
-    ec = co_await coro_io::async_connect(soc, *eps);
+               << ":" << std::to_string((*eps)[0].port())
+               << ", client_id: " << config_.client_id;
+    // Use socket_wrapper_.visit() to get a fresh socket reference instead of
+    // the `soc` parameter, which may dangle if reset() destroyed and
+    // recreated ssl_stream_ above.
+    ec = co_await control_->socket_wrapper_.visit(
+        [eps](auto &fresh_soc) {
+          return coro_io::async_connect(fresh_soc, *eps);
+        });
     std::error_code ignore_ec;
     timer_->cancel(ignore_ec);
     if (control_->is_timeout_) {
@@ -626,8 +1207,10 @@ class coro_rpc_client {
                 << " failed:" << ec.message();
       co_return errc::not_connected;
     }
-    ELOG_INFO << "connect successful, the endpoint is: "
-              << control_->socket_wrapper_.remote_endpoint();
+    ELOG_INFO << "connect successful, remote addr: "
+              << control_->socket_wrapper_.remote_endpoint()
+              << ", local addr: " << control_->socket_wrapper_.local_endpoint()
+              << ", client_id: " << config_.client_id;
 
     co_return coro_rpc::err_code{};
   };
@@ -720,7 +1303,9 @@ class coro_rpc_client {
     header.function_id = func_id<func>();
     header.attach_length = attachment_length;
     id = request_id_++;
-    ELOG_TRACE << "send request ID:" << id << ".";
+    ELOG_TRACE << "call rpc function name: " << get_func_name<func>()
+               << ", send request ID: " << id
+               << ", client_id: " << config_.client_id;
     header.seq_num = id;
 
 #ifdef UNIT_TEST_INJECT
@@ -734,7 +1319,8 @@ class coro_rpc_client {
 #endif
       auto sz = buffer.size() - coro_rpc_protocol::REQ_HEAD_LEN;
       if (sz > UINT32_MAX) {
-        ELOG_ERROR << "too large rpc body";
+        ELOG_ERROR << "too large rpc body"
+                   << ", client_id: " << config_.client_id;
         return {};
       }
       header.length = sz;
@@ -751,14 +1337,32 @@ class coro_rpc_client {
 
   template <typename T>
   static rpc_result<T> handle_response_buffer(std::string_view buffer,
-                                              uint8_t rpc_errc,
-                                              bool &has_error) {
+                                              uint8_t rpc_errc, bool &has_error,
+                                              uint64_t client_id) {
     rpc_return_type_t<T> ret;
     struct_pack::err_code ec;
     rpc_error err;
     if (rpc_errc == 0)
       AS_LIKELY {
         ec = struct_pack::deserialize_to(ret, buffer);
+        if SP_UNLIKELY (ec) {
+          if constexpr (requires { std::get<0>(ret); }) {
+            constexpr auto size = std::tuple_size_v<decltype(ret)>;
+            if constexpr (size > 1) {
+              if constexpr (struct_pack::get_type_code<std::tuple<
+                                std::remove_cvref_t<std::tuple_element_t<
+                                    0, decltype(ret)>>>>() ==
+                            struct_pack::get_type_code<decltype(ret)>()) {
+                auto &args_wrapper = std::get<0>(ret);
+                ec = struct_pack::deserialize_to(args_wrapper, buffer);
+              }
+            }
+          }
+          if SP_UNLIKELY (ec) {
+            std::tuple<decltype(ret) &> wrapper = ret;
+            ec = struct_pack::deserialize_to(wrapper, buffer);
+          }
+        }
         if SP_LIKELY (!ec) {
           if constexpr (std::is_same_v<T, void>) {
             return {};
@@ -786,7 +1390,8 @@ class coro_rpc_client {
     }
     has_error = true;
     // deserialize failed.
-    ELOG_WARN << "deserilaize rpc result failed";
+    ELOG_WARN << "deserilaize rpc result failed"
+              << ", client_id: " << client_id;
     err = {errc::invalid_rpc_result, "failed to deserialize rpc return value"};
     return rpc_result<T>{unexpect_t{}, std::move(err)};
   }
@@ -797,22 +1402,12 @@ class coro_rpc_client {
     constexpr bool has_conn_v = requires { typename First::return_type; };
     return util::get_args<has_conn_v, FuncArgs>();
   }
-  template <typename T, typename U>
-  static decltype(auto) add_const(U &&u) {
-    if constexpr (std::is_const_v<std::remove_reference_t<U>>) {
-      return struct_pack::detail::declval<const T>();
-    }
-    else {
-      return struct_pack::detail::declval<T>();
-    }
-  }
 
   template <typename... FuncArgs, typename Buffer, typename... Args>
   void pack_to_impl(Buffer &buffer, std::size_t offset, Args &&...args) {
     struct_pack::serialize_to_with_offset(
         buffer, offset,
-        std::forward<decltype(add_const<FuncArgs>(args))>(
-            (std::forward<Args>(args)))...);
+        std::forward<const FuncArgs>((std::forward<Args>(args)))...);
   }
 
   template <typename Tuple, size_t... Is, typename Buffer, typename... Args>
@@ -832,7 +1427,7 @@ class coro_rpc_client {
 
   struct async_rpc_raw_result_value_type {
     resp_body buffer_;
-    std::string_view attachment;
+    coro_io::data_view attachment;
     uint8_t errc_;
   };
 
@@ -844,21 +1439,18 @@ class coro_rpc_client {
   struct handler_t {
     std::unique_ptr<coro_io::period_timer> timer_;
     async_simple::Promise<async_rpc_raw_result> promise_;
-    std::span<char> response_attachment_buffer_;
+    coro_io::data_view response_attachment_buffer_;
     handler_t(std::unique_ptr<coro_io::period_timer> &&timer,
               async_simple::Promise<async_rpc_raw_result> &&promise,
-              std::span<char> buffer = {})
+              coro_io::data_view buffer = {})
         : timer_(std::move(timer)),
           promise_(std::move(promise)),
           response_attachment_buffer_(buffer) {}
-    std::span<char> &get_buffer() { return response_attachment_buffer_; }
+    coro_io::data_view &get_buffer() { return response_attachment_buffer_; }
     void operator()(resp_body &&buffer, uint8_t rpc_errc) {
       timer_->cancel();
       promise_.setValue(async_rpc_raw_result{async_rpc_raw_result_value_type{
-          std::move(buffer),
-          std::string_view{response_attachment_buffer_.data(),
-                           response_attachment_buffer_.size()},
-          rpc_errc}});
+          std::move(buffer), response_attachment_buffer_, rpc_errc}});
     }
     void local_error(std::error_code &ec) {
       timer_->cancel();
@@ -876,8 +1468,9 @@ class coro_rpc_client {
     std::unordered_map<uint32_t, handler_t> response_handler_table_;
     resp_body resp_buffer_;
     std::atomic<uint32_t> recving_cnt_ = 0;
+    uint64_t client_id = 0;
     control_t(coro_io::ExecutorWrapper<> *executor, bool is_timeout,
-              const std::string &local_ip = "")
+              const std::string &local_ip)
         : is_timeout_(is_timeout),
           has_closed_(false),
           executor_(executor),
@@ -890,6 +1483,8 @@ class coro_rpc_client {
     if (!control->has_closed_.compare_exchange_strong(expected, true)) {
       return;
     }
+
+    ELOG_DEBUG << "client_id " << control->client_id << " close";
     asio::dispatch(control->socket_wrapper_.get_executor()->get_asio_executor(),
                    [control]() {
                      control->socket_wrapper_.close();
@@ -904,7 +1499,7 @@ class coro_rpc_client {
       co_await coro_io::post(
           []() {
           },
-          control->executor_);  // post to control ioc
+          control->executor_);  // drain: wait for any pending close_socket_async dispatch
       co_return;
     }
     co_await coro_io::post(
@@ -931,13 +1526,12 @@ class coro_rpc_client {
  private:
   template <auto func, typename Socket, typename... Args>
   async_simple::coro::Lazy<rpc_error> send_request_for_impl(
-      Socket &soc, request_config_t &config, uint32_t &id,
-      coro_io::period_timer &timer, Args &&...args) {
-    using R = decltype(get_return_type<func>());
-
+      Socket& soc, request_config_t& config, uint32_t& id,
+      coro_io::period_timer& timer, Args&&... args) {
     if (control_->has_closed_)
       AS_UNLIKELY {
-        ELOG_ERROR << "client has been closed, please re-connect";
+        ELOG_ERROR << "client has been closed, please re-connect"
+                   << ", client_id: " << config_.client_id;
         co_return rpc_error{errc::io_error,
                             "client has been closed, please re-connect"};
       }
@@ -955,8 +1549,11 @@ class coro_rpc_client {
           .start([](auto &&) {
           });
     }
-    co_return co_await send_impl<func>(soc, id, config.request_attachment,
-                                       std::forward<Args>(args)...);
+    co_return co_await send_impl<func>(
+        soc, id,
+        coro_io::data_view{config.request_attachment,
+                           config.request_attachment_gpu_id},
+        std::forward<Args>(args)...);
   }
 
   static void send_err_response(control_t *controller, std::error_code &errc) {
@@ -975,8 +1572,9 @@ class coro_rpc_client {
     do {
       coro_rpc_protocol::resp_header header;
       char buffer[coro_rpc_protocol::RESP_HEAD_LEN];
+      auto tp = std::chrono::steady_clock::now();
       ret = co_await coro_io::async_read(socket, asio::buffer(buffer));
-      auto ec = struct_pack::deserialize_to<
+      [[maybe_unused]] auto ec = struct_pack::deserialize_to<
           struct_pack::sp_config::DISABLE_ALL_META_INFO>(
           header, std::string_view{buffer, buffer + sizeof(buffer)});
       assert(!ec);
@@ -984,18 +1582,25 @@ class coro_rpc_client {
         if (ret.first != asio::error::eof) {
           ELOG_ERROR << "read rpc head failed, error msg:"
                      << ret.first.message()
-                     << ". close the socket.value=" << ret.first.value();
+                     << ". close the socket.value=" << ret.first.value()
+                     << ", cost time = "
+                     << (std::chrono::steady_clock::now() - tp) /
+                            std::chrono::microseconds(1)
+                     << "us"
+                     << ", client_id: " << controller->client_id;
         }
         break;
       }
       auto iter = controller->response_handler_table_.find(header.seq_num);
       if (iter == controller->response_handler_table_.end()) {
-        ELOG_ERROR << "unexists request ID:" << header.seq_num
-                   << ". close the socket.";
+        ELOG_ERROR << "unexists request ID: " << header.seq_num
+                   << ". close the socket"
+                   << ", client_id: " << controller->client_id;
         break;
       }
-      ELOG_TRACE << "find request ID:" << header.seq_num
-                 << ". start notify response handler";
+      ELOG_TRACE << "find request ID: " << header.seq_num
+                 << ". start notify response handler"
+                 << ", client_id: " << controller->client_id;
       uint32_t body_len = header.length;
       struct_pack::detail::resize(
           controller->resp_buffer_.read_buf_,
@@ -1012,29 +1617,65 @@ class coro_rpc_client {
         controller->resp_buffer_.resp_attachment_buf_.clear();
       }
       else {
-        std::span<char> &attachment_buffer = iter->second.get_buffer();
+        auto &attachment_buffer = iter->second.get_buffer();
         if (attachment_buffer.size() < header.attach_length) {
           // allocate attachment buffer
           if (attachment_buffer.size()) [[unlikely]] {
             ELOG_TRACE << "user's attachment buffer size is too small, instead "
                           "by inner allocated buffer";
           }
-          struct_pack::detail::resize(
-              controller->resp_buffer_.resp_attachment_buf_,
-              std::max<uint64_t>(header.attach_length, sizeof(std::string)));
-          attachment_buffer = controller->resp_buffer_.resp_attachment_buf_;
+          auto &resp_buf = controller->resp_buffer_.resp_attachment_buf_;
+          int gpu_id = -1;
+          if constexpr (requires { socket.get_cuda_stream_handler(); }) {
+            gpu_id = socket.get_gpu_id();
+            if (gpu_id >= 0) {
+              resp_buf = {header.attach_length, gpu_id};
+              assert(resp_buf.size() == header.attach_length);
+              attachment_buffer = {std::span{resp_buf.data(), resp_buf.size()},
+                                   resp_buf.gpu_id()};
+            }
+          }
+          if (gpu_id < 0) {
+            auto buffer = resp_buf.get_string();
+            assert(buffer != nullptr);
+            struct_pack::detail::resize(
+                *buffer,
+                std::max<uint64_t>(header.attach_length, sizeof(std::string)));
+            attachment_buffer = {
+                std::span<char>{buffer->data(), header.attach_length}, 0};
+          }
         }
-        attachment_buffer = attachment_buffer.subspan(0, header.attach_length);
-        std::array<asio::mutable_buffer, 2> iov{
-            asio::mutable_buffer{controller->resp_buffer_.read_buf_.data(),
-                                 body_len},
-            asio::mutable_buffer{attachment_buffer.data(),
-                                 attachment_buffer.size()}};
-        ret = co_await coro_io::async_read(socket, iov);
+        else if (attachment_buffer.size() > header.attach_length) {
+          attachment_buffer = {
+              attachment_buffer.substr(0, header.attach_length),
+              attachment_buffer.gpu_id()};
+        }
+        [[maybe_unused]] bool is_sended = false;
+        if constexpr (requires { socket.get_cuda_stream_handler(); }) {
+          std::array<coro_io::data_view, 2> iov{
+              coro_io::data_view{
+                  std::span<char>{controller->resp_buffer_.read_buf_.data(),
+                                  body_len},
+                  -1},
+              attachment_buffer};
+          ret = co_await coro_io::async_read(socket, iov);
+        }
+        else {
+          std::array<asio::mutable_buffer, 2> iov{
+              asio::mutable_buffer{controller->resp_buffer_.read_buf_.data(),
+                                   body_len},
+              asio::mutable_buffer{attachment_buffer.mutable_data(),
+                                   header.attach_length}};
+          ret = co_await coro_io::async_read(socket, iov);
+        }
       }
+      auto cost_time = (std::chrono::steady_clock::now() - tp) /
+                       std::chrono::microseconds(1);
       if (ret.first) {
         ELOG_ERROR << "read rpc body failed, error msg:" << ret.first.message()
-                   << ". close the socket.";
+                   << ". close the socket. cost time = " << cost_time
+                   << "us, request ID: " << header.seq_num
+                   << ", client_id: " << controller->client_id;
         break;
       }
 #ifdef GENERATE_BENCHMARK_DATA
@@ -1043,9 +1684,12 @@ class coro_rpc_client {
       file << std::string_view{(char *)&header,
                                coro_rpc_protocol::RESP_HEAD_LEN};
       file << controller->resp_buffer_.read_buf_;
-      file << controller->resp_buffer_.resp_attachment_buf_;
+      file << std::string_view{controller->resp_buffer_.resp_attachment_buf_};
       file.close();
 #endif
+      ELOG_DEBUG << "recv rpc response, cost time = " << cost_time
+                 << "us, request ID: " << header.seq_num
+                 << ", client_id: " << controller->client_id;
       iter->second(std::move(controller->resp_buffer_), header.err_code);
       controller->response_handler_table_.erase(iter);
       if (controller->response_handler_table_.empty()) {
@@ -1079,7 +1723,8 @@ class coro_rpc_client {
   template <typename T>
   static async_simple::coro::Lazy<async_rpc_result<T>> deserialize_rpc_result(
       async_simple::Future<async_rpc_raw_result> future,
-      std::weak_ptr<control_t> watcher, recving_guard guard) {
+      std::weak_ptr<control_t> watcher, recving_guard guard,
+      uint64_t client_id) {
     auto ret_ = co_await std::move(future);
     guard.release();
     if (ret_.index() == 1) [[unlikely]] {  // local error
@@ -1097,8 +1742,8 @@ class coro_rpc_client {
 
     bool has_error = false;
     auto &ret = std::get<0>(ret_);
-    auto result =
-        handle_response_buffer<T>(ret.buffer_.read_buf_, ret.errc_, has_error);
+    auto result = handle_response_buffer<T>(ret.buffer_.read_buf_, ret.errc_,
+                                            has_error, client_id);
     if (has_error) {
       if (auto w = watcher.lock(); w) {
         close_socket_async(std::move(w));
@@ -1176,7 +1821,9 @@ class coro_rpc_client {
       auto future = promise.getFuture();
       bool is_empty = control_->response_handler_table_.empty();
       auto &&[_, is_ok] = control_->response_handler_table_.try_emplace(
-          id, std::move(timer), std::move(promise), config.resp_attachment_buf);
+          id, std::move(timer), std::move(promise),
+          coro_io::data_view{config.resp_attachment_buf,
+                             config.resp_attachment_buf_gpu_id});
       if (!is_ok) [[unlikely]] {
         close();
         co_return build_failed_rpc_result<rpc_return_t>(
@@ -1191,7 +1838,7 @@ class coro_rpc_client {
         }
         co_return deserialize_rpc_result<rpc_return_t>(
             std::move(future), std::weak_ptr<control_t>{control_},
-            std::move(guard));
+            std::move(guard), config_.client_id);
       }
     }
     else {
@@ -1205,9 +1852,9 @@ class coro_rpc_client {
 
  private:
   template <auto func, typename Socket, typename... Args>
-  async_simple::coro::Lazy<rpc_error> send_impl(Socket &socket, uint32_t &id,
-                                                std::string_view req_attachment,
-                                                Args &&...args) {
+  async_simple::coro::Lazy<rpc_error> send_impl(
+      Socket &socket, uint32_t &id, coro_io::data_view req_attachment,
+      Args &&...args) {
     auto buffer = prepare_buffer<func>(id, req_attachment.size(),
                                        std::forward<Args>(args)...);
     if (buffer.empty()) {
@@ -1221,6 +1868,9 @@ class coro_rpc_client {
     file.close();
 #endif
     std::pair<std::error_code, size_t> ret;
+    auto tp = std::chrono::steady_clock::now();
+    ELOG_TRACE << "rpc request send start, client_id: " << config_.client_id
+               << ", request ID: " << id;
 #ifdef UNIT_TEST_INJECT
     if (g_action == inject_action::client_send_bad_header) {
       buffer[0] = (std::byte)(uint8_t(buffer[0]) + 1);
@@ -1228,7 +1878,8 @@ class coro_rpc_client {
     if (g_action == inject_action::client_close_socket_after_send_header) {
       ret = co_await coro_io::async_write(
           socket, asio::buffer(buffer.data(), coro_rpc_protocol::REQ_HEAD_LEN));
-      ELOG_INFO << "client_id " << config_.client_id << " close socket";
+      ELOG_INFO << "client_id " << config_.client_id << " close socket"
+                << ", request ID: " << id;
       close();
       co_return rpc_error{errc::io_error, ret.first.message()};
     }
@@ -1237,7 +1888,8 @@ class coro_rpc_client {
       ret = co_await coro_io::async_write(
           socket,
           asio::buffer(buffer.data(), coro_rpc_protocol::REQ_HEAD_LEN - 1));
-      ELOG_INFO << "client_id " << config_.client_id << " close socket";
+      ELOG_INFO << "client_id " << config_.client_id << " close socket"
+                << ", request ID: " << id;
       close();
       co_return rpc_error{errc::io_error, ret.first.message()};
     }
@@ -1245,7 +1897,8 @@ class coro_rpc_client {
              inject_action::client_shutdown_socket_after_send_header) {
       ret = co_await coro_io::async_write(
           socket, asio::buffer(buffer.data(), coro_rpc_protocol::REQ_HEAD_LEN));
-      ELOG_INFO << "client_id " << config_.client_id << " shutdown";
+      ELOG_INFO << "client_id " << config_.client_id << " shutdown"
+                << ", request ID: " << id;
       if constexpr (std::is_same_v<Socket, asio::ip::tcp::socket>) {
         socket.shutdown(asio::ip::tcp::socket::shutdown_send);
       }
@@ -1267,6 +1920,7 @@ class coro_rpc_client {
         if (write_mutex_.compare_exchange_weak(expected, true)) {
           break;
         }
+        // switch to executor thread
         co_await coro_io::post(
             []() {
             },
@@ -1277,10 +1931,19 @@ class coro_rpc_client {
             socket, asio::buffer(buffer.data(), buffer.size()));
       }
       else {
-        std::array<asio::const_buffer, 2> iov{
-            asio::const_buffer{buffer.data(), buffer.size()},
-            asio::const_buffer{req_attachment.data(), req_attachment.size()}};
-        ret = co_await coro_io::async_write(socket, iov);
+        if constexpr (requires { socket.get_cuda_stream_handler(); }) {
+          std::array<coro_io::data_view, 2> iov{
+              coro_io::data_view{
+                  std::string_view{(char *)buffer.data(), buffer.size()}, -1},
+              req_attachment};
+          ret = co_await coro_io::async_write(socket, iov);
+        }
+        else {
+          std::array<asio::const_buffer, 2> iov{
+              asio::const_buffer{buffer.data(), buffer.size()},
+              asio::const_buffer{req_attachment.data(), req_attachment.size()}};
+          ret = co_await coro_io::async_write(socket, iov);
+        }
       }
       write_mutex_ = false;
 #ifdef UNIT_TEST_INJECT
@@ -1294,7 +1957,8 @@ class coro_rpc_client {
 #ifdef UNIT_TEST_INJECT
     if (g_action == inject_action::client_close_socket_after_send_payload) {
       ELOG_INFO << "client_id " << config_.client_id
-                << " client_close_socket_after_send_payload";
+                << " client_close_socket_after_send_payload"
+                << ", request ID: " << id;
       close();
       co_return rpc_error{errc::io_error, ret.first.message()};
     }
@@ -1306,10 +1970,21 @@ class coro_rpc_client {
       }
       else {
         ELOG_ERROR << "write error: " << ret.first.value() << ", "
-                   << ret.first.message();
+                   << ret.first.message()
+                   << ", client_id: " << config_.client_id << ", cost time = "
+                   << (std::chrono::steady_clock::now() - tp) /
+                          std::chrono::microseconds(1)
+                   << "us"
+                   << ", request ID: " << id;
         co_return rpc_error{errc::io_error, ret.first.message()};
       }
     }
+    ELOG_TRACE << "rpc request send over, client_id: " << config_.client_id
+               << ", cost time = "
+               << (std::chrono::steady_clock::now() - tp) /
+                      std::chrono::microseconds(1)
+               << "us"
+               << ", request ID: " << id;
     co_return rpc_error{};
   }
 
@@ -1321,9 +1996,7 @@ class coro_rpc_client {
   std::unique_ptr<coro_io::period_timer> timer_;
   std::shared_ptr<control_t> control_;
   std::vector<asio::ip::tcp::endpoint> endpoints_;
-  std::string_view req_attachment_;
-  std::span<char> resp_attachment_buffer_;
-  std::string_view resp_attachment_;
+  coro_io::data_view req_attachment_, resp_attachment_, resp_attachment_buffer_;
   config config_;
   constexpr static std::size_t default_read_buf_size_ = 256;
 #ifdef YLT_ENABLE_SSL

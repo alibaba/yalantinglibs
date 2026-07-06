@@ -21,6 +21,7 @@
 #include <array>
 #include <asio/buffer.hpp>
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -31,9 +32,12 @@
 #include <utility>
 #include <ylt/easylog.hpp>
 
+#include "asio/dispatch.hpp"
 #include "async_simple/Common.h"
 #include "async_simple/util/move_only_function.h"
 #include "ylt/coro_io/coro_io.hpp"
+#include "ylt/coro_io/data_view.hpp"
+#include "ylt/coro_io/heterogeneous_buffer.hpp"
 #include "ylt/coro_io/socket_wrapper.hpp"
 #include "ylt/coro_rpc/impl/errno.h"
 #include "ylt/util/utils.hpp"
@@ -55,9 +59,9 @@ struct context_info_t {
   std::shared_ptr<coro_connection> conn_;
   typename rpc_protocol::req_header req_head_;
   std::string req_body_;
-  std::string req_attachment_;
-  std::function<std::string_view()> resp_attachment_ = [] {
-    return std::string_view{};
+  coro_io::heterogeneous_buffer req_attachment_;
+  std::function<coro_io::data_view()> resp_attachment_ = [] {
+    return coro_io::data_view{std::string_view{}, -1};
   };
   std::function<void(const std::error_code &, std::size_t)> complete_handler_;
   std::atomic<context_status> status_ = context_status::init;
@@ -71,7 +75,8 @@ struct context_info_t {
       : router_(r), conn_(std::move(conn)) {}
   context_info_t(typename rpc_protocol::router &r,
                  std::shared_ptr<coro_connection> &&conn,
-                 std::string &&req_body_buf, std::string &&req_attachment_buf)
+                 std::string &&req_body_buf,
+                 coro_io::heterogeneous_buffer &&req_attachment_buf)
       : router_(r),
         conn_(std::move(conn)),
         req_body_(std::move(req_body_buf)),
@@ -83,6 +88,8 @@ struct context_info_t {
   void set_response_attachment(std::string_view attachment);
   void set_response_attachment(std::string attachment);
   void set_response_attachment(std::function<std::string_view()> attachment);
+  void set_response_attachment2(std::function<coro_io::data_view()> attachment);
+  void set_response_attachment2(coro_io::data_view attachment);
   /* set a handler which will be called when data was serialized and write to
    * socket*/
   /* std::error_code: socket write result*/
@@ -92,7 +99,9 @@ struct context_info_t {
     complete_handler_ = std::move(handler);
   }
   std::string_view get_request_attachment() const;
+  coro_io::data_view get_request_attachment2() const;
   std::string release_request_attachment();
+  coro_io::heterogeneous_buffer release_request_attachment2();
   std::any &tag() noexcept;
   const std::any &tag() const noexcept;
   coro_io::endpoint get_local_endpoint() const noexcept;
@@ -170,41 +179,29 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   }
 
   template <typename rpc_protocol>
-  async_simple::coro::Lazy<void> start(
-      typename rpc_protocol::router &router) noexcept {
-    co_await socket_wrapper_.visit_coro([this, &router](auto &socket) {
-      return start_impl<rpc_protocol>(router, socket);
+  struct handshake_result_t {
+    std::error_code ec;
+    std::string magic_number;
+  };
+
+  template <typename rpc_protocol>
+  async_simple::coro::Lazy<void> start(typename rpc_protocol::router &router,
+                                       std::string_view magic_number) noexcept {
+    co_await socket_wrapper_.visit([this, &router, magic_number](auto &socket) {
+      return start_impl<rpc_protocol>(router, socket, magic_number);
     });
   }
   template <typename rpc_protocol, typename Socket>
   async_simple::coro::Lazy<void> start_impl(
-      typename rpc_protocol::router &router, Socket &socket) noexcept {
-#ifdef YLT_ENABLE_SSL
-    if constexpr (std::is_same_v<
-                      Socket,
-                      coro_io::socket_wrapper_t::tcp_socket_with_ssl_t>) {
-      ELOG_INFO << "begin to handshake conn_id " << conn_id_;
-      reset_timer();
-      auto shake_ec = co_await coro_io::async_handshake(
-          &socket, asio::ssl::stream_base::server);
-      cancel_timer();
-      if (shake_ec) {
-        ELOG_ERROR << "handshake failed: " << shake_ec.message() << " conn_id  "
-                   << conn_id_;
-        close();
-        co_return;
-      }
-      else {
-        ELOG_INFO << "handshake ok conn_id " << conn_id_;
-      }
-    }
-#endif
+      typename rpc_protocol::router &router, Socket &socket,
+      std::string_view magic_number) noexcept {
 #ifdef YLT_ENABLE_IBV
     if constexpr (std::is_same_v<Socket,
                                  coro_io::socket_wrapper_t::ibv_socket_t>) {
-      reset_timer();  // TODO: test ibverbs accept timeout
-      auto ec = co_await socket.accept();
-      cancel_timer();
+      reset_timer(0, "ibverbs handshake");  // TODO: test ibverbs accept timeout
+      auto ec = co_await socket.accept(magic_number);
+      magic_number = "";
+      cancel_timer(0, "ibverbs handshake");
       if (ec) [[unlikely]] {
         ELOG_ERROR << "ibverbs init qp failed: " << ec.message() << " conn_id  "
                    << conn_id_;
@@ -215,38 +212,46 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 #endif
     auto context_info = std::make_shared<context_info_t<rpc_protocol>>(
         router, shared_from_this());
-    reset_timer();
-    std::string magic_number;
-    if (transfer_callback_ == nullptr) {
-      magic_number = "SKIP";
-    }
-    for (int64_t req_count = 0;; req_count++) {
-      typename rpc_protocol::req_header req_head_tmp;
+    uint64_t req_id = 0;
+    reset_timer(req_id, "recv client data");
+    for (;; ++req_id) {
+      typename rpc_protocol::req_header req_head_tmp{};
+      std::error_code ec;
+      auto tp = std::chrono::steady_clock::now();
       // timer will be reset after rpc call response
-      auto ec =
-          co_await rpc_protocol::read_head(socket, req_head_tmp, magic_number);
+      if (req_id == 0) {
+        ec = co_await rpc_protocol::read_first_head(socket, req_head_tmp,
+                                                    magic_number);
+      }
+      else {
+        ec = co_await rpc_protocol::read_head(socket, req_head_tmp);
+      }
       // `co_await async_read` uses asio::async_read underlying.
       // If eof occurred, the bytes_transferred of `co_await async_read` must
       // less than RPC_HEAD_LEN. Incomplete data will be discarded.
       // So, no special handling of eof is required.
       if (ec) [[unlikely]] {
-        ELOG_INFO << "connection " << conn_id_ << " close: " << ec.message();
-        if (req_count == 0 && magic_number.size() && transfer_callback_) {
-          ELOG_INFO << "The connection is not coro_rpc connection.";
-          (*transfer_callback_)(std::move(socket_wrapper_), magic_number);
-        }
+        ELOG_INFO << "connection " << conn_id_ << " close: " << ec.message()
+                  << ", request ID:" << req_id << ", cost time = "
+                  << (std::chrono::steady_clock::now() - tp) /
+                         std::chrono::microseconds(1)
+                  << "us";
         break;
       }
       // we won't transfer connection after first check magic number
-      magic_number = "SKIP";
 #ifdef UNIT_TEST_INJECT
       client_id_ = req_head_tmp.seq_num;
-      ELOG_INFO << "conn_id " << conn_id_ << " client_id " << client_id_;
+      ELOG_INFO << "conn_id " << conn_id_ << " client_id " << client_id_
+                << ", request ID:" << req_id;
 #endif
 #ifdef UNIT_TEST_INJECT
       if (g_action == inject_action::close_socket_after_read_header) {
         ELOG_WARN << "inject action: close_socket_after_read_header, conn_id "
-                  << conn_id_ << ", client_id " << client_id_;
+                  << conn_id_ << ", client_id " << client_id_
+                  << ", request ID:" << req_id << ", cost time = "
+                  << (std::chrono::steady_clock::now() - tp) /
+                         std::chrono::microseconds(1)
+                  << "us";
         break;
       }
 #endif
@@ -276,7 +281,11 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 
       if (!serialize_proto.has_value())
         AS_UNLIKELY {
-          ELOG_ERROR << "bad serialize protocol type, conn_id " << conn_id_;
+          ELOG_ERROR << "bad serialize protocol type, conn_id " << conn_id_
+                     << ", request ID:" << req_id << ", cost time = "
+                     << (std::chrono::steady_clock::now() - tp) /
+                            std::chrono::microseconds(1)
+                     << "us";
           break;
         }
 
@@ -285,27 +294,42 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 
       ec = co_await rpc_protocol::read_payload(socket, req_head, body,
                                                req_attachment);
-      cancel_timer();
+      cancel_timer(req_id, "recv client data");
       payload = std::string_view{body};
 
       if (ec)
         AS_UNLIKELY {
           ELOG_ERROR << "read error: " << ec.message() << ", conn_id "
-                     << conn_id_;
+                     << conn_id_ << ", request ID:" << req_id
+                     << ", cost time = "
+                     << (std::chrono::steady_clock::now() - tp) /
+                            std::chrono::microseconds(1)
+                     << "us";
           break;
         }
+      else {
+        ELOG_TRACE << "read client data over, conn_id " << conn_id_
+                   << ", request ID:" << req_id << ", cost time = "
+                   << (std::chrono::steady_clock::now() - tp) /
+                          std::chrono::microseconds(1)
+                   << "us";
+      }
 
       key = rpc_protocol::get_route_key(req_head);
       auto handler = router.get_handler(key);
       ++rpc_processing_cnt_;
+      auto start_execute_time_point = std::chrono::steady_clock::now();
       if (!handler) {
         auto coro_handler = router.get_coro_handler(key);
         set_rpc_return_by_callback();
-        router.route_coro(coro_handler, payload, serialize_proto.value(), key)
+        router
+            .route_coro(conn_id_, req_id, coro_handler, payload,
+                        serialize_proto.value(), key)
             .template setLazyLocal<connection_lazy_ctx<rpc_protocol>>(
                 context_info)
             .directlyStart(
-                [context_info](auto &&result) mutable {
+                [start_execute_time_point, context_info, id = conn_id_,
+                 req_id](auto &&result) mutable {
                   std::pair<coro_rpc::err_code, std::string> &ret =
                       result.value();
                   if (ret.first)
@@ -313,14 +337,18 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
                       ELOGI << "rpc error in function:"
                             << context_info->get_rpc_function_name()
                             << ". error code:" << ret.first.ec
-                            << ". message : " << ret.second;
+                            << ". message : " << ret.second
+                            << ", conn_id = " << id
+                            << ", request ID:" << req_id;
                     }
                   auto executor = context_info->conn_->get_executor();
-                  executor->schedule([context_info = std::move(context_info),
-                                      ret = std::move(ret)]() mutable {
+                  executor->schedule([start_execute_time_point,
+                                      context_info = std::move(context_info),
+                                      ret = std::move(ret), req_id]() mutable {
                     context_info->conn_
                         ->template direct_response_msg<rpc_protocol>(
-                            ret.first, ret.second, context_info->req_head_,
+                            start_execute_time_point, req_id, ret.first,
+                            ret.second, context_info->req_head_,
                             std::move(context_info->resp_attachment_),
                             std::move(context_info->complete_handler_));
                   });
@@ -329,8 +357,9 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       }
       else {
         coro_rpc::detail::set_context<rpc_protocol>() = context_info.get();
-        auto &&[resp_err, resp_buf] = router.route(
-            handler, payload, context_info, serialize_proto.value(), key);
+        auto &&[resp_err, resp_buf] =
+            router.route(conn_id_, req_id, handler, payload, context_info,
+                         serialize_proto.value(), key);
         if (is_rpc_return_by_callback_) {
           if (!resp_err) {
             continue;
@@ -339,7 +368,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
             ELOGI << "rpc error in function:"
                   << context_info->get_rpc_function_name()
                   << ". error code:" << resp_err.ec
-                  << ". message : " << resp_buf;
+                  << ". message : " << resp_buf << ", conn_id = " << conn_id_
+                  << ", request ID:" << req_id;
             is_rpc_return_by_callback_ = false;
           }
         }
@@ -347,7 +377,9 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         if (g_action == inject_action::close_socket_after_send_length) {
           ELOG_WARN
               << "inject action: close_socket_after_send_length , conn_id "
-              << conn_id_ << ", client_id " << client_id_;
+              << conn_id_ << ", client_id " << client_id_
+              << ", request ID:" << req_id;
+          ;
           std::string header_buf = rpc_protocol::prepare_response(
               resp_buf, req_head, 0, resp_err, "");
           co_await coro_io::async_write(socket, asio::buffer(header_buf));
@@ -355,21 +387,23 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         }
         if (g_action == inject_action::server_send_bad_rpc_result) {
           ELOG_WARN << "inject action: server_send_bad_rpc_result , conn_id "
-                    << conn_id_ << ", client_id " << client_id_;
+                    << conn_id_ << ", client_id " << client_id_
+                    << ", request ID:" << req_id;
+          ;
           resp_buf[0] = resp_buf[0] + 1;
         }
 #endif
         direct_response_msg<rpc_protocol>(
-            resp_err, resp_buf, req_head,
+            start_execute_time_point, req_id, resp_err, resp_buf, req_head,
             std::move(context_info->resp_attachment_),
             std::move(context_info->complete_handler_));
         context_info->resp_attachment_ = [] {
-          return std::string_view{};
+          return coro_io::data_view{std::string_view{}, -1};
         };
       }
     }
     close();
-    cancel_timer();
+    cancel_timer(req_id, "recv client data");
   }
   /*!
    * send `ret` to RPC client
@@ -379,56 +413,80 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
    */
   template <typename rpc_protocol>
   void direct_response_msg(
+      std::chrono::steady_clock::time_point start_tp, uint64_t req_id,
       coro_rpc::err_code &resp_err, std::string &resp_buf,
       const typename rpc_protocol::req_header &req_head,
-      std::function<std::string_view()> &&attachment,
+      std::function<coro_io::data_view()> &&attachment,
       std::function<void(const std::error_code &, std::size_t)>
           &&complete_handler) {
     std::string resp_error_msg;
     if (resp_err) {
       resp_error_msg = std::move(resp_buf);
       resp_buf = {};
-      ELOG_WARN << "rpc route/execute error, error msg: " << resp_error_msg;
+      ELOG_WARN << "rpc route/execute error, error msg: " << resp_error_msg
+                << ", conn_id = " << conn_id_;
     }
     std::string header_buf = rpc_protocol::prepare_response(
         resp_buf, req_head, attachment().length(), resp_err, resp_error_msg);
 
-    response(std::move(header_buf), std::move(resp_buf), std::move(attachment),
-             std::move(complete_handler), nullptr)
+    response(start_tp, req_id, std::move(header_buf), std::move(resp_buf),
+             std::move(attachment), std::move(complete_handler), nullptr)
         .start([](auto &&) {
         });
   }
 
   template <typename rpc_protocol>
-  void response_msg(std::string &&body_buf,
-                    std::function<std::string_view()> &&resp_attachment,
+  void response_msg(std::chrono::steady_clock::time_point start_tp,
+                    uint64_t req_id, std::string &&body_buf,
+                    std::function<coro_io::data_view()> &&resp_attachment,
                     const typename rpc_protocol::req_header &req_head,
                     std::function<void(const std::error_code &, std::size_t)>
                         &&complete_handler) {
     std::string header_buf = rpc_protocol::prepare_response(
         body_buf, req_head, resp_attachment().size());
-    response(std::move(header_buf), std::move(body_buf),
-             std::move(resp_attachment), std::move(complete_handler),
-             shared_from_this())
-        .via(socket_wrapper_.get_executor())
-        .detach();
+    asio::dispatch(
+        socket_wrapper_.get_executor()->get_asio_executor(),
+        [watcher = weak_from_this(), header_buf = std::move(header_buf),
+         body_buf = std::move(body_buf),
+         resp_attachment = std::move(resp_attachment),
+         handler = std::move(complete_handler), req_id, start_tp]() mutable {
+          if (auto self = watcher.lock()) {
+            self->response(start_tp, req_id, std::move(header_buf),
+                           std::move(body_buf), std::move(resp_attachment),
+                           std::move(handler), self)
+                .start([](auto &&) {
+                });
+          }
+        });
   }
 
   template <typename rpc_protocol>
-  void response_error(coro_rpc::errc ec, std::string_view error_msg,
+  void response_error(std::chrono::steady_clock::time_point start_tp,
+                      uint64_t req_id, coro_rpc::errc ec,
+                      std::string_view error_msg,
                       const typename rpc_protocol::req_header &req_head,
                       std::function<void(const std::error_code &, std::size_t)>
                           &&complete_handler) {
-    std::function<std::string_view()> attach_ment = []() -> std::string_view {
-      return {};
-    };
     std::string body_buf;
     std::string header_buf =
         rpc_protocol::prepare_response(body_buf, req_head, 0, ec, error_msg);
-    response(std::move(header_buf), std::move(body_buf), std::move(attach_ment),
-             std::move(complete_handler), shared_from_this())
-        .via(socket_wrapper_.get_executor())
-        .detach();
+    asio::dispatch(
+        socket_wrapper_.get_executor()->get_asio_executor(),
+        [watcher = weak_from_this(), header_buf = std::move(header_buf),
+         body_buf = std::move(body_buf), handler = std::move(complete_handler),
+         req_id, start_tp]() mutable {
+          if (auto self = watcher.lock()) {
+            self->response(
+                    start_tp, req_id, std::move(header_buf),
+                    std::move(body_buf),
+                    []() -> coro_io::data_view {
+                      return {};
+                    },
+                    std::move(handler), self)
+                .start([](auto &&) {
+                });
+          }
+        });
   }
 
   void set_rpc_return_by_callback() { is_rpc_return_by_callback_ = true; }
@@ -462,10 +520,6 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     conn_id_ = conn_id;
   }
 
-  void set_transfer_callback(TransferCallback *callback) {
-    transfer_callback_ = callback;
-  }
-
   uint64_t get_connection_id() const noexcept { return conn_id_; }
 
   std::any &tag() { return tag_; }
@@ -479,6 +533,39 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
 
   coro_io::endpoint get_local_endpoint() {
     return socket_wrapper_.local_endpoint();
+  }
+
+  coro_io::socket_wrapper_t &socket_wrapper() { return socket_wrapper_; }
+
+  template <typename rpc_protocol>
+  async_simple::coro::Lazy<handshake_result_t<rpc_protocol>> handshake() {
+    co_return co_await socket_wrapper_.visit(
+        [this]<typename Socket>(Socket &socket)
+            -> async_simple::coro::Lazy<handshake_result_t<rpc_protocol>> {
+          handshake_result_t<rpc_protocol> result;
+#ifdef YLT_ENABLE_SSL
+          if constexpr (std::is_same_v<
+                            Socket,
+                            coro_io::socket_wrapper_t::tcp_socket_with_ssl_t>) {
+            ELOG_INFO << "begin to handshake conn_id " << conn_id_;
+            reset_timer(0, "ssl handshake");
+            result.ec = co_await coro_io::async_handshake(
+                &socket, asio::ssl::stream_base::server);
+            cancel_timer(0, "ssl handshake");
+            if (result.ec) {
+              ELOG_ERROR << "handshake failed: " << result.ec.message()
+                         << " conn_id  " << conn_id_;
+              co_return result;
+            }
+            else {
+              ELOG_INFO << "handshake ok conn_id " << conn_id_;
+            }
+          }
+#endif
+          result.ec =
+              co_await rpc_protocol::read_magic(socket, result.magic_number);
+          co_return result;
+        });
   }
 
  private:
@@ -496,17 +583,26 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
         co_return;
       }
 #endif
-      auto attachment = std::get<2>(msg)();
+      coro_io::data_view attachment = std::get<2>(msg)();
       if (attachment.empty()) {
         std::array<asio::const_buffer, 2> buffers{
             asio::buffer(std::get<0>(msg)), asio::buffer(std::get<1>(msg))};
         ret = co_await coro_io::async_write(socket, buffers);
       }
       else {
-        std::array<asio::const_buffer, 3> buffers{
-            asio::buffer(std::get<0>(msg)), asio::buffer(std::get<1>(msg)),
-            asio::buffer(attachment)};
-        ret = co_await coro_io::async_write(socket, buffers);
+        if constexpr (requires { socket.get_cuda_stream_handler(); }) {
+          std::array<coro_io::data_view, 3> buffers{
+              coro_io::data_view{std::string_view{std::get<0>(msg)}, -1},
+              coro_io::data_view{std::string_view{std::get<1>(msg)}, -1},
+              attachment};
+          ret = co_await coro_io::async_write(socket, buffers);
+        }
+        else {
+          std::array<asio::const_buffer, 3> buffers{
+              asio::buffer(std::get<0>(msg)), asio::buffer(std::get<1>(msg)),
+              asio::buffer(attachment)};
+          ret = co_await coro_io::async_write(socket, buffers);
+        }
       }
       auto &complete_handler = std::get<3>(msg);
       if (complete_handler) {
@@ -514,8 +610,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       }
       if (ret.first)
         AS_UNLIKELY {
-          ELOG_ERROR << ret.first.message() << ", "
-                     << "async_write error";
+          ELOG_INFO << ret.first.message() << ", "
+                    << "async_write error, conn_id = " << conn_id_;
           close();
           co_return;
         }
@@ -534,18 +630,21 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
   }
 
   async_simple::coro::Lazy<void> response(
+      std::chrono::steady_clock::time_point start_tp, uint64_t req_id,
       std::string header_buf, std::string body_buf,
-      std::function<std::string_view()> resp_attachment,
+      std::function<coro_io::data_view()> resp_attachment,
       std::function<void(const std::error_code, std::size_t)> complete_handler,
       rpc_conn self) noexcept {
     if (has_closed())
       AS_UNLIKELY {
-        ELOG_DEBUG << "response_msg failed: connection has been closed";
+        ELOG_DEBUG << "response_msg failed: connection has been closed"
+                   << ", conn_id = " << conn_id_ << "request ID:" << req_id;
         co_return;
       }
 #ifdef UNIT_TEST_INJECT
     if (g_action == inject_action::close_socket_after_send_length) {
-      ELOG_WARN << "inject action: close_socket_after_send_length";
+      ELOG_WARN << "inject action: close_socket_after_send_length"
+                << ", conn_id = " << conn_id_ << "request ID:" << req_id;
       body_buf.clear();
     }
 #endif
@@ -554,19 +653,25 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
                               std::move(complete_handler));
     --rpc_processing_cnt_;
     assert(rpc_processing_cnt_ >= 0);
-    reset_timer();
+    ELOG_INFO << "finish rpc function execution, conn_id = " << conn_id_
+              << ", request ID:" << req_id << ", cost time = "
+              << (std::chrono::steady_clock::now() - start_tp) /
+                     std::chrono::microseconds(1)
+              << "us";
+    reset_timer(req_id, "rpc function executor over");
     if (write_queue_.size() == 1) {
       if (self == nullptr) {
         self = shared_from_this();
       }
-      co_await socket_wrapper_.visit_coro([this](auto &socket) {
+      co_await socket_wrapper_.visit([this](auto &socket) {
         return send_data(socket);
       });
     }
   }
 
   void close() {
-    ELOG_TRACE << "connection closed";
+    ELOG_TRACE << "connection closed"
+               << ", conn_id = " << conn_id_;
     if (has_closed_) {
       return;
     }
@@ -577,28 +682,32 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       quit_callback_(conn_id_);
     }
   }
-  void reset_timer() {
+  void reset_timer(uint64_t id, std::string_view info = "") {
+    ELOG_TRACE << "start timer by operation " << info << ", conn_id "
+               << conn_id_ << ", request ID:" << id;
     if (!enable_check_timeout_ || rpc_processing_cnt_ != 0) {
       return;
     }
 
     timer_.expires_from_now(keep_alive_timeout_duration_);
     timer_.async_wait(
-        [this, self = shared_from_this()](asio::error_code const &ec) {
+        [this, self = shared_from_this(), id](asio::error_code const &ec) {
           if (!ec) {
 #ifdef UNIT_TEST_INJECT
             ELOG_INFO << "close timeout client client_id " << client_id_
-                      << ", conn_id " << conn_id_;
+                      << ", conn_id " << conn_id_ << ", request ID:" << id;
 #else
-            ELOG_INFO << "close timeout client conn_id " << conn_id_;
+            ELOG_INFO << "close timeout client conn_id " << conn_id_
+                      << ", request ID:" << id;
 #endif
-
             close();
           }
         });
   }
 
-  void cancel_timer() {
+  void cancel_timer(uint64_t id, std::string_view info = "") {
+    ELOG_TRACE << "stop timer by operation " << info << ", conn_id " << conn_id_
+               << ", request ID:" << id;
     if (!enable_check_timeout_) {
       return;
     }
@@ -607,10 +716,9 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
     timer_.cancel(ec);
   }
   coro_io::socket_wrapper_t socket_wrapper_;
-  TransferCallback *transfer_callback_{nullptr};
   // FIXME: queue's performance can be imporved.
   std::deque<
-      std::tuple<std::string, std::string, std::function<std::string_view()>,
+      std::tuple<std::string, std::string, std::function<coro_io::data_view()>,
                  std::function<void(const std::error_code, std::size_t)>>>
       write_queue_;
   bool is_rpc_return_by_callback_{false};
@@ -656,15 +764,15 @@ uint64_t context_info_t<rpc_protocol>::get_connection_id() const noexcept {
 template <typename rpc_protocol>
 void context_info_t<rpc_protocol>::set_response_attachment(
     std::string attachment) {
-  set_response_attachment([attachment = std::move(attachment)] {
-    return std::string_view{attachment};
-  });
+  resp_attachment_ = [attachment = std::move(attachment)] {
+    return coro_io::data_view{attachment, -1};
+  };
 }
 
 template <typename rpc_protocol>
 void context_info_t<rpc_protocol>::set_response_attachment(
     std::string_view attachment) {
-  set_response_attachment([attachment] {
+  return set_response_attachment([attachment] {
     return attachment;
   });
 }
@@ -672,6 +780,22 @@ void context_info_t<rpc_protocol>::set_response_attachment(
 template <typename rpc_protocol>
 void context_info_t<rpc_protocol>::set_response_attachment(
     std::function<std::string_view()> attachment) {
+  resp_attachment_ = [attachment = std::move(attachment)] {
+    return coro_io::data_view{attachment(), -1};
+  };
+}
+
+template <typename rpc_protocol>
+void context_info_t<rpc_protocol>::set_response_attachment2(
+    coro_io::data_view attachment) {
+  set_response_attachment2([attachment] {
+    return attachment;
+  });
+}
+
+template <typename rpc_protocol>
+void context_info_t<rpc_protocol>::set_response_attachment2(
+    std::function<coro_io::data_view()> attachment) {
   resp_attachment_ = std::move(attachment);
 }
 
@@ -681,7 +805,27 @@ std::string_view context_info_t<rpc_protocol>::get_request_attachment() const {
 }
 
 template <typename rpc_protocol>
+coro_io::data_view context_info_t<rpc_protocol>::get_request_attachment2()
+    const {
+  return req_attachment_;
+}
+
+template <typename rpc_protocol>
 std::string context_info_t<rpc_protocol>::release_request_attachment() {
+  auto str = req_attachment_.get_string();
+#ifdef YLT_ENABLE_CUDA
+  if SP_UNLIKELY (!str) {
+    throw std::logic_error(
+        "call release_request_attachment, but attachment is in gpu memory, you "
+        "need call release_resp_attachment2()");
+  }
+#endif
+  return std::move(*str);
+}
+
+template <typename rpc_protocol>
+coro_io::heterogeneous_buffer
+context_info_t<rpc_protocol>::release_request_attachment2() {
   return std::move(req_attachment_);
 }
 

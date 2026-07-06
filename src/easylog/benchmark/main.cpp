@@ -59,7 +59,6 @@ void test_glog() {
   std::filesystem::remove("glog.txt");
   FLAGS_log_dir = ".";
   FLAGS_minloglevel = google::GLOG_INFO;
-  FLAGS_timestamp_in_logfile_name = false;
   google::SetLogDestination(google::INFO, "glog.txt");
   google::InitGoogleLogging("glog");
 

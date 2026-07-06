@@ -213,4 +213,7 @@ struct is_specialization<Ref<Args...>, Ref> : std::true_type {};
 template <typename Test, template <typename...> class Ref>
 inline constexpr bool is_specialization_v = is_specialization<Test, Ref>::value;
 
+template <typename T>
+concept check_structure_declared = requires { sizeof(T); };
+
 }  // namespace util

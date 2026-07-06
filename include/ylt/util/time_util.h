@@ -140,7 +140,7 @@ constexpr inline std::int64_t absolute_to_internal =
     (absolute_zero_year - internal_year) *
     std::int64_t(365.2425 * seconds_per_day);
 constexpr inline std::int64_t unix_to_internal =
-    (1969 * 365 + 1969 / 4 - 1969 / 100 + 1969 / 400) * seconds_per_day;
+    (1969ll * 365 + 1969 / 4 - 1969 / 100 + 1969 / 400) * seconds_per_day;
 constexpr inline std::int64_t internal_to_unix = -unix_to_internal;
 constexpr inline std::array<std::int32_t, 13> days_before = {
     0,
@@ -410,7 +410,7 @@ constexpr std::string_view YMON[12] = {"Jan", "Feb", "Mar", "Apr",
 
 template <size_t N>
 inline void to_int(int num, char c, char *p) {
-  for (int i = 0; i < N; i++) {
+  for (size_t i = 0; i < N; i++) {
     p[N - 1 - i] = digits[num % 10];
     num = num / 10;
   }
@@ -448,7 +448,7 @@ inline std::string_view get_local_time_str(char (&buf)[N], std::time_t t,
 
   char *p = buf;
 
-  for (int i = 0; i < format.size(); ++i) {
+  for (size_t i = 0; i < format.size(); ++i) {
     if (format[i] == '%') {
       char c = i + 2 < format.size() ? format[i + 2] : '0';
       i++;

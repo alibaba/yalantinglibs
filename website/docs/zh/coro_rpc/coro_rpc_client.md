@@ -66,13 +66,64 @@ coro_rpc支持使用openssl对连接进行加密。在安装openssl并使用cmak
 
 当启用ssl支持后，用户可以调用`init_ssl`函数，然后再连接到服务器。这会使得客户端与服务器之间建立加密的链接。需要注意的是，coro_rpc服务端在编译时也必须启用ssl支持，并且在启动服务器之前也需要调用`init_ssl`方法来启用SSL支持。
 
+### 单向SSL认证
+
+单向SSL认证只验证服务器身份，客户端使用CA证书验证服务器：
+
+服务端配置：
+
 ```cpp
-client.init_ssl("./","server.crt");
+coro_rpc_server server(2, 9000);
+ssl_configure ssl_conf;
+ssl_conf.base_path = "./certs";
+ssl_conf.cert_file = "server.crt";
+ssl_conf.key_file = "server.key";
+ssl_conf.ca_cert_file = "";  // 单向认证为空
+ssl_conf.enable_client_verify = false;  // 不验证客户端证书
+
+server.init_ssl(ssl_conf);
+server.register_handler<your_function>();
+server.start();
 ```
 
-第一个字符串代表SSL证书所在的基本路径，第二个字符串代表SSL证书相对于基本路径的相对路径。
+### 双向SSL认证（Mutual Authentication）
 
-当建立连接时，客户端会使用该证书校验服务端发来的证书，以避免中间人攻击。因此，客户端必须持有服务端使用的证书或其根证书。
+双向SSL认证同时验证客户端和服务器身份，客户端需要提供自己的证书：
+
+客户端配置：
+
+```cpp
+    // 客户端双向认证
+    client.init_ssl("./",  // 证书路径
+                    "ca.crt",  // CA证书，用于验证服务器
+                    "client.crt",  // 客户端证书
+                    "client.key",  // 客户端私钥
+                    "127.0.0.1"  // 服务器主机名（SNI）
+    );
+```
+
+服务端配置：
+
+```cpp
+coro_rpc_server server(2, 9000);
+ssl_configure ssl_conf;
+ssl_conf.base_path = "./certs";
+ssl_conf.cert_file = "server.crt";
+ssl_conf.key_file = "server.key";
+ssl_conf.ca_cert_file = "ca.crt";  // CA证书，用于验证客户端
+ssl_conf.enable_client_verify = true;  // 启用客户端证书验证
+
+server.init_ssl(ssl_conf);
+server.register_handler<your_function>();
+server.start();
+```
+
+**重要说明**：
+- `enable_client_verify` 标志启用强制客户端证书验证
+- 启用双向认证后，客户端必须提供由 `ca_cert_file` 指定的CA签发的有效证书
+- 主机名参数必须与服务器证书中的通用名称（CN）或主题备用名称（SAN）匹配
+
+我们同样支持国密NTLS。你需要开启CMAKE选项`YLT_ENABLE_NTLS`。
 
 ## RPC参数的转换与编译期检查
 
@@ -126,7 +177,7 @@ ibverbs协议的配置如下：
 struct ib_socket_t::config_t {
   uint32_t cq_size = 128; // 事件通知队列的最大长度
   uint32_t recv_buffer_cnt = 8;                 // 默认提交到接受队列的缓冲数目，一个缓冲区默认256KB。积压的接收数据越多，队列中的缓冲区也会越多，最多可以缓冲max_recv_wr*buffer_size这么多的数据(buffer_size为buffer_pool配置的缓冲区大小），此后如果上层仍不消费数据，则发送端会收到rnr错误，不断重试并等待对端消费。
-  uint32_t send_buffer_cnt = 2;                 // 默认的发送缓冲区队列长度上限。代表最多积压的发送缓冲区数目。
+  uint32_t send_buffer_cnt = 4;                 // 默认的发送缓冲区队列长度上限。代表最多积压的发送缓冲区数目。
   ibv_qp_type qp_type = IBV_QPT_RC;             // 默认的qp类型。
   ibv_qp_cap cap = {.max_send_wr = 32,           // 发送队列的最大长度。
                     .max_recv_wr = 32,          // 接受队列的最大长度
@@ -184,10 +235,13 @@ struct ib_socket_t::config_t {
 3. 创建并使用自己的 `ib_device_t`
 ```cpp
   auto dev = coro_io::ib_device_t::create({
-    .dev_name=nullptr,  // 如果 dev_name 为 nullptr，则会使用设备列表中的第一个设备
+    .dev_name = "",  // 如果 dev_name 为 空，则会使用设备列表中的第一个设备
+    .port = 1, // 手动指定网卡port
+    .use_best_gid_index = true, // 自动查找该设备最佳的gid_index
+    .gid_index = 0, // 手动指定gid_index，当关闭自动查找或自动查找失败时生效
     .buffer_pool_config = {
       // ...
-    }
+    },
   });
   coro_rpc_client cli;
   cli.init_ibv({

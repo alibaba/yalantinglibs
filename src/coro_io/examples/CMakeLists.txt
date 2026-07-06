@@ -30,6 +30,16 @@ endif()
 add_executable(coro_io_example main.cpp)
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_SYSTEM_NAME MATCHES "Windows") # mingw-w64
-    target_link_libraries(coro_io_example wsock32 ws2_32)
+    target_link_libraries(coro_io_example PRIVATE ws2_32 mswsock)
+endif()
+
+if (YLT_ENABLE_CUDA)
+  add_executable(cuda cuda.cpp)
+  target_link_libraries(cuda PRIVATE CUDA::cuda_driver)
+  if (YLT_ENABLE_NVCOMP)
+    target_link_libraries(cuda PRIVATE ${NVCOMP_LIB})
+    target_include_directories(cuda PRIVATE ${NVCOMP_INCLUDE_DIR})
+    target_compile_definitions(cuda PRIVATE YLT_ENABLE_NVCOMP)
+  endif()
 endif()
 

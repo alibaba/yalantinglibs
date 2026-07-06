@@ -181,7 +181,7 @@ jobs:
                 -DUSE_CCACHE=${{env.ccache}} -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
 
       - name: Build
-        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}} 
+        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
 
       - name: Test
         working-directory: ${{github.workspace}}/build

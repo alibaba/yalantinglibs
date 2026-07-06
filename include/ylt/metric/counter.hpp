@@ -15,7 +15,7 @@ enum class op_type_t { INC, DEC, SET };
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
 struct json_counter_metric_t {
-  std::vector<std::string_view> labels;
+  std::vector<std::pair<std::string_view, std::string_view>> labels;
   std::variant<int64_t, double> value;
 };
 YLT_REFL(json_counter_metric_t, labels, value);
@@ -23,10 +23,9 @@ struct json_counter_t {
   std::string_view name;
   std::string_view help;
   std::string_view type;
-  std::vector<std::string_view> labels_name;
   std::vector<json_counter_metric_t> metrics;
 };
-YLT_REFL(json_counter_t, name, help, type, labels_name, metrics);
+YLT_REFL(json_counter_t, name, help, type, metrics);
 #endif
 
 template <typename value_type>
@@ -51,8 +50,11 @@ class basic_static_counter : public static_metric {
         default_label_value_(dupli_count_) {}
 
   void inc(value_type val = 1) {
-    if (val <= 0) {
+    if (val < 0) {
       return;
+    }
+    if (!has_change_.load(std::memory_order::relaxed)) [[unlikely]] {
+      has_change_.store(true, std::memory_order::relaxed);
     }
     default_label_value_.inc(val);
   }
@@ -87,14 +89,10 @@ class basic_static_counter : public static_metric {
 
     json_counter_t counter{name_, help_, metric_name()};
 
-    counter.labels_name.reserve(static_labels_.size());
-    for (auto &[k, _] : static_labels_) {
-      counter.labels_name.emplace_back(k);
-    }
     counter.metrics.resize(1);
     counter.metrics[0].labels.reserve(static_labels_.size());
-    for (auto &[k, _] : static_labels_) {
-      counter.metrics[0].labels.emplace_back(k);
+    for (auto &[k, v] : static_labels_) {
+      counter.metrics[0].labels.emplace_back(k, v);
     }
     counter.metrics[0].value = value;
     iguana::to_json(counter, str);
@@ -121,7 +119,7 @@ class basic_static_counter : public static_metric {
   void build_string(std::string &str, const std::vector<std::string> &v1,
                     const std::vector<std::string> &v2) {
     for (size_t i = 0; i < v1.size(); i++) {
-      str.append(v1[i]).append("=\"").append(v2[i]).append("\"").append(",");
+      str.append(v1[i]).append("=\"").append(v2[i]).append("\",");
     }
     str.pop_back();
   }
@@ -145,6 +143,17 @@ class basic_dynamic_counter
                         std::array<std::string, N> labels_name)
       : Base(MetricType::Counter, std::move(name), std::move(help),
              std::move(labels_name)) {}
+
+  // hybrid labels value
+  basic_dynamic_counter(std::string name, std::string help,
+                        std::map<std::string, std::string> static_labels,
+                        std::array<std::string, N> labels_name)
+      : Base(MetricType::Counter, std::move(name), std::move(help),
+             std::move(labels_name)),
+        static_labels_(static_labels) {
+    Base::build_label_string(static_labels_str_, static_labels_);
+  }
+
   using label_key_type = const std::array<std::string, N> &;
   void inc(label_key_type labels_value, value_type value = 1) {
     detail::inc_impl(Base::try_emplace(labels_value).first->value, value);
@@ -268,10 +277,6 @@ class basic_dynamic_counter
   void serialize_to_json(std::string &str) override {
     auto map = Base::copy();
     json_counter_t counter{Base::name_, Base::help_, Base::metric_name()};
-    counter.labels_name.reserve(Base::labels_name().size());
-    for (auto &e : Base::labels_name()) {
-      counter.labels_name.emplace_back(e);
-    }
     to_json(counter, map, str);
   }
 
@@ -282,9 +287,12 @@ class basic_dynamic_counter
       auto &val = e->value;
       json_counter_metric_t metric;
       size_t index = 0;
-      metric.labels.reserve(k.size());
+      assert(Base::labels_name().size() == k.size());
+      for (auto &[k, v] : static_labels_) {
+        metric.labels.emplace_back(k, v);
+      }
       for (auto &label_value : k) {
-        metric.labels.emplace_back(label_value);
+        metric.labels.emplace_back(Base::labels_name()[index++], label_value);
       }
       metric.value = val.load(std::memory_order::relaxed);
       counter.metrics.push_back(std::move(metric));
@@ -327,11 +335,18 @@ class basic_dynamic_counter
 
   void build_string(std::string &str, const std::vector<std::string> &v1,
                     const auto &v2) {
+    str.append(static_labels_str_);
+    if (!static_labels_str_.empty() && !v1.empty()) {
+      str.append(",");
+    }
     for (size_t i = 0; i < v1.size(); i++) {
-      str.append(v1[i]).append("=\"").append(v2[i]).append("\"").append(",");
+      str.append(v1[i]).append("=\"").append(v2[i]).append("\",");
     }
     str.pop_back();
   }
+
+  std::string static_labels_str_;
+  std::map<std::string, std::string> static_labels_;
 };
 
 using dynamic_counter_1t = basic_dynamic_counter<int64_t, 1>;

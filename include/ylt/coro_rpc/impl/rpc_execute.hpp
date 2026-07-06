@@ -19,6 +19,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
 #include <variant>
 
@@ -26,6 +27,9 @@
 #include "coro_connection.hpp"
 #include "ylt/coro_rpc/impl/errno.h"
 #include "ylt/easylog.hpp"
+#include "ylt/struct_pack/compatible.hpp"
+#include "ylt/struct_pack/derived_helper.hpp"
+#include "ylt/struct_pack/type_calculate.hpp"
 #include "ylt/util/type_traits.h"
 
 namespace coro_rpc::internal {
@@ -79,11 +83,28 @@ inline std::pair<coro_rpc::err_code, std::string> execute(
       is_ok = serialize_proto::deserialize_to(args, data);
     }
 
-    if (!is_ok)
-      AS_UNLIKELY {
-        return std::pair{err_code{errc::invalid_rpc_arguments},
-                         "invalid rpc arg"s};
+    if (!is_ok) {
+      // fix for single argument function want add more compatible argument
+      if constexpr (size == 1) {
+        std::tuple<decltype(args) &> args_wrapper = args;
+        is_ok = serialize_proto::deserialize_to(args_wrapper, data);
       }
+      else if constexpr (size > 1) {
+        if constexpr (struct_pack::get_type_code<std::tuple<std::remove_cvref_t<
+                          std::tuple_element_t<0, decltype(args)>>>>() ==
+                      struct_pack::get_type_code<decltype(args)>()) {
+          std::tuple<decltype(std::get<0>(args))> args_wrapper =
+              std::get<0>(args);
+          is_ok = serialize_proto::deserialize_to(args_wrapper, data);
+        }
+      }
+      if (!is_ok) {
+        AS_UNLIKELY {
+          return std::pair{err_code{errc::invalid_rpc_arguments},
+                           "invalid rpc arg"s};
+        }
+      }
+    }
 
     if constexpr (std::is_void_v<return_type>) {
       if constexpr (std::is_void_v<Self>) {

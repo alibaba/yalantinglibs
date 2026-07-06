@@ -43,6 +43,9 @@
 #include <ylt/util/expected.hpp>
 
 #include "async_simple/Future.h"
+#include "async_simple/Signal.h"
+#include "async_simple/coro/LazyLocalBase.h"
+#include "async_simple/coro/Mutex.h"
 #include "coro_io.hpp"
 #include "detail/client_queue.hpp"
 #include "io_context_pool.hpp"
@@ -80,7 +83,11 @@ class client_pool : public std::enable_shared_from_this<
     while (true) {
       clients.reselect();
       self = nullptr;
-      co_await coro_io::sleep_for(sleep_time);
+      auto is_canceled = co_await coro_io::sleep_for(sleep_time);
+      if (!is_canceled) {
+        ELOG_TRACE << "coroutine destroyed, stop collect timeout client";
+        break;
+      }
       if ((self = self_weak.lock()) == nullptr) {
         break;
       }
@@ -98,14 +105,7 @@ class client_pool : public std::enable_shared_from_this<
                    free_client_cnt
             << " parallel request cnt:"
             << self->parallel_request_cnt_.load(std::memory_order::relaxed);
-        if (!is_all_cleared) [[unlikely]] {
-          try {
-            co_await async_simple::coro::Yield{};
-          } catch (std::exception& e) {
-            ELOG_ERROR << "unexcepted yield exception: " << e.what();
-          }
-        }
-        else {
+        if (is_all_cleared) {
           break;
         }
       }
@@ -116,7 +116,7 @@ class client_pool : public std::enable_shared_from_this<
   static auto rand_time(std::chrono::milliseconds ms) {
     static thread_local std::default_random_engine r;
     std::uniform_real_distribution e(1.0f, 1.2f);
-    return std::chrono::milliseconds{static_cast<long>(e(r) * ms.count())};
+    return std::chrono::milliseconds{static_cast<int64_t>(e(r) * ms.count())};
   }
 
   static async_simple::coro::Lazy<std::pair<bool, std::chrono::milliseconds>>
@@ -159,7 +159,13 @@ class client_pool : public std::enable_shared_from_this<
           auto new_eps_ptr =
               std::make_shared<std::vector<asio::ip::tcp::endpoint>>(
                   std::move(eps));
-          self->eps_.store(std::move(new_eps_ptr), std::memory_order_release);
+          auto is_lock = self->dns_cache_update_mutex_.tryLock();
+          // store should'nt need lock ,but tsan show a data race here,
+          // so we add a try lock here
+          if (is_lock) [[likely]] {
+            self->eps_.store(std::move(new_eps_ptr), std::memory_order_release);
+            self->dns_cache_update_mutex_.unlock();
+          }
         }
       }
     }
@@ -203,13 +209,14 @@ class client_pool : public std::enable_shared_from_this<
     ELOG_WARN << "reconnect client{" << client.get() << "},host:{"
               << client->get_host() << ":" << client->get_port()
               << "} out of max limit, stop retry. connect failed";
-    alive_detect(client->get_config(), std::move(self)).start([](auto&&) {
-    });
+    typename client_t::config config_copy = client->get_config();
     client = nullptr;
+    alive_detect(std::move(config_copy), std::move(self)).start([](auto&&) {
+    });
   }
 
   static async_simple::coro::Lazy<void> alive_detect(
-      const typename client_t::config& client_config,
+      typename client_t::config client_config,
       std::weak_ptr<client_pool> watcher) {
     std::shared_ptr<client_pool> self = watcher.lock();
     using namespace std::chrono_literals;
@@ -257,6 +264,11 @@ class client_pool : public std::enable_shared_from_this<
           co_await coro_io::sleep_for(wait_time, &client->get_executor());
         }
         self = watcher.lock();
+        if (!self) {
+          ELOG_WARN << "client pool is destroyed, stop connect client {"
+                    << client.get() << "}";
+          co_return;
+        }
         if (self->is_alive_) {
           ELOG_TRACE << "client pool is aliving, stop connect client {"
                      << client.get() << "} for alive detect";
@@ -326,10 +338,9 @@ class client_pool : public std::enable_shared_from_this<
             this->weak_from_this(), clients,
             (std::max)(collect_time, std::chrono::milliseconds{50}),
             pool_config_.idle_queue_per_max_clear_count)
-            .directlyStart(
-                [](auto&&) {
-                },
-                coro_io::get_global_executor());
+            .setLazyLocal(async_simple::coro::LazyLocalBase{signal_.get()})
+            .start([](auto&&) {
+            });
       }
     }
   }
@@ -560,7 +571,26 @@ class client_pool : public std::enable_shared_from_this<
     return eps_.load(std::memory_order_acquire);
   }
 
+  /**
+   * @brief clear free clients in client pools, return cleared client count.
+   * It's an approximation because of concurrency.
+   *
+   * @return std::size_t
+   */
+  std::size_t clear() noexcept {
+    std::unique_ptr<client_t> c;
+    std::size_t cnt = 0;
+    while (short_connect_clients_.try_dequeue(c)) {
+      ++cnt;
+    }
+    while (free_clients_.try_dequeue(c)) {
+      ++cnt;
+    }
+    return cnt;
+  }
+
   const pool_config& get_pool_config() const noexcept { return pool_config_; }
+  ~client_pool() { signal_->emits(async_simple::SignalType::Terminate); }
 
  private:
   template <typename, typename>
@@ -618,6 +648,9 @@ class client_pool : public std::enable_shared_from_this<
   std::atomic<bool> is_alive_ = true;
   std::atomic<uint64_t> timepoint_;
   ylt::util::atomic_shared_ptr<std::vector<asio::ip::tcp::endpoint>> eps_;
+  async_simple::coro::Mutex dns_cache_update_mutex_;
+  std::shared_ptr<async_simple::Signal> signal_ =
+      async_simple::Signal::create();
 };
 
 template <typename client_t,

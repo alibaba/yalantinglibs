@@ -308,3 +308,58 @@ TEST_CASE("test server down") {
     }
   }());
 }
+
+TEST_CASE("test load_balancer clear") {
+  async_simple::coro::syncAwait([]() -> async_simple::coro::Lazy<void> {
+    coro_rpc::coro_rpc_server server1(1, 0);
+    server1.register_handler<hello>();
+    auto res1 = server1.async_start();
+    REQUIRE_MESSAGE(!res1.hasResult(), "server start failed");
+    auto port1 = server1.port();
+
+    coro_rpc::coro_rpc_server server2(1, 0);
+    server2.register_handler<hello>();
+    auto res2 = server2.async_start();
+    REQUIRE_MESSAGE(!res2.hasResult(), "server start failed");
+    auto port2 = server2.port();
+
+    auto hosts = std::vector<std::string>{"127.0.0.1:" + std::to_string(port1),
+                                          "127.0.0.1:" + std::to_string(port2)};
+    auto host_view = std::vector<std::string_view>{hosts[0], hosts[1]};
+    auto load_balancer =
+        coro_io::load_balancer<coro_rpc::coro_rpc_client>::create(host_view);
+
+    // Clear on fresh load_balancer should return 0
+    CHECK(load_balancer.clear() == 0);
+
+    // Make concurrent requests to populate pools across both hosts
+    std::vector<async_simple::coro::Lazy<coro_rpc::expected<void, std::errc>>>
+        tasks;
+    for (int i = 0; i < 10; ++i) {
+      tasks.push_back(load_balancer.send_request(
+          [](coro_rpc::coro_rpc_client &client,
+             std::string_view host) -> async_simple::coro::Lazy<void> {
+            co_await client.call<hello>();
+            co_return;
+          }));
+    }
+    auto results = co_await async_simple::coro::collectAll(std::move(tasks));
+    for (auto &result : results) {
+      CHECK(result.value().has_value());
+    }
+
+    // Both servers should have connections
+    CHECK(server1.connection_count() > 0);
+    CHECK(server2.connection_count() > 0);
+
+    // Clear should drain free clients from all pools
+    auto cleared = load_balancer.clear();
+    CHECK(cleared > 0);
+
+    // Second clear should return 0
+    CHECK(load_balancer.clear() == 0);
+
+    server1.stop();
+    server2.stop();
+  }());
+}

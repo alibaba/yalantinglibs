@@ -1,17 +1,40 @@
+/*
+ * Copyright (c) 2025, Alibaba Group Holding Limited;
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 #pragma once
+#include <arpa/inet.h>
 #include <infiniband/verbs.h>
 #include <netinet/in.h>
 
 #include <algorithm>
+#include <cstdint>
+#include <cstring>
 #include <memory>
 #include <stdexcept>
 #include <string>
 #include <system_error>
 #include <unordered_map>
+#include <vector>
 
+#include "asio/dispatch.hpp"
 #include "asio/ip/address.hpp"
+#include "asio/posix/stream_descriptor.hpp"
 #include "ib_buffer.hpp"
+#include "ylt/coro_io/io_context_pool.hpp"
 #include "ylt/easylog.hpp"
+#include "ylt/util/type_traits.h"
 
 namespace coro_io {
 namespace detail {
@@ -64,12 +87,12 @@ class ib_devices_t {
 };
 inline std::string gid_to_string(uint8_t (&a)[16]) noexcept {
   std::string ret;
-  ret.resize(40);
-  sprintf(ret.data(),
-          "%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%"
-          "02x%02x",
-          a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10],
-          a[11], a[12], a[13], a[14], a[15]);
+  ret.resize(39);
+  snprintf(ret.data(), ret.size() + 1,
+           "%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%"
+           "02x%02x",
+           a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10],
+           a[11], a[12], a[13], a[14], a[15]);
   return ret;
 }
 
@@ -96,21 +119,142 @@ inline std::string mtu_str(ibv_mtu mtu) {
   }
   return str;
 }
+
+/* helper function to print the content of the async event */
+inline ibv_qp* print_async_event(struct ibv_context* ctx,
+                                 struct ibv_async_event* event) {
+  ibv_qp* qp = nullptr;
+  switch (event->event_type) {
+    /* QP events */
+    case IBV_EVENT_QP_FATAL:
+      ELOG_WARN << "QP fatal event for QP number:" << event->element.qp->qp_num;
+      qp = event->element.qp;
+      break;
+    case IBV_EVENT_QP_REQ_ERR:
+      ELOG_WARN << "QP Requestor error for QP number:"
+                << event->element.qp->qp_num;
+      qp = event->element.qp;
+      break;
+    case IBV_EVENT_QP_ACCESS_ERR:
+      ELOG_WARN << "QP access error event for QP number:"
+                << event->element.qp->qp_num;
+      qp = event->element.qp;
+      break;
+    case IBV_EVENT_COMM_EST:
+      ELOG_INFO << "QP communication established event for QP number:"
+                << event->element.qp->qp_num;
+      break;
+    case IBV_EVENT_SQ_DRAINED:
+      ELOG_INFO << "QP Send Queue drained event for QP number:"
+                << event->element.qp->qp_num;
+      break;
+    case IBV_EVENT_PATH_MIG:
+      ELOG_INFO << "QP Path migration loaded event for QP number:"
+                << event->element.qp->qp_num;
+      break;
+    case IBV_EVENT_PATH_MIG_ERR:
+      ELOG_WARN << "QP Path migration error event for QP number:"
+                << event->element.qp->qp_num;
+      qp = event->element.qp;
+      break;
+    case IBV_EVENT_QP_LAST_WQE_REACHED:
+      ELOG_INFO << "QP last WQE reached event for QP number:"
+                << event->element.qp->qp_num;
+      break;
+
+    /* CQ events */
+    case IBV_EVENT_CQ_ERR:
+      ELOG_WARN << "CQ error for CQ with handle " << event->element.cq;
+      break;
+
+    /* SRQ events */
+    case IBV_EVENT_SRQ_ERR:
+      ELOG_WARN << "SRQ error for SRQ with handle " << event->element.srq;
+      break;
+    case IBV_EVENT_SRQ_LIMIT_REACHED:
+      ELOG_INFO << "SRQ limit reached event for SRQ with handle "
+                << event->element.srq;
+      break;
+
+    /* Port events */
+    case IBV_EVENT_PORT_ACTIVE:
+      ELOG_INFO << "Port active event for port number "
+                << event->element.port_num;
+      break;
+    case IBV_EVENT_PORT_ERR:
+      ELOG_WARN << "Port error event for port number "
+                << event->element.port_num;
+      break;
+    case IBV_EVENT_LID_CHANGE:
+      ELOG_INFO << "LID change event for port number "
+                << event->element.port_num;
+      break;
+    case IBV_EVENT_PKEY_CHANGE:
+      ELOG_INFO << "P_Key table change event for port number "
+                << event->element.port_num;
+      break;
+    case IBV_EVENT_GID_CHANGE:
+      ELOG_INFO << "GID table change event for port number "
+                << event->element.port_num;
+      break;
+    case IBV_EVENT_SM_CHANGE:
+      ELOG_INFO << "SM change event for port number "
+                << event->element.port_num;
+      break;
+    case IBV_EVENT_CLIENT_REREGISTER:
+      ELOG_INFO << "Client reregister event for port number "
+                << event->element.port_num;
+      break;
+
+    /* RDMA device events */
+    case IBV_EVENT_DEVICE_FATAL:
+      ELOG_WARN << "Fatal error event for device "
+                << ibv_get_device_name(ctx->device);
+      break;
+
+    default:
+      ELOG_WARN << "Unknown event (" << event->event_type << ")";
+  }
+  return qp;
+}
+
 }  // namespace detail
-class ib_device_t {
+
+class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
  public:
-  friend class ib_device_manager_t;
   struct config_t {
     std::string dev_name;
-    uint16_t port = 1;
+    uint16_t port = 1;               // dev gid
+    uint16_t gid_index = 0;          // dev gid_index
+    bool use_best_gid_index = true;  // automatically find best gid index. If
+                                     // failed, it will use gid_index.
     ib_buffer_pool_t::config_t buffer_pool_config;
   };
-  static std::shared_ptr<ib_device_t> create(const config_t& conf) {
-    return std::make_shared<ib_device_t>(private_construct_token{}, conf);
+  static std::shared_ptr<ib_device_t> create(const config_t& conf,
+                                             ibv_device* dev = nullptr) {
+    auto ret =
+        std::make_shared<ib_device_t>(private_construct_token{}, conf, dev);
+    ret->start_async_event_watcher();
+    return ret;
   }
 
  private:
   struct private_construct_token {};
+
+  void poll_async_events() {
+    ibv_async_event event;
+    ibv_qp_attr attr{.qp_state = IBV_QPS_ERR};
+    while (ibv_get_async_event(ctx_.get(), &event) == 0) {
+      ELOG_INFO << "IBDevice(" << name()
+                << ") get async event: " << event.event_type;
+      auto qp = detail::print_async_event(ctx_.get(), &event);
+      if (qp) {
+        ibv_modify_qp(qp, &attr, IBV_QP_STATE);
+      }
+      ibv_ack_async_event(&event);
+    }
+    ELOG_WARN << "IBDevice(" << name() << ") poll async events thread exit.";
+  }
 
  public:
   ib_device_t(private_construct_token, const config_t& conf,
@@ -131,17 +275,18 @@ class ib_device_t {
       throw std::system_error(ec);
     }
 
-    find_best_gid_index();
+    gid_index_ = conf.use_best_gid_index ? find_best_gid_index(conf.gid_index)
+                                         : conf.gid_index;
 
     ELOG_INFO << name_ << " Active MTU: " << detail::mtu_str(attr_.active_mtu)
               << ", "
               << "Max MTU: " << detail::mtu_str(attr_.max_mtu)
-              << ", best gid index: " << gid_index_;
+              << ", gid index: " << gid_index_;
 
     if (gid_index_ >= 0) {
       if (auto ec = ibv_query_gid(ctx_.get(), conf.port, gid_index_, &gid_);
           ec) {
-        auto err_code = std::make_error_code(std::errc{ec});
+        auto err_code = std::make_error_code(std::errc{errno});
         ELOG_ERROR << "IBDevice failed to query port " << conf.port
                    << " of device " << name_ << " by gid_index:" << gid_index_
                    << ", error msg: " << err_code.message();
@@ -164,7 +309,24 @@ class ib_device_t {
           "gid index should greater than zero, now is: " +
           std::to_string(gid_index_)};
     }
-    buffer_pool_ = ib_buffer_pool_t::create(*this, conf.buffer_pool_config);
+    ibv_device_attr attr;
+    auto pool_config = conf.buffer_pool_config;
+    if (pool_config.max_memory_usage == 0) {
+      pool_config.max_memory_usage = std::numeric_limits<uint64_t>::max();
+    }
+    if (ibv_query_device(ctx_.get(), &attr) == 0) {
+      ELOG_INFO << "max mr size of device:" << attr.max_mr_size
+                << ", user config max memory usage:"
+                << pool_config.max_memory_usage
+                << ". we will use min value as limit";
+      pool_config.max_memory_usage =
+          std::min<uint64_t>(attr.max_mr_size, pool_config.max_memory_usage);
+    }
+    else {
+      ELOG_WARN
+          << "query device info failed! We dont know the max_mr_size of device";
+    }
+    buffer_pool_ = ib_buffer_pool_t::create(*this, pool_config);
   }
 
   std::string_view name() const noexcept { return name_; }
@@ -187,35 +349,231 @@ class ib_device_t {
     return buffer_pool_;
   }
 
+  struct async_event_watcher_manager_t
+      : public std::unordered_map<ib_device_t*, std::weak_ptr<ib_device_t>> {
+    ~async_event_watcher_manager_t() {
+      for (auto& [_, dev] : *this) {
+        if (auto ptr = dev.lock(); ptr) {
+          ptr->stop_async_event_watcher();
+        }
+      }
+    }
+  };
+
+  ~ib_device_t() { stop_async_event_watcher(); }
+
  private:
-  int ipv6_addr_v4mapped(const struct in6_addr* a) {
-    return ((a->s6_addr32[0] | a->s6_addr32[1]) |
-            (a->s6_addr32[2] ^ htonl(0x0000ffff))) == 0UL ||
-           /* IPv4 encoded multicast addresses */
-           (a->s6_addr32[0] == htonl(0xff0e0000) &&
-            ((a->s6_addr32[1] | (a->s6_addr32[2] ^ htonl(0x0000ffff))) == 0UL));
+  // Address priority rank for GID selection (lower is better)
+  enum class gid_addr_rank : int {
+    global_unicast = 0,  // Normal routable IPv6 or IPv4-mapped global address
+    link_local = 1,      // fe80::/10 or ::ffff:169.254.x.x
+    loopback = 2,        // ::1 or ::ffff:127.x.x.x
+  };
+
+  // Device type priority (lower is better)
+  static int gid_type_priority(uint32_t gid_type) {
+    switch (gid_type) {
+      case IBV_GID_TYPE_IB:
+        return 0;
+      case IBV_GID_TYPE_ROCE_V2:
+        return 1;
+      case IBV_GID_TYPE_ROCE_V1:
+        return 2;
+      default:
+        return 3;
+    }
   }
 
-  void find_best_gid_index() {
+  static gid_addr_rank classify_gid_address(const union ibv_gid& gid) {
+    // Check IPv4-mapped address (::ffff:x.x.x.x)
+    bool is_v4_mapped =
+        (gid.raw[0] == 0 && gid.raw[1] == 0 && gid.raw[2] == 0 &&
+         gid.raw[3] == 0 && gid.raw[4] == 0 && gid.raw[5] == 0 &&
+         gid.raw[6] == 0 && gid.raw[7] == 0 && gid.raw[8] == 0 &&
+         gid.raw[9] == 0 && gid.raw[10] == 0xff && gid.raw[11] == 0xff);
+
+    if (is_v4_mapped) {
+      // ::ffff:127.x.x.x → loopback
+      if (gid.raw[12] == 127) {
+        return gid_addr_rank::loopback;
+      }
+      // ::ffff:169.254.x.x → link-local
+      if (gid.raw[12] == 169 && gid.raw[13] == 254) {
+        return gid_addr_rank::link_local;
+      }
+      return gid_addr_rank::global_unicast;
+    }
+
+    // IPv6 loopback ::1
+    static constexpr uint8_t ipv6_loopback[16] = {0, 0, 0, 0, 0, 0, 0, 0,
+                                                  0, 0, 0, 0, 0, 0, 0, 1};
+    if (memcmp(gid.raw, ipv6_loopback, 16) == 0) {
+      return gid_addr_rank::loopback;
+    }
+
+    // fe80::/10 → link-local
+    if ((gid.raw[0] == 0xfe) && ((gid.raw[1] & 0xc0) == 0x80)) {
+      return gid_addr_rank::link_local;
+    }
+
+    return gid_addr_rank::global_unicast;
+  }
+
+ public:
+  // Select best GID from a list of entries. Returns gid_index or -1 if empty.
+  // Exposed as public static for unit testing.
+  static int select_best_gid(const std::vector<ibv_gid_entry>& entries) {
+    if (entries.empty()) {
+      return -1;
+    }
+
+    int best_index = -1;
+    int best_type_prio = 4;
+    gid_addr_rank best_addr_rank = gid_addr_rank::loopback;
+
+    for (auto& entry : entries) {
+      int type_prio = gid_type_priority(entry.gid_type);
+      gid_addr_rank addr_rank = classify_gid_address(entry.gid);
+
+      // Compare: type priority first, then address rank
+      if (type_prio < best_type_prio ||
+          (type_prio == best_type_prio && addr_rank < best_addr_rank)) {
+        best_type_prio = type_prio;
+        best_addr_rank = addr_rank;
+        best_index = static_cast<int>(entry.gid_index);
+      }
+    }
+
+    return best_index;
+  }
+
+  int find_best_gid_index(int default_gid_index) {
+#ifndef YLT_IBVERBS_DONT_SUPPORT_FIND_GID_INDEX
+    std::vector<ibv_gid_entry> valid_entries;
     ibv_gid_entry gid_entry;
 
     for (int i = 0; i < attr_.gid_tbl_len; i++) {
-      if (auto ret = ibv_query_gid_ex(ctx_.get(), port_, i, &gid_entry, 0)) {
+      if (ibv_query_gid_ex(ctx_.get(), port_, i, &gid_entry, 0)) {
         continue;
       }
-
-      if ((ipv6_addr_v4mapped((struct in6_addr*)gid_entry.gid.raw) &&
-           gid_entry.gid_type == IBV_GID_TYPE_ROCE_V2) ||
-          gid_entry.gid_type == IBV_GID_TYPE_IB) {
-        gid_index_ = i;
-        break;
+      // For RoCE types, skip entries without an associated net device
+      if (gid_entry.gid_type != IBV_GID_TYPE_IB &&
+          gid_entry.ndev_ifindex == 0) {
+        continue;
       }
+      valid_entries.push_back(gid_entry);
     }
+
+    // Debug: print all valid GID entries
+    ELOG_INFO << this->name_ << " GID table has " << valid_entries.size()
+              << " valid entries (total table size: " << attr_.gid_tbl_len
+              << ")";
+    for (auto& entry : valid_entries) {
+      char gid_str[INET6_ADDRSTRLEN] = {};
+      inet_ntop(AF_INET6, entry.gid.raw, gid_str, sizeof(gid_str));
+      const char* type_str = entry.gid_type == IBV_GID_TYPE_IB        ? "IB"
+                             : entry.gid_type == IBV_GID_TYPE_ROCE_V2 ? "RoCEv2"
+                             : entry.gid_type == IBV_GID_TYPE_ROCE_V1
+                                 ? "RoCEv1"
+                                 : "Unknown";
+      ELOG_INFO << "  gid[" << entry.gid_index << "] type=" << type_str
+                << " ndev_ifindex=" << entry.ndev_ifindex
+                << " addr=" << gid_str;
+    }
+
+    int best = select_best_gid(valid_entries);
+    if (best >= 0) {
+      ELOG_INFO << "Selected best GID index: " << best;
+      return best;
+    }
+#endif
+    ELOG_WARN << "select best GID failed, maybe the platform doesn't "
+                 "support it. return default gid index: "
+              << default_gid_index;
+    return default_gid_index;
+  }
+
+  template <typename T>
+  static bool weak_ptrs_equal(const std::weak_ptr<T>& a,
+                              const std::weak_ptr<T>& b) {
+    return !a.owner_before(b) && !b.owner_before(a);
+  }
+
+  void start_async_event_watcher() {
+    if (!ctx_) {
+      return;
+    }
+    int flags = fcntl(ctx_->async_fd, F_GETFL);
+    int ret = fcntl(ctx_->async_fd, F_SETFL, flags | O_NONBLOCK);
+    if (ret < 0) {
+      ELOG_ERROR
+          << "Error, failed to change file descriptor of async event queue\n";
+      return;
+    }
+    auto executor = coro_io::get_global_executor();
+    async_event_watcher_fd_ = std::unique_ptr<asio::posix::stream_descriptor>(
+        new asio::posix::stream_descriptor(executor->get_asio_executor(),
+                                           ctx_->async_fd));
+    auto listen_event = [](std::weak_ptr<ib_device_t> dev,
+                           coro_io::ExecutorWrapper<>* executor)
+        -> async_simple::coro::Lazy<void> {
+      std::error_code ec;
+      auto self = dev.lock();
+      if (self == nullptr) {
+        co_return;
+      }
+      auto self_raw_ptr = self.get();
+      (*executor->get_data_with_default<async_event_watcher_manager_t>(
+          "ylt_ib_watch"))[self_raw_ptr] = dev;
+      auto name = std::string{self->name()};
+      ELOG_INFO << "start_async_event_watcher of device:" << name << " start";
+      while (!ec) {
+        coro_io::callback_awaitor<std::error_code> awaitor;
+        ec = co_await awaitor.await_resume([&self](auto handler) {
+          self->async_event_watcher_fd_->async_wait(
+              asio::posix::stream_descriptor::wait_read,
+              [handler](const std::error_code& ec) mutable {
+                handler.set_value_then_resume(ec);
+              });
+          self = nullptr;
+        });
+        if (!ec) {
+          self = dev.lock();
+          if (!self) {
+            ELOG_DEBUG
+                << "ib_device async event stop listening by close device:"
+                << name;
+            break;
+          }
+          self->poll_async_events();
+        }
+        else {
+          ELOG_DEBUG << "ib_device async event stop listening by error:"
+                     << ec.message() << ",device:" << name;
+        }
+      }
+      auto* table = executor->get_data<async_event_watcher_manager_t>(
+          "ib_device_async_event_watcher");
+      if (table) {
+        auto iter = table->find(self_raw_ptr);
+        if (iter != table->end() && weak_ptrs_equal(iter->second, dev)) {
+          table->erase(iter);
+        }
+      }
+    };
+    listen_event(shared_from_this(), executor).via(executor).detach();
+  }
+
+  void stop_async_event_watcher() {
+    std::error_code ec;
+    [[maybe_unused]] auto _ = async_event_watcher_fd_->cancel(ec);
+    async_event_watcher_fd_->release();
   }
 
   std::string name_;
   std::unique_ptr<ibv_context, ib_deleter> ctx_;
   std::unique_ptr<ibv_pd, ib_deleter> pd_;
+  std::unique_ptr<asio::posix::stream_descriptor> async_event_watcher_fd_;
   std::shared_ptr<ib_buffer_pool_t> buffer_pool_;
   std::atomic<bool> support_inline_data_ = true;
   ibv_port_attr attr_;
@@ -232,21 +590,23 @@ inline std::unique_ptr<ibv_mr, ib_deleter> ib_buffer_t::regist(ib_device_t& dev,
                                                                int ib_flags) {
   auto mr = ibv_reg_mr(dev.pd(), ptr, size, ib_flags);
   ELOG_TRACE << "ibv_reg_mr regist: " << mr << " with pd:" << dev.pd();
-  if (mr != nullptr) [[unlikely]] {
+  if (mr != nullptr) [[likely]] {
     ELOG_TRACE << "regist sge.lkey: " << mr->lkey << ", sge.addr: " << mr->addr
                << ", sge.length: " << mr->length;
     return std::unique_ptr<ibv_mr, ib_deleter>{mr};
   }
   else {
-    throw std::make_error_code(std::errc{errno});
+    ELOG_WARN << "regist memory failed! "
+              << std::make_error_code(std::errc{errno}).message();
+    return nullptr;
   }
 };
 
 inline ib_buffer_t ib_buffer_t::regist(ib_buffer_pool_t& pool,
-                                       std::unique_ptr<char[]> data,
-                                       std::size_t size, int ib_flags) {
+                                       memory_owner_t data, std::size_t size,
+                                       int ib_flags) {
   auto mr = ibv_reg_mr(pool.device_.pd(), data.get(), size, ib_flags);
-  if (mr != nullptr) [[unlikely]] {
+  if (mr != nullptr) [[likely]] {
     ELOG_DEBUG << "ibv_reg_mr regist: " << mr
                << " with pd:" << pool.device_.pd();
     pool.modify_memory_usage(size);
@@ -254,7 +614,9 @@ inline ib_buffer_t ib_buffer_t::regist(ib_buffer_pool_t& pool,
                        pool};
   }
   else {
-    throw std::make_error_code(std::errc{errno});
+    std::error_code ec = std::make_error_code(std::errc{errno});
+    ELOG_WARN << "allocate ibverbs memory region failed! " << ec.message();
+    return ib_buffer_t{};
   }
 };
 class ib_device_manager_t {
@@ -272,8 +634,7 @@ class ib_device_manager_t {
     auto& devices = detail::ib_devices_t::instance();
     for (auto& native_dev : devices.get_devices()) {
       try {
-        auto dev = std::make_shared<ib_device_t>(
-            ib_device_t::private_construct_token{}, conf, native_dev);
+        auto dev = ib_device_t::create(conf, native_dev);
         auto [iter, is_ok] = device_map_.emplace(dev->name(), dev);
         if (is_ok && default_device_ == nullptr) {
           default_device_ = iter->second;

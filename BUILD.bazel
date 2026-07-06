@@ -1,4 +1,4 @@
-load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 load("//bazel:defs.bzl", "YA_BIN_COPT", "YA_LT_COPT")
 
 package(default_visibility = ["//visibility:public"])

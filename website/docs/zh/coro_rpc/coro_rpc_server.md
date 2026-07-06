@@ -390,16 +390,50 @@ coro_rpc支持使用openssl对连接进行加密。在安装openssl并使用cmak
 
 当启用ssl支持后，用户可以调用`init_ssl`函数，然后再连接到服务器。这会使得客户端与服务器之间建立加密的链接。需要注意的是，coro_rpc服务端在编译时也必须启用ssl支持。
 
+### 单向SSL认证
+
+单向SSL认证只验证服务器身份，服务端配置自己的证书和私钥：
+
 ```cpp
-coro_rpc_server server;
-server.init_ssl({
-  .base_path = "./",           // ssl文件的基本路径
-  .cert_file = "server.crt",   // 证书相对于base_path的路径
-  .key_file = "server.key"     // 私钥相对于base_path的路径
-});
+coro_rpc_server server(2, 9000);
+ssl_configure ssl_conf;
+ssl_conf.base_path = "./certs";
+ssl_conf.cert_file = "server.crt";
+ssl_conf.key_file = "server.key";
+ssl_conf.ca_cert_file = "";  // 单向认证为空
+ssl_conf.enable_client_verify = false;  // 不验证客户端证书
+
+server.init_ssl(ssl_conf);
+server.register_handler<your_function>();
+server.start();
 ```
 
+### 双向SSL认证（mTLS）
+
+双向SSL认证同时验证客户端和服务器身份，服务端需要配置CA证书以验证客户端：
+
+```cpp
+coro_rpc_server server(2, 9000);
+ssl_configure ssl_conf;
+ssl_conf.base_path = "./certs";
+ssl_conf.cert_file = "server.crt";
+ssl_conf.key_file = "server.key";
+ssl_conf.ca_cert_file = "ca.crt";  // CA证书，用于验证客户端
+ssl_conf.enable_client_verify = true;  // 启用强制客户端证书验证
+
+server.init_ssl(ssl_conf);
+server.register_handler<your_function>();
+server.start();
+```
+
+**重要说明**：
+- `enable_client_verify` 标志启用强制客户端证书验证
+- 启用双向认证后，客户端必须提供由 `ca_cert_file` 指定的CA签发的有效证书
+- 服务器将拒绝没有有效客户端证书的连接
+
 启用ssl支持后，服务器将拒绝一切非ssl连接。
+
+我们同样支持国密NTLS。你需要开启CMAKE选项`YLT_ENABLE_NTLS`。
 
 ## rdma 支持
 
@@ -409,30 +443,41 @@ coro_rpc_server server;
 server.init_ibverbs(ib_socket_t::config_t{});
 ```
 
-启用rdma后，服务器将拒接一切非rdma连接。
+启用rdma后，服务器仍然可以接受非rdma请求。
 
 ## 高级设置
 
 我们提供了coro_rpc::config_t类，用户可以通过该类型设置server的细节：
 
 ```cpp
-struct config_base {
+struct config_t {
   bool is_enable_tcp_no_delay = true; /*tcp请求是否立即响应*/
   uint16_t port = 9001; /*监听端口*/
   unsigned thread_num = std::thread::hardware_concurrency(); /*rpc server内部使用的连接数，默认为逻辑核数*/
   std::chrono::steady_clock::duration conn_timeout_duration = 
       std::chrono::seconds{0};  /*rpc请求的超时时间，0秒代表rpc请求不会自动超时*/
   std::string address="0.0.0.0"; /*监听地址*/
+  /* RPC 服务器的 acceptor 列表，默认为空。
+  允许用户自定义从 coro_io::server_acceptor_base 派生的 acceptor，支持多个 acceptor。
+  如果该列表非空，则 config_t::port 和 config_t::address 将被忽略。 */
+    std::vector<std::unique_ptr<coro_io::server_acceptor_base>> acceptors; 
   /*下面设置只有启用SSL才有*/
   std::optional<ssl_configure> ssl_config = std::nullopt; // 配置是否启用ssl
   /*下面设置只有启用rdma才有*/
   std::optional<coro_io::ib_socket_t::config_t> ibv_config = std::nullopt; // 配置是否启用rdma
+  std::vector<std::shared_ptr<coro_io::ib_device_t>> ibv_dev_list = std::nullopt;
+   // 配置服务器使用的rdma设备列表
+   // 当列表为空时，默认使用ibv_config中提供的设备
+   // 否则覆盖ibv_config的设置。
+   // 内部采用round-robin算法建立新连接。
 };
 struct ssl_configure {
   std::string base_path;  // ssl文件的基本路径
   std::string cert_file;  // 证书相对于base_path的路径
   std::string key_file;   // 私钥相对于base_path的路径
-  std::string dh_file;    // dh_file相对于base_path的路径(可选) 
+  std::string dh_file;    // dh_file相对于base_path的路径(可选)
+  std::string ca_cert_file;  // CA证书相对于base_path的路径(可选，用于验证客户端证书)
+  bool enable_client_verify = false;  // 启用强制客户端证书验证
 }
 int start() {
   coro_rpc::config_t config{};
@@ -442,8 +487,76 @@ int start() {
 }
 ```
 
+### 多地址监听
+
+`coro_rpc_server`支持多地址监听，可以利用这个功能同时使用多张tcp网卡。
+
+```cpp
+ std::vector<std::unique_ptr<coro_io::server_acceptor_base>> acceptors;
+    acceptors.emplace_back(
+        std::make_unique<coro_io::tcp_server_acceptor>("0.0.0.0", 8824));
+    acceptors.emplace_back(
+        std::make_unique<coro_io::tcp_server_acceptor>("localhost", 8825));
+    coro_rpc_server server(
+        coro_rpc::config_t{.acceptors = std::move(acceptors)});
+```
+
 
 ## 特殊rpc函数的注册与调用
+
+### rpc abi变更与兼容性
+
+coro_rpc 底层采用序列化库struct_pack，因此只要rpc参数和返回值的更改，满足struct_pack能向前/向后兼容的约束，那么新老版本的abi就可以相互兼容。你可以在参数和返回值的结构体中添加`struct_pack::compatible<T,VERSION_NUMBER>`字段。其中`struct_pack::compatible<T>`类似于`std::optional<T>`。当客户端的老版本没有该字段时，服务端将得到一个空值。
+
+具体规则详见[struct_pack文档](https://alibaba.github.io/yalantinglibs/zh/struct_pack/struct_pack_intro.html#%E5%90%91%E5%89%8D-%E5%90%91%E5%90%8E%E5%85%BC%E5%AE%B9%E6%80%A7)。如果abi可能多次变更，建议每次变更都手动指定模板参数中的版本号。
+
+如果参数或者返回值没有结构体？你可以添加新的参数和返回值！同样，请增加若干个`compatible<T>`字段。
+
+例如：
+// server 端
+```server.cpp
+int client_oldapi_server_newapi(int a, struct_pack::compatible<int> b) {
+  return a + b.value_or(1);
+}
+int client_newapi_server_oldapi(int a) { return a; }
+
+std::tuple<int,struct_pack::compatible<int>> client_oldapi_server_newapi_ret() {
+    return {42,1};
+}
+int client_newapi_server_oldapi_ret() {
+    return 42;
+}
+
+```
+// client 端
+```client.cpp
+int client_oldapi_server_newapi(int a);
+int client_newapi_server_oldapi(int a, struct_pack::compatible<int> b);
+int client_oldapi_server_newapi_ret();
+std::tuple<int,struct_pack::compatible<int>> client_newapi_server_oldapi_ret();
+```
+
+我们保证server和client之间可以调用这api变更后的函数正常通信。
+
+特别的，返回值是`void`，我们同样支持，只需要将其升级为`std::tuple<std::monostate,...>` 即可。
+
+例如：
+// server 端
+```server.cpp
+std::tuple<std::monostate,struct_pack::compatible<int>> client_oldapi_server_newapi_ret_void() {
+    return {std::monostate{},1};
+}
+void client_newapi_server_oldapi_ret_void() {
+    return;
+}
+
+```
+// client 端
+```client.cpp
+void client_oldapi_server_newapi_ret_void();
+std::tuple<std::monostate,struct_pack::compatible<int>>  client_newapi_server_oldapi_ret_void();
+```
+
 
 ### 成员函数的注册与调用 
 

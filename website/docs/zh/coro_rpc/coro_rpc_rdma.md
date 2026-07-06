@@ -70,6 +70,163 @@ int main() {
 
 具体benchmark的代码[在这里](https://github.com/alibaba/yalantinglibs/blob/main/src/coro_rpc/benchmark/bench.cpp)。
 
+## GID 自动选择
+
+在 RDMA 通信中，GID（Global Identifier）是用于标识设备端口的全局地址。一个 RDMA 设备端口可能对应多个 GID 条目（不同协议类型、不同 IP 地址），需要选择最优的 GID 来建立连接。
+
+coro_rpc 内部实现了 GID 自动选择逻辑，用户无需手动指定 `gid_index`。选择规则如下：
+
+### 过滤规则
+
+- 对于 RoCE 类型的 GID，如果其 `ndev_ifindex == 0`（即没有关联的网络设备），则会被排除
+- IB 类型的 GID 不受此限制（IB 协议不依赖 IP 网络栈）
+
+### 优先级排序
+
+**设备类型优先级**（高 → 低）：
+
+1. **IB**（InfiniBand）
+2. **RoCE v2**（基于 UDP/IP，支持路由）
+3. **RoCE v1**（基于以太网，不可路由）
+
+**同类型下的地址优先级**（高 → 低）：
+
+1. **全局单播地址**：可路由的 IPv6 地址或 IPv4-mapped 全局地址（如 `fd03::`、`2001::`、`::ffff:10.x.x.x`）
+2. **链路本地地址**：`fe80::/10` 或 `::ffff:169.254.x.x`，仅本链路有效
+3. **回环地址**：`::1` 或 `::ffff:127.x.x.x`
+
+### 示例
+
+以一个 mlx5 bond 设备的真实 GID 表为例：
+
+| INDEX | GID | 类型 | 分类 |
+|-------|-----|------|------|
+| 0 | `fe80::0225:9dff:fe78:82ef` | RoCE v1 | 链路本地 |
+| 1 | `fe80::0225:9dff:fe78:82ef` | RoCE v2 | 链路本地 |
+| 2 | `fd03:4516:1090:4e40::1` | RoCE v1 | 全局单播 |
+| 3 | `fd03:4516:1090:4e40::1` | RoCE v2 | 全局单播 |
+| 4 | `fe80:4516:1090:4e40::1` | RoCE v1 | 链路本地 |
+| 5 | `fe80:4516:1090:4e40::1` | RoCE v2 | 链路本地 |
+
+自动选择结果为 **INDEX 3**（RoCE v2 + 全局单播地址），这是最优选择。
+
+## GPU-direct RDMA 支持
+
+GPU-direct RDMA 允许 GPU 内存和远程节点之间通过 RDMA 直接进行内存访问，消除了数据传输过程中对 CPU 的依赖。这个功能显著降低了 GPU 相关应用程序的延迟并提高了吞吐量。
+
+### 初始化
+
+要启用 GPU-direct RDMA 支持，你需要：
+
+1. **初始化 CUDA 环境**：首先获取可用的 CUDA 设备并初始化 GPU 环境：
+   ```cpp
+   auto cuda_dev_list = coro_io::cuda_device_t::get_cuda_devices();
+   ```
+
+2. **创建支持 GPU 内存的 IB 设备**：创建支持 GPU 显存缓冲区的 InfiniBand 设备：
+   ```cpp
+   auto dev = coro_io::ib_device_t::create(
+       {.buffer_pool_config = {.gpu_id = 0 /* GPU ID */}});
+   ```
+
+3. **使用支持GPU缓冲区的ib设备，初始化服务器和客户端**：
+   - 服务器：`server.init_ibv({.device = dev})`
+   - 客户端：`client.init_ibv({.device = dev})`
+
+#### RPC客户端
+
+- **设置请求attachment**：使用 set_req_attachment2 发送 GPU 数据：
+  ```cpp
+  coro_io::data_view gpu_attachment; // = ...;
+  client.set_req_attachment2(gpu_attachment);
+  ```
+
+- **访问响应attachment**：使用 get_resp_attachment2 从响应中获取服务端发送的 GPU 数据：
+  ```cpp
+  coro_io::data_view resp_attachment = client.get_resp_attachment2();
+  ```
+
+- **可选：设置响应attachment buf**：使用 set_resp_attachment_buf2 预先分配并设置接收attachment响应数据的缓冲区地址。当长度不足时，内部会自动重新分配一个缓冲区。
+  ```cpp
+  coro_io::data_view gpu_attachment_buf; // = ...;
+  client.set_resp_attachment2(gpu_attachment_buf);
+  ```
+
+  data_view是一个数据视图，除传统的`data()`,`size()`接口，还提供了`gpu_id()`接口，用于标明显存所在的显卡ID。当ID=-1时，代表数据位于内存中。
+
+### RPC服务端
+
+RPC服务端，可以通过RPC函数的上下文，访问请求attachment并设置响应attachment：
+
+```cpp
+// 在处理函数中
+void rpc_function() {
+    coro_io::data_view attachment = coro_rpc::get_context()->get_request_attachment2();
+    coro_rpc::get_context()->set_response_attachment2(attachment);
+}
+```
+
+### 性能优势
+
+GPU-direct RDMA 消除了网络传输过程中的 CPU-GPU 内存复制，减少了延迟和 CPU 开销。数据直接从 GPU 内存流向网络接口，反之亦然，这使其非常适合高性能计算和 AI 应用程序，其中大量 GPU 数据需要跨节点共享。
+
+## GPU CRC32 异步计算（基于 nvCOMP）
+
+`coro_io::cuda_crc32_async` 在 GPU stream 上异步计算单个 device buffer 的 CRC32，调用方通过 `stream.record().get()` 同步后读取结果。底层使用 [NVIDIA nvCOMP](https://docs.nvidia.com/cuda/nvcomp/) 提供的 `nvcompBatchedCRC32Async`，默认 CRC-32/PKZIP 多项式，也可传 `nvcompCRC32_C`（iSCSI）/`nvcompCRC32_BZIP2` 等其他预设。
+
+### 启用方式（CMake 宏）
+
+该功能需要 nvCOMP 库（v4.0 及以上）。先在系统上安装：
+
+```bash
+# RHEL / Alibaba Cloud Linux
+sudo yum install -y nvcomp-cuda-12   # 或 nvcomp-cuda-11 / nvcomp-cuda-13
+
+# Ubuntu / Debian
+sudo apt-get install -y nvcomp-cuda-12
+```
+
+然后在 CMake 配置时**同时**打开 `YLT_ENABLE_CUDA` 和 `YLT_ENABLE_NVCOMP`，并**显式指定** nvCOMP 的头文件和库路径（不自动搜索，因为不同 CUDA 大版本的 yum 包安装目录不同）：
+
+```bash
+cmake -B build \
+  -DYLT_ENABLE_CUDA=ON \
+  -DYLT_ENABLE_NVCOMP=ON \
+  -DNVCOMP_INCLUDE_DIR=/usr/include/nvcomp_12 \
+  -DNVCOMP_LIB=/usr/lib64/libnvcomp.so
+```
+
+需要传入的宏：
+
+| 宏 | 必填 | 说明 |
+|----|------|------|
+| `YLT_ENABLE_CUDA` | 是 | 启用 coro_io 的 CUDA 支持（链接 `CUDA::cuda_driver`） |
+| `YLT_ENABLE_NVCOMP` | 是 | 启用 nvCOMP 集成（定义 `YLT_ENABLE_NVCOMP` 宏） |
+| `NVCOMP_INCLUDE_DIR` | 是 | nvCOMP 头文件目录，例如 `/usr/include/nvcomp_12`（yum 包按 CUDA 主版本号分子目录） |
+| `NVCOMP_LIB` | 是 | nvCOMP 库文件路径，例如 `/usr/lib64/libnvcomp.so` |
+
+> 若 `YLT_ENABLE_NVCOMP=ON` 但漏传 `NVCOMP_INCLUDE_DIR` 或 `NVCOMP_LIB`，CMake 会直接 `FATAL_ERROR` 并提示用法。
+
+### 用法
+
+```cpp
+#include <ylt/coro_io/cuda/cuda_crc32.hpp>
+
+coro_io::cuda_stream_handler_t stream{0};  // 必须显式指定 gpu_id
+auto d_data = coro_io::cuda_malloc_async(stream, len);   // device 输入
+auto d_crc  = (uint32_t*)coro_io::cuda_malloc_async(stream, sizeof(uint32_t));
+
+coro_io::cuda_crc32_async(stream, (void*)d_data, len, d_crc);              // 默认 PKZIP
+// coro_io::cuda_crc32_async(stream, (void*)d_data, len, d_crc, nvcompCRC32_C);  // 或 iSCSI
+
+YLT_CHECK_CUDA_ERR(stream.record().get());  // 同步后再读 *d_crc
+```
+
+调用约定（与 `cuda_copy_async` 一致）：
+- `device_data` 与 `device_out` 都必须在 device 内存中
+- 函数返回时 CRC32 尚未计算完成，必须同步 stream 后才能读取 `*device_out`
+- 默认 CRC-32/PKZIP 多项式；可传 nvCOMP 预设常量切换算法
+
 ## RDMA性能优化
 
 ### RDMA内存池
@@ -123,5 +280,7 @@ if (ret.has_value()) {
         assert(result.value()=="hello"); 
     }
 }
+
+
 ```
 

@@ -347,7 +347,7 @@ constexpr bool deserialize_view = deserialize_view_impl<Type>::value;
 
   template <typename T>
   constexpr bool container = container_impl<T>::value;
-#endif  
+#endif
 
   template <typename Type>
   constexpr bool is_char_t = std::is_same_v<Type, signed char> ||
@@ -380,7 +380,7 @@ constexpr bool deserialize_view = deserialize_view_impl<Type>::value;
 
   template <typename T>
   constexpr bool string = string_impl<T>::value && container<T>;
-#endif  
+#endif
 
 #if __cpp_concepts >= 201907L
   template <typename Type>
@@ -398,7 +398,7 @@ constexpr bool deserialize_view = deserialize_view_impl<Type>::value;
 
   template <typename T>
   constexpr bool string_view = string<T> && string_view_impl<T>::value;
-#endif  
+#endif
 
 #if __cpp_concepts >= 201907L
   template <typename Type>
@@ -464,8 +464,14 @@ constexpr bool deserialize_view = deserialize_view_impl<Type>::value;
   constexpr inline bool is_std_vector_v<std::vector<args...>> = true;
 
   template <typename Type>
+  constexpr inline bool is_std_array_v = false;
+
+  template <typename T, std::size_t N>
+  constexpr inline bool is_std_array_v<std::array<T, N>> = true;
+
+  template <typename Type>
   constexpr bool continuous_container =
-      string<Type> || (container<Type> && (is_std_vector_v<Type> || is_std_basic_string_v<Type>));
+      string<Type> || (container<Type> && (is_std_vector_v<Type> || is_std_basic_string_v<Type> || is_std_array_v<Type>));
 #endif
 
 #if __cpp_concepts >= 201907L
@@ -502,6 +508,23 @@ template <typename T, typename = void>
 
   template <typename T>
   constexpr bool hash_map_container = map_container<T> && hash_map_container_impl<T>::value;
+#endif
+
+#if __cpp_concepts >= 201907L
+  template <typename Type>
+  concept multi_map_container = map_container<Type> && !(requires(Type container,typename Type::key_type key) {
+    container[key];
+  });
+#else
+template <typename T, typename = void>
+  struct multi_map_container_impl : std::true_type {};
+
+  template <typename T>
+  struct multi_map_container_impl<T, std::void_t<decltype(std::declval<T>()[std::declval<typename T::key_type>()])>> 
+      : std::false_type {};
+
+  template <typename T>
+  constexpr bool multi_map_container = map_container<T> && multi_map_container_impl<T>::value;
 #endif
 
   template <typename Type>
@@ -677,8 +700,8 @@ struct memory_reader;
   template <typename T>
   struct user_defined_serialization_impl<T, std::void_t<
     decltype(sp_serialize_to(std::declval<struct_pack::detail::memory_writer&>(),std::declval<const T&>())),
-    std::enable_if<std::is_same_v<decltype(sp_deserialize_to(std::declval<struct_pack::detail::memory_reader&>(),std::declval<T&>())), struct_pack::err_code>,
-    std::enable_if<std::is_same_v<decltype(sp_get_needed_size(std::declval<const T&>())), std::string_view>>>>>
+    std::enable_if_t<std::is_same_v<decltype(sp_deserialize_to(std::declval<struct_pack::detail::memory_reader&>(),std::declval<T&>())), struct_pack::err_code>>,
+    std::enable_if_t<std::is_same_v<decltype(sp_get_needed_size(std::declval<const T&>())), std::size_t>>>>
       : std::true_type {};
 
   template <typename Type>
@@ -689,7 +712,7 @@ struct memory_reader;
 
   template <typename T>
   struct user_defined_type_name_impl<T, std::void_t<
-    std::enable_if<std::is_same_v<decltype(sp_set_type_name((T*)nullptr)), std::string_view>>>>
+    std::enable_if_t<std::is_same_v<decltype(sp_set_type_name((T*)nullptr)), std::string_view>>>>
       : std::true_type {};
 
   template <typename Type>
@@ -834,6 +857,8 @@ struct memory_reader;
                                             ignore_compatible_field,parent_tag_>::value &&
                     ...);
       }
+    
+    public:
       static constexpr bool solve() {
         if constexpr (user_defined_serialization<T>) {
           return false;
@@ -893,8 +918,7 @@ struct memory_reader;
           return false;
       }
 
-    public:
-      static inline constexpr bool value = is_trivial_serializable::solve();
+      static inline constexpr bool value = is_trivial_serializable<std::remove_cv_t<T>,ignore_compatible_field,parent_tag>::solve();
   };
 
 }

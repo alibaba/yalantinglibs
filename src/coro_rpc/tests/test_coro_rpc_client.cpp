@@ -178,19 +178,38 @@ TEST_CASE("testing client") {
 
 std::string get_first_local_ip() {
   using asio::ip::tcp;
-  tcp::resolver resolver(coro_io::get_global_executor()->get_asio_executor());
-  tcp::resolver::query query(asio::ip::host_name(), "");
-  tcp::resolver::iterator iter = resolver.resolve(query);
-  tcp::resolver::iterator end;  // End marker.
-  while (iter != end) {
-    tcp::endpoint ep = *iter++;
-    auto addr = ep.address();
-    if (addr.is_v4()) {
-      return addr.to_string();
+  try {
+    tcp::resolver resolver(coro_io::get_global_executor()->get_asio_executor());
+    tcp::resolver::query query(asio::ip::host_name(), "");
+    tcp::resolver::iterator iter = resolver.resolve(query);
+    tcp::resolver::iterator end;  // End marker.
+    while (iter != end) {
+      tcp::endpoint ep = *iter++;
+      auto addr = ep.address();
+      if (addr.is_v4()) {
+        return addr.to_string();
+      }
     }
+  } catch (std::exception& e) {
+    ELOG_WARN << "get_first_local_ip error: " << e.what();
   }
 
   return "localhost";
+}
+
+void foo(const size_t& i) {}
+
+TEST_CASE("testing const & args") {
+  coro_rpc_server server(1, 8901);
+  server.register_handler<foo>();
+  auto res = server.async_start();
+  REQUIRE_MESSAGE(!res.hasResult(), "server start failed");
+
+  coro_rpc_client client{};
+  syncAwait(client.connect("127.0.0.1:8901"));
+  const int& i = 0;
+  auto ret = syncAwait(client.call<foo>(i));
+  CHECK(ret.has_value());
 }
 
 TEST_CASE("testing client with local ip") {
@@ -201,8 +220,16 @@ TEST_CASE("testing client with local ip") {
 
   std::string local_ip = get_first_local_ip();
   ELOG_INFO << "local ip: " << local_ip;
+
+// Due to windows strong host mode, we cant connect to localhost from specify
+// nic ip address
+#ifndef _WIN32
+  std::string target_ip = "127.0.0.1";
+#else
+  std::string target_ip = local_ip;
+#endif
   coro_rpc_client client(local_ip);
-  auto ec = client.sync_connect("127.0.0.1", "8901");
+  auto ec = client.sync_connect(target_ip, "8901");
   REQUIRE_MESSAGE(!ec, ec.message());
 
   auto ret = client.sync_call<hello>();

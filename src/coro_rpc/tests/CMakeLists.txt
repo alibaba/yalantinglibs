@@ -1,6 +1,7 @@
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output/tests)
 set(TEST_SRCS
+        test_acceptor.cpp
         test_coro_rpc_server.cpp
         test_coro_rpc_client.cpp
         test_register_handler.cpp
@@ -9,9 +10,21 @@ set(TEST_SRCS
         test_function_name.cpp
         test_variadic.cpp
         test_parallel.cpp
+        test_client_filter.cpp
+        test_abi_compatible.cpp
         )
 if(YLT_ENABLE_ND)
         list(APPEND TEST_SRCS test_networkdirect_rpc.cpp)
+endif()
+if (YLT_ENABLE_IBV AND YLT_ENABLE_CUDA)
+        list(APPEND TEST_SRCS test_gdr.cpp)
+endif()
+if (YLT_ENABLE_SSL)
+        set(TEST_SRCS
+                ${TEST_SRCS}
+                test_rpc_ssl_mutual_auth.cpp
+                test_rpc_ssl_reconnect.cpp
+        )
 endif()
 set(TEST_COMMON
         rpc_api.cpp
@@ -46,8 +59,8 @@ add_executable(coro_rpc_regist_test_2 rpc_api.cpp test_register_duplication_2.cp
 add_executable(coro_rpc_regist_test_3 rpc_api.cpp test_register_duplication_3.cpp)
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_SYSTEM_NAME MATCHES "Windows") # mingw-w64
-  target_link_libraries(coro_rpc_test wsock32 ws2_32)
-  target_link_libraries(coro_rpc_regist_test_1 wsock32 ws2_32)
-  target_link_libraries(coro_rpc_regist_test_2 wsock32 ws2_32)
-  target_link_libraries(coro_rpc_regist_test_3 wsock32 ws2_32)
+  target_link_libraries(coro_rpc_test PRIVATE ws2_32 mswsock)
+  target_link_libraries(coro_rpc_regist_test_1 PRIVATE ws2_32 mswsock)
+  target_link_libraries(coro_rpc_regist_test_2 PRIVATE ws2_32 mswsock)
+  target_link_libraries(coro_rpc_regist_test_3 PRIVATE ws2_32 mswsock)
 endif()

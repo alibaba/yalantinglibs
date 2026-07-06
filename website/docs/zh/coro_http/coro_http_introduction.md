@@ -180,7 +180,6 @@ const int verify_peer = SSL_VERIFY_PEER;
 const int verify_fail_if_no_peer_cert = SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
 const int verify_client_once = SSL_VERIFY_CLIENT_ONCE;
 
-  /// 
   /// \param verify_mode 证书校验模式，默认校验
   /// \param full_path ssl 证书名称
   /// \param sni_hostname sni host 名称，默认为url的host
@@ -206,11 +205,89 @@ void test_coro_http_client() {
   print(data.status);
 
   data = co_await client1.async_get(uri2);
-  print(data.status);  
+  print(data.status);
 }
 #endif
 ```
 根据需要，一般情况下init_ssl()可以不调用。
+
+### 双向SSL认证（mTLS）
+
+coro_http 同样支持SSL双向认证，客户端和服务器都需要提供证书进行身份验证。
+
+#### 客户端配置
+
+客户端需要提供自己的证书和私钥：
+
+```cpp
+#ifdef YLT_ENABLE_SSL
+void test_mutual_ssl_client() {
+  coro_http_client client{};
+  // 双向认证：提供CA证书、客户端证书和私钥
+  bool init_ok = client.init_ssl(
+      asio::ssl::verify_peer,  // 验证服务器证书
+      "./certs/ca.crt",        // CA证书，用于验证服务器
+      "127.0.0.1"              // 服务器主机名（SNI）
+  );
+
+  // 使用init_ssl重载方法加载客户端证书
+  // 或者通过config配置客户端证书
+  coro_http_client::config conf;
+  conf.base_path = "./certs";
+  conf.cert_file = "client.crt";  // 客户端证书
+  conf.verify_mode = asio::ssl::verify_peer;
+  conf.domain = "127.0.0.1";
+  client.init_config(conf);
+
+  auto result = client.get("https://127.0.0.1:9001/");
+  if (result.status == 200) {
+    std::cout << "双向认证成功: " << result.resp_body << "\n";
+  }
+}
+#endif
+```
+
+#### 服务端配置
+
+服务端需要配置CA证书来验证客户端：
+
+```cpp
+coro_http_server server(1, 9001);
+
+bool init_ok = server.init_ssl(
+    "./certs/server.crt",   // 服务器证书
+    "./certs/server.key",   // 服务器私钥
+    "",                      // 无密码
+    "./certs/ca.crt",       // CA证书，用于验证客户端
+    true                     // 启用客户端证书验证（强制）
+);
+
+if (!init_ok) {
+  std::cerr << "SSL初始化失败" << std::endl;
+  return;
+}
+
+server.set_http_handler<GET>("/", [](coro_http_request& req,
+                                     coro_http_response& resp) {
+  resp.set_status_and_content(status_type::ok, "Hello Mutual Auth!");
+});
+
+server.sync_start();
+```
+
+**重要说明**：
+- 启用双向认证后，客户端必须提供由服务端指定的CA签发的有效证书
+- 服务器将拒绝没有有效客户端证书的连接
+- 客户端的主机名参数需要与服务器证书中的CN匹配
+
+## 国密SSL（NTLS）支持
+
+yaLanTingLibs 现已全面支持国密SSL（NTLS），通过集成 Tongsuo（铜锁）密码库，`coro_http` 和 `coro_rpc` 组件现在可以支持两种国密通信协议：
+
+- **GB/T 38636-2020 TLCP**：双证书国密通信协议
+- **RFC 8998**：TLS 1.3 + 国密单证书模式
+
+详细使用说明请参考：[国密SSL（NTLS）支持文档](ntls_support.md)
 
 ## http 先连接再请求
 前面介绍的get/post 接口传入uri，在函数内部会自动去连接服务器并发请求，一次性完成了连接和请求，如果希望将连接和请求分开程两个阶段，那么就可以先调用connect 接口再调用async_get 接口。
@@ -478,6 +555,32 @@ websocket 例子:
   REQUIRE(data.resp_body.size() == send_str.size());
   CHECK(data.resp_body == send_str);
 ```
+
+## 错误码
+coro_http 错误码复用了std::error_code，具体错误的值为std::errc：https://en.cppreference.com/w/cpp/error/errc
+
+coro_http 只对std::errc::timeout错误码做了扩展，发生连接和请求超时的时候不会返回有二义性的std::errc::timeout，而是返回扩展的http_errc：
+```cpp
+enum class http_errc { connect_timeout = 2025, request_timeout };
+std::error_code make_error_code(http_errc e);
+```
+error message 分别对应：`Connect timeout` 和`Request timeout`
+
+常见的返回错误及其含义有：
+
+std::errc::protocol_error: url解析错误；response 解析错误；websocket 协议解析错误；chunked格式解析错误；gzip解析错误都归为协议错误；
+
+http_errc::connect_timeout：连接超时，自定义错误码2025，错误消息`Connect timeout`
+
+http_errc::request_timeout：请求超时，自定义错误码2026，错误消息`Request timeout`
+
+std::errc::invalid_argument：请求参数非法，文件上传时文件不存在；文件上传时upload size非法；
+
+std::errc::bad_file_descriptor：文件流上传时，文件打开失败；
+
+std::errc::no_such_file_or_directory：文件流发送时文件不存在
+
+网络io返回的错误来自于asio io请求返回的错误asio::error(std::errc 的子集)，如asio::error::eof, asio::error::broken_pipe，asio::connection_reset，asio::error::connection_refused等等；
 
 ## 线程模型
 coro_http_client 默认情况下是共享一个全局“线程池”，这个“线程池”准确来说是一个io_context pool，coro_http_client 的线程模型是一个client一个io_context，

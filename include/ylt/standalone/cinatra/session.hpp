@@ -69,7 +69,7 @@ class session {
     return session_id_;
   }
 
-  std::size_t get_time_stamp() {
+  std::time_t get_time_stamp() {
     std::unique_lock<std::mutex> lock(mtx_);
     return time_stamp_;
   }

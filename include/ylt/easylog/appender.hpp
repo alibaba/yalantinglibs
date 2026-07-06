@@ -38,7 +38,7 @@ constexpr char digits[10] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9'};
 
 template <size_t N, char c>
 inline void to_int(int num, char *p, int &size) {
-  for (int i = 0; i < N; i++) {
+  for (size_t i = 0; i < N; i++) {
     p[--size] = digits[num % 10];
     num = num / 10;
   }
@@ -94,11 +94,11 @@ inline char *get_time_str(const auto &now) {
 class appender {
  public:
   appender() = default;
-  appender(const std::string &filename, bool async, bool enable_console,
+  appender(const std::string& filename, bool async, bool enable_console,
            size_t max_file_size, size_t max_files, bool flush_every_time)
       : has_init_(true),
-        flush_every_time_(flush_every_time),
         enable_console_(enable_console),
+        flush_every_time_(flush_every_time),
         max_file_size_(max_file_size) {
     filename_ = filename;
     max_files_ = (std::min)(max_files, static_cast<size_t>(1000));
@@ -158,8 +158,6 @@ class appender {
 
     buf[0] = '[';
     auto [ptr, ec] = std::to_chars(buf + 1, buf + 21, tid);
-    buf[22] = ']';
-    buf[23] = ' ';
     last_tid = tid;
     last_len = ptr - buf;
     buf[last_len++] = ']';
@@ -196,7 +194,7 @@ class appender {
     auto time_str = std::string_view(buf, 36);
     auto tid_str = get_tid_buf(record.get_tid());
     auto file_str = record.get_file_str();
-    auto msg = record.get_message();
+    auto msg = record.get_message_inner();
 
     write_file(time_str);
     write_file(tid_str);
@@ -295,28 +293,28 @@ class appender {
     std::lock_guard guard(mtx_);
     if (file_.is_open()) {
       file_.flush();
-      file_.sync_with_stdio();
     }
   }
 
   void stop() {
-    std::lock_guard guard(mtx_);
     if (!write_thd_.joinable()) {
       return;
     }
 
-    if (stop_) {
-      return;
+    {
+      std::lock_guard guard(que_mtx_);
+      if (!stop_) {
+        stop_ = true;
+        cnd_.notify_one();
+      }
     }
-    stop_ = true;
-    cnd_.notify_one();
+
+    if (write_thd_.joinable()) {
+      write_thd_.join();
+    }
   }
 
-  ~appender() {
-    stop();
-    if (write_thd_.joinable())
-      write_thd_.join();
-  }
+  ~appender() { stop(); }
 
  private:
   void open_log_file() {
@@ -346,6 +344,9 @@ class appender {
         if (file_.write(BOM_STR.data(), BOM_STR.size())) {
           file_size_ += BOM_STR.size();
         }
+      }
+      else {
+        file_size_ = file_size;
       }
     }
   }

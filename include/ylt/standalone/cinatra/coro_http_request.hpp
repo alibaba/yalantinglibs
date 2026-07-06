@@ -73,13 +73,13 @@ inline std::vector<std::pair<int, int>> parse_ranges(std::string_view range_str,
       }
     }
 
-    if (start > 0 && (start >= file_size || start == end)) {
+    if (start > 0 && (start >= static_cast<int>(file_size) || start == end)) {
       // out of range
       is_valid = false;
       return {};
     }
 
-    if (end > 0 && end >= file_size) {
+    if (end > 0 && end >= static_cast<int>(file_size)) {
       end = file_size - 1;
     }
 

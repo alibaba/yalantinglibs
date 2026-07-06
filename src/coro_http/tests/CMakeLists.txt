@@ -22,10 +22,13 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif()
 
 add_executable(coro_http_test
+        test_mixed.cpp
         test_coro_http_server.cpp
         test_cinatra.cpp
         test_cinatra_websocket.cpp
         test_http_parse.cpp
+        test_http_client_filter.cpp
+        test_http_ssl_mutual_auth.cpp
         main.cpp
         )
 
@@ -45,13 +48,27 @@ add_definitions(-DINJECT_FOR_HTTP_SEVER_TEST)
 
 add_test(NAME coro_http_test COMMAND coro_http_test)
 # target_compile_definitions(easylog_test PRIVATE STRUCT_PACK_ENABLE_UNPORTABLE_TYPE)
-if (YLT_ENABLE_SSL)
-    message(STATUS "Use SSL")
-    find_package(OpenSSL REQUIRED)
-    add_definitions(-DCINATRA_ENABLE_SSL)
-    target_link_libraries(coro_http_test  OpenSSL::SSL OpenSSL::Crypto)
-endif ()
 
-if (ZLIB_FOUND)
-    target_link_libraries(coro_http_test ZLIB::ZLIB)
-endif ()
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_SYSTEM_NAME MATCHES "Windows") # mingw-w64
+    if (YLT_ENABLE_SSL)
+        message(STATUS "Use SSL")
+        find_package(OpenSSL REQUIRED)
+        add_definitions(-DCINATRA_ENABLE_SSL)
+        target_link_libraries(coro_http_test PRIVATE ws2_32 mswsock OpenSSL::SSL OpenSSL::Crypto)
+    endif ()
+    
+    if (ZLIB_FOUND)
+        target_link_libraries(coro_http_test PRIVATE ws2_32 mswsock ZLIB::ZLIB)
+    endif ()
+else()
+    if (YLT_ENABLE_SSL)
+        message(STATUS "Use SSL")
+        find_package(OpenSSL REQUIRED)
+        add_definitions(-DCINATRA_ENABLE_SSL)
+        target_link_libraries(coro_http_test  OpenSSL::SSL OpenSSL::Crypto)
+    endif ()
+    
+    if (ZLIB_FOUND)
+        target_link_libraries(coro_http_test ZLIB::ZLIB)
+    endif ()
+endif()

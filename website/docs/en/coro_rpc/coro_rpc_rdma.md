@@ -70,6 +70,163 @@ We conducted some performance tests on coro_rpc between two hosts in a 180Gb RDM
 
 The specific benchmark code can be found [here](https://github.com/alibaba/yalantinglibs/blob/main/src/coro_rpc/benchmark/bench.cpp).
 
+## Automatic GID Selection
+
+In RDMA communication, a GID (Global Identifier) is a global address used to identify a device port. A single RDMA device port may have multiple GID entries (different protocol types, different IP addresses), and the optimal GID must be selected to establish a connection.
+
+coro_rpc implements automatic GID selection logic internally, so users do not need to manually specify a `gid_index`. The selection rules are as follows:
+
+### Filtering Rules
+
+- For RoCE-type GIDs, entries with `ndev_ifindex == 0` (i.e., no associated network device) are excluded
+- IB-type GIDs are not subject to this restriction (the IB protocol does not depend on the IP network stack)
+
+### Priority Ordering
+
+**Device type priority** (high → low):
+
+1. **IB** (InfiniBand)
+2. **RoCE v2** (based on UDP/IP, routable)
+3. **RoCE v1** (based on Ethernet, not routable)
+
+**Address priority within the same type** (high → low):
+
+1. **Global unicast address**: Routable IPv6 or IPv4-mapped global addresses (e.g., `fd03::`, `2001::`, `::ffff:10.x.x.x`)
+2. **Link-local address**: `fe80::/10` or `::ffff:169.254.x.x`, valid only on the local link
+3. **Loopback address**: `::1` or `::ffff:127.x.x.x`
+
+### Example
+
+Using a real GID table from an mlx5 bond device:
+
+| INDEX | GID | Type | Classification |
+|-------|-----|------|----------------|
+| 0 | `fe80::0225:9dff:fe78:82ef` | RoCE v1 | Link-local |
+| 1 | `fe80::0225:9dff:fe78:82ef` | RoCE v2 | Link-local |
+| 2 | `fd03:4516:1090:4e40::1` | RoCE v1 | Global unicast |
+| 3 | `fd03:4516:1090:4e40::1` | RoCE v2 | Global unicast |
+| 4 | `fe80:4516:1090:4e40::1` | RoCE v1 | Link-local |
+| 5 | `fe80:4516:1090:4e40::1` | RoCE v2 | Link-local |
+
+The automatic selection result is **INDEX 3** (RoCE v2 + global unicast address), which is the optimal choice.
+
+## GPU-direct RDMA Support
+
+GPU-direct RDMA allows direct memory access between GPU memory and remote nodes via RDMA, eliminating the dependency on CPU during data transfers. This feature significantly reduces latency and improves throughput for GPU-related applications.
+
+### Initialization
+
+To enable GPU-direct RDMA support, you need to:
+
+1. **Initialize CUDA Environment**: First get available CUDA devices and initialize the GPU environment:
+   ```cpp
+   auto cuda_dev_list = coro_io::cuda_device_t::get_cuda_devices();
+   ```
+
+2. **Create IB Device with GPU Memory Support**: Create an InfiniBand device that supports GPU memory buffers:
+   ```cpp
+   auto dev = coro_io::ib_device_t::create(
+       {.buffer_pool_config = {.gpu_id = 0 /* GPU ID */}});
+   ```
+
+3. **Initialize Server and Client with GPU Buffer Support IB Device**:
+   - Server: `server.init_ibv({.device = dev})`
+   - Client: `client.init_ibv({.device = dev})`
+
+#### RPC Client
+
+- **Set Request Attachment**: Use set_req_attachment2 to send GPU data:
+  ```cpp
+  coro_io::data_view gpu_attachment; // = ...;
+  client.set_req_attachment2(gpu_attachment);
+  ```
+
+- **Access Response Attachment**: Use get_resp_attachment2 to retrieve GPU data sent by the server from the response:
+  ```cpp
+  coro_io::data_view resp_attachment = client.get_resp_attachment2();
+  ```
+
+- **Optional: Set Response Attachment Buffer**: Use set_resp_attachment_buf2 to pre-allocate and set the buffer address for receiving attachment response data. When the length is insufficient, an internal buffer will be automatically reallocated.
+  ```cpp
+  coro_io::data_view gpu_attachment_buf; // = ...;
+  client.set_resp_attachment2(gpu_attachment_buf);
+  ```
+
+  data_view is a data view that, in addition to traditional [data()](file:///root/lizezheng/yalantinglibs/include/ylt/thirdparty/asio/detail/is_buffer_sequence.hpp#L38-L38) and [size()](file:///root/lizezheng/yalantinglibs/include/ylt/thirdparty/asio/detail/is_buffer_sequence.hpp#L35-L35) interfaces, provides a [gpu_id()](file:///root/lizezheng/yalantinglibs/include/ylt/coro_io/memory_owner.hpp#L66-L72) interface to indicate the GPU ID where the GPU memory resides. When ID=-1, it indicates that the data is located in system memory.
+
+### RPC Server
+
+On the RPC server side, you can access request attachments and set response attachments through the context of the RPC function:
+
+```cpp
+// In the handler function
+void rpc_function() {
+    coro_io::data_view attachment = coro_rpc::get_context()->get_request_attachment2();
+    coro_rpc::get_context()->set_response_attachment2(attachment);
+}
+```
+
+### Performance Advantages
+
+GPU-direct RDMA eliminates CPU-GPU memory copying during network transmission, reducing latency and CPU overhead. Data flows directly from GPU memory to the network interface and vice versa, making it ideal for high-performance computing and AI applications where large amounts of GPU data need to be shared across nodes.
+
+## GPU CRC32 Async Computation (via nvCOMP)
+
+`coro_io::cuda_crc32_async` asynchronously computes the CRC32 of a single device buffer on a GPU stream; the caller reads the result after `stream.record().get()`. It is backed by `nvcompBatchedCRC32Async` from [NVIDIA nvCOMP](https://docs.nvidia.com/cuda/nvcomp/) and defaults to the CRC-32/PKZIP polynomial — pass `nvcompCRC32_C` (iSCSI), `nvcompCRC32_BZIP2`, or any other preset to switch algorithms.
+
+### Enabling (CMake options)
+
+This feature requires nvCOMP v4.0 or newer. Install it on the system first:
+
+```bash
+# RHEL / Alibaba Cloud Linux
+sudo yum install -y nvcomp-cuda-12   # or nvcomp-cuda-11 / nvcomp-cuda-13
+
+# Ubuntu / Debian
+sudo apt-get install -y nvcomp-cuda-12
+```
+
+Then enable **both** `YLT_ENABLE_CUDA` and `YLT_ENABLE_NVCOMP` at CMake configure time, and **explicitly specify** the nvCOMP include / library paths (no auto-search, because the install location differs across CUDA major versions):
+
+```bash
+cmake -B build \
+  -DYLT_ENABLE_CUDA=ON \
+  -DYLT_ENABLE_NVCOMP=ON \
+  -DNVCOMP_INCLUDE_DIR=/usr/include/nvcomp_12 \
+  -DNVCOMP_LIB=/usr/lib64/libnvcomp.so
+```
+
+Required options:
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `YLT_ENABLE_CUDA` | yes | Enables coro_io CUDA support (links `CUDA::cuda_driver`) |
+| `YLT_ENABLE_NVCOMP` | yes | Enables nvCOMP integration (defines `YLT_ENABLE_NVCOMP`) |
+| `NVCOMP_INCLUDE_DIR` | yes | nvCOMP include directory, e.g. `/usr/include/nvcomp_12` (yum package uses a per-CUDA-version subdirectory) |
+| `NVCOMP_LIB` | yes | Path to nvCOMP library, e.g. `/usr/lib64/libnvcomp.so` |
+
+> If `YLT_ENABLE_NVCOMP=ON` but `NVCOMP_INCLUDE_DIR` or `NVCOMP_LIB` is not set, CMake fails with a `FATAL_ERROR` showing the expected usage.
+
+### Usage
+
+```cpp
+#include <ylt/coro_io/cuda/cuda_crc32.hpp>
+
+coro_io::cuda_stream_handler_t stream{0};  // gpu_id must be explicit
+auto d_data = coro_io::cuda_malloc_async(stream, len);   // device input
+auto d_crc  = (uint32_t*)coro_io::cuda_malloc_async(stream, sizeof(uint32_t));
+
+coro_io::cuda_crc32_async(stream, (void*)d_data, len, d_crc);              // default PKZIP
+// coro_io::cuda_crc32_async(stream, (void*)d_data, len, d_crc, nvcompCRC32_C);  // or iSCSI
+
+YLT_CHECK_CUDA_ERR(stream.record().get());  // sync before reading *d_crc
+```
+
+Calling conventions (same as `cuda_copy_async`):
+- `device_data` and `device_out` must reside in device memory
+- The CRC32 result is not yet available when the function returns; the stream must be synchronized before reading `*device_out`
+- Default polynomial is CRC-32/PKZIP; pass any nvCOMP preset constant to switch algorithms
+
 ## RDMA Performance Optimization
 
 ### RDMA Memory Pool

@@ -43,7 +43,7 @@ struct string_literal {
   constexpr bool operator!=(
       const string_literal<CharType, Size2> &other) const {
     if constexpr (Size == Size2) {
-      for (int i = 0; i < Size; ++i) {
+      for (size_t i = 0; i < Size; ++i) {
         if ((*this)[i] != other[i])
           return true;
       }

@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <type_traits>
 #include <variant>
@@ -29,6 +30,7 @@
 #include "asio/buffer.hpp"
 #include "struct_pack_protocol.hpp"
 #include "ylt/coro_io/coro_io.hpp"
+#include "ylt/coro_io/data_view.hpp"
 #include "ylt/coro_rpc/impl/context.hpp"
 #include "ylt/coro_rpc/impl/errno.h"
 #include "ylt/coro_rpc/impl/expected.hpp"
@@ -95,40 +97,37 @@ struct coro_rpc_protocol {
 
   template <typename Socket>
   static async_simple::coro::Lazy<std::error_code> read_head(
-      Socket& socket, req_header& req_head, std::string& magic) {
+      Socket& socket, req_header& req_head) {
     // TODO: add a connection-level buffer in parameter to reuse memory
     char head_buffer[sizeof(req_header)];
-    if (magic.size()) {
-      auto [ec, _] = co_await coro_io::async_read(
-          socket, asio::buffer(head_buffer, sizeof(req_header)));
-      if (ec) [[unlikely]] {
-        co_return std::move(ec);
-      }
+    auto [ec, _] = co_await coro_io::async_read(
+        socket, asio::buffer(head_buffer, sizeof(req_header)));
+    if (ec) [[unlikely]] {
+      co_return std::move(ec);
     }
-    else [[unlikely]] {
-      auto [ec, _] =
-          co_await coro_io::async_read(socket, asio::buffer(head_buffer, 1));
-      if (ec) [[unlikely]] {
-        co_return std::move(ec);
-      }
-      else if (head_buffer[0] != magic_number) {
-        magic = head_buffer[0];
-        co_return std::make_error_code(std::errc::protocol_error);
-      }
-      std::tie(ec, _) = co_await coro_io::async_read(
-          socket, asio::buffer(head_buffer + 1, sizeof(req_header) - 1));
-      if (ec) [[unlikely]] {
-        co_return std::move(ec);
-      }
-    }
-    auto i = struct_pack::get_needed_size<
-        struct_pack::sp_config::DISABLE_ALL_META_INFO>(req_head);
-    auto ec = struct_pack::deserialize_to<
+    auto ec2 = struct_pack::deserialize_to<
         struct_pack::sp_config::DISABLE_ALL_META_INFO>(
         req_head,
         std::string_view{head_buffer, head_buffer + sizeof(head_buffer)});
-    if (ec || req_head.magic != magic_number ||
+    if (ec2 || req_head.magic != magic_number ||
         req_head.version > VERSION_NUMBER) [[unlikely]] {
+      co_return std::make_error_code(std::errc::protocol_error);
+    }
+    co_return std::error_code{};
+  }
+
+  // this function is used for check connection type when read first rpc head
+  template <typename Socket>
+  static async_simple::coro::Lazy<std::error_code> read_magic(
+      Socket& socket, std::string& magic) {
+    char head_buffer[sizeof(req_header)];
+    auto [ec, _] =
+        co_await coro_io::async_read(socket, asio::buffer(head_buffer, 1));
+    if (ec) [[unlikely]] {
+      co_return std::move(ec);
+    }
+    magic = head_buffer[0];
+    if (head_buffer[0] != magic_number) {
       co_return std::make_error_code(std::errc::protocol_error);
     }
     co_return std::error_code{};
@@ -137,25 +136,56 @@ struct coro_rpc_protocol {
   template <typename Socket>
   static async_simple::coro::Lazy<std::error_code> read_payload(
       Socket& socket, req_header& req_head, std::string& buffer,
-      std::string& attchment) {
+      coro_io::heterogeneous_buffer& attachment) {
     struct_pack::detail::resize(buffer, req_head.length);
     if (req_head.attach_length > 0) {
-      struct_pack::detail::resize(attchment, req_head.attach_length);
-
-      if (req_head.length > 0) {
-        std::array<asio::mutable_buffer, 2> buffers{asio::buffer(buffer),
-                                                    asio::buffer(attchment)};
-        auto [ec, _] = co_await coro_io::async_read(socket, buffers);
-        co_return ec;
+      if constexpr (requires { socket.get_gpu_id(); }) {
+        if (auto id = socket.get_gpu_id(); id >= 0) {
+          if (attachment.size() < req_head.attach_length ||
+              attachment.gpu_id() != id) {
+            attachment =
+                coro_io::heterogeneous_buffer(req_head.attach_length, id);
+          }
+          std::array<coro_io::data_view, 2> buffers{
+              coro_io::data_view{std::string_view{buffer}, -1}, attachment};
+          auto [ec, _] = co_await coro_io::async_read(socket, buffers);
+          co_return ec;
+        }
       }
-
-      auto [ec, _] =
-          co_await coro_io::async_read(socket, asio::buffer(attchment));
+      struct_pack::detail::resize(*attachment.get_string(),
+                                  req_head.attach_length);
+      std::array<asio::mutable_buffer, 2> buffers{
+          asio::buffer(buffer), asio::buffer(*attachment.get_string())};
+      auto [ec, _] = co_await coro_io::async_read(socket, buffers);
       co_return ec;
     }
 
     auto [ec, _] = co_await coro_io::async_read(socket, asio::buffer(buffer));
     co_return ec;
+  }
+
+  template <typename Socket>
+  static async_simple::coro::Lazy<std::error_code> read_first_head(
+      Socket& socket, req_header& req_head, std::string_view magic) {
+    // TODO: add a connection-level buffer in parameter to reuse memory
+    assert(magic.size() < sizeof(req_header));
+    char head_buffer[sizeof(req_header)];
+    memcpy(head_buffer, magic.data(), magic.size());
+    auto [ec, _] = co_await coro_io::async_read(
+        socket, asio::buffer(head_buffer + magic.size(),
+                             sizeof(req_header) - magic.size()));
+    if (ec) [[unlikely]] {
+      co_return std::move(ec);
+    }
+    auto ec2 = struct_pack::deserialize_to<
+        struct_pack::sp_config::DISABLE_ALL_META_INFO>(
+        req_head,
+        std::string_view{head_buffer, head_buffer + sizeof(head_buffer)});
+    if (ec2 || req_head.magic != magic_number ||
+        req_head.version > VERSION_NUMBER) [[unlikely]] {
+      co_return std::make_error_code(std::errc::protocol_error);
+    }
+    co_return std::error_code{};
   }
 
   static std::string prepare_response(std::string& rpc_result,

@@ -20,6 +20,7 @@
 #include <ylt/coro_rpc/coro_rpc_context.hpp>
 
 #include "ylt/coro_io/io_context_pool.hpp"
+#include "ylt/coro_rpc/impl/default_config/coro_rpc_config.hpp"
 #include "ylt/coro_rpc/impl/errno.h"
 #include "ylt/coro_rpc/impl/protocol/coro_rpc_protocol.hpp"
 
@@ -67,7 +68,7 @@ void coro_fun_with_delay_return_void_cost_long_time(
 inline async_simple::coro::Lazy<void> coro_func_return_void(int i) {
   auto ctx = co_await coro_rpc::get_context_in_coro();
   ELOGV(INFO,
-        "call function coro_func_return_void, connection id:%d,request id:%d",
+        "call function coro_func_return_void, connection id:%d, request id:%d",
         ctx->get_connection_id(), ctx->get_request_id());
   co_return;
 }
@@ -88,4 +89,6 @@ class LoginService {
   bool login(std::string username, std::string password);
 };
 }  // namespace ns_login
+std::unique_ptr<coro_rpc::coro_rpc_server> start_extern_server();
+
 #endif  // CORO_RPC_RPC_API_HPP

@@ -129,10 +129,7 @@ class record_t {
 
   Severity get_severity() const { return severity_; }
 
-  const char *get_message() {
-    ss_.push_back('\n');
-    return ss_.data();
-  }
+  std::string_view get_message() const { return ss_; }
 
   std::string_view get_file_str() const { return file_str_; }
 
@@ -211,6 +208,13 @@ class record_t {
   }
 
  private:
+  friend class appender;
+
+  std::string_view get_message_inner() {
+    ss_.push_back('\n');
+    return ss_;
+  }
+
   template <typename... Args>
   void printf_string_format(const char *fmt, Args &&...args) {
     size_t size = snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);

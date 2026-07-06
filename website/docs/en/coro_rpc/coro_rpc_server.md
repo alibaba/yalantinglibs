@@ -385,16 +385,50 @@ coro_rpc supports encrypting connections with OpenSSL. After installing OpenSSL 
 
 Once SSL support is enabled, users can call the `init_ssl` function before connecting to the server. This will establish an encrypted link between the client and the server. It should be noted that the coro_rpc server also must have SSL support enabled at compile time.
 
+### One-way SSL Authentication
+
+For one-way SSL authentication (server authentication only), configure the server with its certificate and private key:
+
 ```cpp
-coro_rpc_server server;
-server.init_ssl({
-  .base_path = "./",           // Base path of ssl files.
-  .cert_file = "server.crt",   // Path of the certificate relative to base_path.
-  .key_file = "server.key"     // Path of the private key relative to base_path.
-});
+coro_rpc_server server(2, 9000);
+ssl_configure ssl_conf;
+ssl_conf.base_path = "./certs";
+ssl_conf.cert_file = "server.crt";
+ssl_conf.key_file = "server.key";
+ssl_conf.ca_cert_file = "";  // Empty for one-way authentication
+ssl_conf.enable_client_verify = false;  // Disable client certificate verification
+
+server.init_ssl(ssl_conf);
+server.register_handler<your_function>();
+server.start();
 ```
 
-After enabling SSL support, the server will reject all non-SSL connections.
+### Mutual SSL Authentication (mTLS)
+
+For mutual SSL authentication (both client and server authentication), configure the server to verify client certificates:
+
+```cpp
+coro_rpc_server server(2, 9000);
+ssl_configure ssl_conf;
+ssl_conf.base_path = "./certs";
+ssl_conf.cert_file = "server.crt";
+ssl_conf.key_file = "server.key";
+ssl_conf.ca_cert_file = "ca.crt";  // CA certificate for verifying clients
+ssl_conf.enable_client_verify = true;  // Enable mandatory client certificate verification
+
+server.init_ssl(ssl_conf);
+server.register_handler<your_function>();
+server.start();
+```
+
+**Important Notes**:
+- The `enable_client_verify` flag enables mandatory client certificate verification
+- When mutual authentication is enabled, clients must provide a valid certificate signed by the CA specified in `ca_cert_file`
+- The server will reject any client connection without a valid client certificate
+
+After enabling SSL, the server will reject all non-ssl connections.
+
+We also support NTLS if you enable it by CMAKE OPTION `YLT_ENABLE_NTLS`.
 
 ## RDMA Support
 
@@ -411,23 +445,32 @@ After enabling RDMA support, the server will reject all non-rdma connections.
 We provide the coro_rpc::config_t class, which allows users to set the details of the server:
 
 ```cpp
-struct config_base {
+struct config_t {
   bool is_enable_tcp_no_delay = true; /* Whether to respond immediately to tcp requests */
   uint16_t port = 9001; /* Listening port */
   unsigned thread_num = std::thread::hardware_concurrency(); /* Number of connections used internally by rpc server, default is the number of logical cores */
   std::chrono::steady_clock::duration conn_timeout_duration =
       std::chrono::seconds{0}; /* Timeout duration for rpc requests, 0 seconds means rpc requests will not automatically timeout */
   std::string address="0.0.0.0"; /* Listening address */
+  std::vector<std::unique_ptr<coro_io::server_acceptor_base>> acceptors; /* acceptor list for rpc server, default is empty, allow user defined acceptors which derived from coro_io::server_acceptor_base, support multiple acceptors. If acceptors is not empty,config_t::port, config_t::address which be ignored. */
   /* The following settings are only applicable if SSL is enabled */
   std::optional<ssl_configure> ssl_config = std::nullopt; // Configure whether to enable ssl
   /* The following settings are only applicable if rdma is enabled */
   std::optional<coro_io::ib_socket_t::config_t> ibv_config = std::nullopt; // Configure whether to enable rdma
+  std::vector<std::shared_ptr<coro_io::ib_device_t>> ibv_dev_list = std::nullopt;
+// List of RDMA devices to be used by the server. 
+// If the list is empty (nullopt), the device specified in `ibv_config` will be used by default.
+// Otherwise, this list overrides the settings in `ibv_config`.
+// New connections are established using a round-robin algorithm internally.
+
 };
 struct ssl_configure {
   std::string base_path;  // Base path of ssl files.
   std::string cert_file;  // Path of the certificate relative to base_path.
   std::string key_file;   // Path of the private key relative to base_path.
   std::string dh_file;    // Path of the dh_file relative to base_path (optional).
+  std::string ca_cert_file;  // Path of the CA certificate relative to base_path (optional, for client verification).
+  bool enable_client_verify = false;  // Enable mandatory client certificate verification.
 }
 int start() {
   coro_rpc::config_t config{};
@@ -435,10 +478,80 @@ int start() {
   /* Register rpc function here... */
   server.start();
 }
+
+After enabling RDMA support, the server still allow non-rdma connections.
+
+### Listen at multiple addresses
+
+`coro_rpc_server` supports listening on multiple addresses, enabling the use of multiple TCP network interfaces simultaneously.
+
+```cpp
+ std::vector<std::unique_ptr<coro_io::server_acceptor_base>> acceptors;
+    acceptors.emplace_back(
+        std::make_unique<coro_io::tcp_server_acceptor>("0.0.0.0", 8824));
+    acceptors.emplace_back(
+        std::make_unique<coro_io::tcp_server_acceptor>("localhost", 8825));
+    coro_rpc_server server(
+        coro_rpc::config_t{.acceptors = std::move(acceptors)});
+```
+
 ```
 
 
 ## Registration and Invocation of Special RPC Functions
+
+### RPC ABI Changes and Compatibility
+
+coro_rpc uses the `struct_pack` serialization library internally. As long as changes to RPC parameters and return values satisfy the forward/backward compatibility constraints of `struct_pack`, the ABIs of new and old versions can remain mutually compatible. You can add `struct_pack::compatible<T,VERSION_NUMBER>` fields to the structs used for parameters and return values. `struct_pack::compatible<T>` is similar to `std::optional<T>`. When an older client version does not contain this field, the server will receive an empty value.
+
+For detailed rules, see the [struct_pack documentation](https://alibaba.github.io/yalantinglibs/en/struct_pack/struct_pack_intro.html#forward-backward-compatibility). If the ABI is likely to change multiple times, it is recommended to manually specify the version number in the template parameter for each change.
+
+What if the parameters or return values do not use structs? You can add new parameters and return values directly. Likewise, add several `compatible<T>` fields.
+
+Example:
+// server side
+```server.cpp
+int client_oldapi_server_newapi(int a, struct_pack::compatible<int> b) {
+  return a + b.value_or(1);
+}
+int client_newapi_server_oldapi(int a) { return a; }
+
+std::tuple<int,struct_pack::compatible<int>> client_oldapi_server_newapi_ret() {
+    return {42,1};
+}
+int client_newapi_server_oldapi_ret() {
+    return 42;
+}
+
+```
+// client side
+```client.cpp
+int client_oldapi_server_newapi(int a);
+int client_newapi_server_oldapi(int a, struct_pack::compatible<int> b);
+int client_oldapi_server_newapi_ret();
+std::tuple<int,struct_pack::compatible<int>> client_newapi_server_oldapi_ret();
+```
+
+We ensure that the server and client can communicate normally when calling these functions after the API changes.
+
+In particular, we also support the case where the return value is `void`; you only need to upgrade it to `std::tuple<std::monostate,...>`.
+
+Example:
+// server side
+```server.cpp
+std::tuple<std::monostate,struct_pack::compatible<int>> client_oldapi_server_newapi_ret_void() {
+    return {std::monostate{},1};
+}
+void client_newapi_server_oldapi_ret_void() {
+    return;
+}
+
+```
+// client side
+```client.cpp
+void client_oldapi_server_newapi_ret_void();
+std::tuple<std::monostate,struct_pack::compatible<int>>  client_newapi_server_oldapi_ret_void();
+```
 
 ### Registration and Invocation of Member Functions
 

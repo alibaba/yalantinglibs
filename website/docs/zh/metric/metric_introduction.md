@@ -2,7 +2,7 @@
 metric 用于统计应用程序的各种指标，这些指标被用于系统见识和警报，常见的指标类型有四种：Counter、Gauge、Histogram和Summary，这些指标遵循[Prometheus](https://hulining.gitbook.io/prometheus/introduction)的数据格式。yalantinglibs提供了一系列高性能且线程安全的统计工具。
 
 metric 包括4种指标类型：
-- couter：只会增加的指标；
+- counter：只会增加的指标；
 - gauge：可以增加或减少的指标，它派生于counter；
 - histogram：直方图，初始化的时候需要设置桶(bucket)；
 - summary：分位数指标，初始化的时候需要设置桶和误差；
@@ -614,3 +614,14 @@ test_summary{quantile="0.990000"} 99.000000
 test_summary_sum 5050.000000
 test_summary_count 100
 ```
+
+## 配置prometheus 前端
+安装[prometheus](https://github.com/prometheus/prometheus)之后，打开其配置文件：prometheus.yml
+
+修改要连接的服务端地址：
+```
+- targets: ["127.0.0.1:9001"]
+```
+然后启动prometheus，prometheus会定时访问`http://127.0.0.1:9001/metrics` 拉取所有指标数据。
+
+在本地浏览器输入:127.0.0.1:9090, 打开prometheus前端，在前端页面的搜索框中输入指标的名称request_count之后就能看到table和graph 结果了。
