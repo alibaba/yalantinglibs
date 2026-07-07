@@ -139,7 +139,7 @@ inline std::size_t copy(cuda_stream_handler_t* handler, std::span<ibv_sge> src,
       }
 #else
       ELOG_WARN << "cuda is not enabled, gpu_id = " << sge.lkey;
-      std::runtime_error("cuda is not enabled")
+      throw std::runtime_error("cuda is not enabled");
 #endif
     }
     transfer_total += sge.length;
@@ -168,7 +168,7 @@ inline void copy(cuda_stream_handler_t* handler, ibv_sge src,
 
 #else
       ELOG_WARN << "cuda is not enabled, gpu_id = " << sge.lkey;
-      std::runtime_error("cuda is not enabled")
+      throw std::runtime_error("cuda is not enabled");
 #endif
     }
     transfer_total += sge.length;
