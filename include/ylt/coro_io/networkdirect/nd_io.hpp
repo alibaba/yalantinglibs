@@ -64,7 +64,6 @@ inline async_simple::coro::Lazy<std::error_code> async_accept(
       std::move(conn), std::span<const std::byte>{req_pd.data(), n});
   if (ret) [[unlikely]] {
     nd_socket.close();
-    co_return std::make_error_code(std::errc::protocol_error);
   }
   co_return ret;
 }
@@ -196,6 +195,10 @@ async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_write(
   std::size_t total = detail::buffer_size(buffer);
   std::size_t chunk = nd_socket.get_buffer_size();
   auto pool = nd_socket.buffer_pool();
+  if (!pool) [[unlikely]] {
+    co_return std::pair{std::make_error_code(std::errc::bad_file_descriptor),
+                        std::size_t{0}};
+  }
 
   std::error_code ec{};
   std::size_t sent_total = 0;

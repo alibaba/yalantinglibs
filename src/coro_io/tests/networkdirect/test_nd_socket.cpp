@@ -23,6 +23,7 @@
 
 #include "asio/buffer.hpp"
 #include "asio/io_context.hpp"
+#include "asio/ip/tcp.hpp"
 #include "async_simple/coro/Collect.h"
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/coro/SyncAwait.h"
@@ -104,6 +105,33 @@ nd_device_ptr try_get_device() {
   }
 }
 
+std::uint16_t pick_unused_tcp_port() {
+  asio::io_context ctx;
+  asio::ip::tcp::acceptor acceptor(ctx);
+  asio::error_code ec;
+
+  acceptor.open(asio::ip::tcp::v4(), ec);
+  if (ec) {
+    return 0;
+  }
+  acceptor.set_option(asio::ip::tcp::acceptor::reuse_address(true), ec);
+  if (ec) {
+    return 0;
+  }
+  acceptor.bind({asio::ip::tcp::v4(), 0}, ec);
+  if (ec) {
+    return 0;
+  }
+
+  auto endpoint = acceptor.local_endpoint(ec);
+  if (ec) {
+    return 0;
+  }
+  auto port = endpoint.port();
+  acceptor.close(ec);
+  return port;
+}
+
 }  // namespace
 
 TEST_CASE("nd_socket connect + echo (loopback)") {
@@ -134,7 +162,8 @@ TEST_CASE("nd_socket connect + echo (loopback)") {
     io_ctx.run();
   });
 
-  std::uint16_t port = 28182;
+  auto port = pick_unused_tcp_port();
+  REQUIRE_MESSAGE(port != 0, "failed to pick an unused ND socket test port");
   nd_listener<tcp> listener(io_ctx);
   listener.open(tcp::v4());
   listener.bind(port);

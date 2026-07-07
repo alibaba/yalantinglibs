@@ -38,9 +38,9 @@ private:
 
 public:
   ASIO_DEFINE_HANDLER_PTR(nd_accept_op);
-  nd_accept_op(IND2Connector* conncetor, std::atomic<connect_state>* state,
+  nd_accept_op(IND2Connector* connector, std::atomic<connect_state>* state,
                Handler& handler, const IoExecutor& io_ex)
-      : nd_op_base(conncetor, &nd_op_base::default_process,
+      : nd_op_base(connector, &nd_op_base::default_process,
                    &nd_accept_op::do_complete)
       , state_(state)
       , handler_(ASIO_MOVE_CAST(Handler)(handler))
@@ -54,10 +54,18 @@ private:
 
    nd_accept_op* o = static_cast<nd_accept_op*>(base);
 
-   if (owner && !ec && o->state_) {
-     o->state_->store(connect_state::connected, std::memory_order_release);
-   } else if (owner && ec == asio::error::operation_aborted && o->state_) {
-     o->state_->store(connect_state::closed, std::memory_order_release);
+   if (owner && o->state_) {
+     if (!ec) {
+       connect_state expected = connect_state::connecting;
+       if (!o->state_->compare_exchange_strong(
+               expected, connect_state::connected,
+               std::memory_order_acq_rel, std::memory_order_acquire)) {
+         ec = asio::error::operation_aborted;
+       }
+     }
+     else {
+       o->state_->store(connect_state::closed, std::memory_order_release);
+     }
    }
 
    ptr p = {asio::detail::addressof(o->handler_), o, o};

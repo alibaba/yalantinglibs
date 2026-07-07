@@ -269,7 +269,7 @@ inline std::wstring get_provider_path(WSAPROTOCOL_INFOW const& proto,
   temp.resize(len);
   res = WSCGetProviderPath((GUID*)&proto.ProviderId, temp.data(), &len, &err);
   if (res != 0) {
-    if (res == WSAEINVAL) {
+    if (err == WSAEINVAL) {
       ec = make_error_code(std::errc::invalid_argument);
     }
     else {
@@ -525,7 +525,7 @@ inline std::string query_adapter_name(ND2_ADAPTER_INFO const& info,
 inline HANDLE create_overlapped_file(native_context_t* context,
                                      asio::error_code& ec) {
   assert(context);
-  HANDLE result;
+  HANDLE result{INVALID_HANDLE_VALUE};
   auto const hr = context->CreateOverlappedFile(&result);
   ec = static_cast<nd_errc>(hr);
   return result;

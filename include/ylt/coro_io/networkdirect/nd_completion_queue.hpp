@@ -124,6 +124,7 @@ inline std::size_t nd_completion_queue::poll() {
 }
 
 inline std::size_t nd_completion_queue::poll(asio::error_code& ec) {
+  ec.clear();
   std::size_t total = drain_ready();
   ULONG retrieved = 0;
   do {
@@ -147,6 +148,7 @@ inline std::size_t nd_completion_queue::poll_one() {
 }
 
 inline std::size_t nd_completion_queue::poll_one(asio::error_code& ec) {
+  ec.clear();
   if (auto* op = pop_ready()) {
     op->complete(this);
     return 1;

@@ -54,18 +54,25 @@ class small_sglist {
       ec.clear();
       return true;
     }
+
+    auto const was_inline = data_ == inline_.data();
+    auto const was_heap = heap_ && data_ == heap_.get();
     if (count > heap_capacity_) {
       auto heap = std::make_unique<NativeSge[]>(count);
-      if (data_) {
-        std::copy_n(data_, size_, heap.get());
+      if (was_heap) {
+        // Heap -> larger heap: preserve existing entries before replacing it.
+        std::copy_n(heap_.get(), size_, heap.get());
       }
       heap_ = std::move(heap);
       heap_capacity_ = count;
-      if (size_ > inline_sge_count) {
-        data_ = heap_.get();
-      }
+    }
+
+    if (was_inline) {
+      // Inline stack -> heap: this is needed even when heap capacity exists.
+      std::copy_n(inline_.data(), size_, heap_.get());
     }
     ec.clear();
+    data_ = heap_.get();
     return true;
   }
 
@@ -75,36 +82,38 @@ class small_sglist {
       return;
     }
 
-    auto const old_data = data_;
-    auto const old_size = size_;
-    auto const move_heap_to_inline =
-        count <= inline_sge_count && old_data == heap_.get();
-    asio::error_code ec;
-    reserve(count, ec);
-    auto* new_data = count <= inline_sge_count ? inline_.data() : heap_.get();
-    if (move_heap_to_inline) {
-      std::copy_n(old_data, (std::min)(old_size, count), new_data);
+    if (count <= inline_sge_count) {
+      if (uses_heap()) {
+        // Heap -> inline stack when resizing back under the inline capacity.
+        std::copy_n(heap_.get(), (std::min)(size_, count), inline_.data());
+      }
+      data_ = inline_.data();
+      size_ = count;
+      return;
     }
-    data_ = new_data;
+
+    asio::error_code ec{};
+    reserve(count, ec);
     size_ = count;
   }
 
   NativeSge& append_uninitialized(asio::error_code& ec) {
     auto const index = size_;
     auto const target = size_ + 1;
-    if (target > inline_sge_count && target > heap_capacity_) {
-      auto const doubled = heap_capacity_ == 0 ? inline_sge_count * 2
-                                               : heap_capacity_ * 2;
-      reserve((std::max)(target, doubled), ec);
+    if (target > inline_sge_count) {
+      auto capacity = target;
+      if (target > heap_capacity_) {
+        auto const doubled = heap_capacity_ == 0 ? inline_sge_count * 2
+                                                 : heap_capacity_ * 2;
+        capacity = (std::max)(target, doubled);
+      }
+      reserve(capacity, ec);
     }
     else {
+      if (!data_) {
+        data_ = inline_.data();
+      }
       ec.clear();
-    }
-    if (!data_) {
-      data_ = inline_.data();
-    }
-    else if (target > inline_sge_count) {
-      data_ = heap_.get();
     }
     size_ = target;
     ec.clear();
@@ -115,9 +124,9 @@ class small_sglist {
   NativeSge const* data() const noexcept { return data_; }
   std::size_t size() const noexcept { return size_; }
   std::size_t capacity() const noexcept {
-    return data_ == heap_.get() ? heap_capacity_ : inline_sge_count;
+    return uses_heap() ? heap_capacity_ : inline_sge_count;
   }
-  bool uses_heap() const noexcept { return data_ == heap_.get(); }
+  bool uses_heap() const noexcept { return heap_ && data_ == heap_.get(); }
   NativeSge& operator[](std::size_t i) noexcept { return data_[i]; }
   NativeSge const& operator[](std::size_t i) const noexcept {
     return data_[i];

@@ -79,10 +79,10 @@ private:
   asio::detail::handler_work<Handler, IoExecutor> work_;
 
 public:
-  nd_connect_op(IND2Connector* conncetor, std::atomic<connect_state>* state,
+  nd_connect_op(IND2Connector* connector, std::atomic<connect_state>* state,
                 asio::mutable_buffer reply, Handler& handler,
                 const IoExecutor& io_ex)
-      : nd_connect_op_base(conncetor, state, reply,
+      : nd_connect_op_base(connector, state, reply,
                            &nd_connect_op::do_complete)
       , handler_(ASIO_MOVE_CAST(Handler)(handler))
       , work_(handler_, io_ex) {}

@@ -35,6 +35,13 @@ namespace coro_io {
 
 class nd_buffer_pool_t;
 
+namespace detail {
+struct nd_buffer_mem_control_t {
+  std::atomic<std::size_t> now_usage = 0;
+  std::atomic<std::size_t> history_max_usage = 0;
+};
+}  // namespace detail
+
 class nd_host_memory_t {
  public:
   nd_host_memory_t() = default;
@@ -58,13 +65,18 @@ struct nd_buffer_t {
   std::weak_ptr<nd_buffer_pool_t> owner_pool_;
   nd_host_memory_t memory_;
   std::unique_ptr<nd_memory_region> mr_;
+  std::shared_ptr<detail::nd_buffer_mem_control_t> memory_usage_recorder_;
+  std::size_t accounted_size_ = 0;
 
   inline void release_resource();
 
  public:
   nd_buffer_t() = default;
   nd_buffer_t(std::unique_ptr<nd_memory_region> mr, nd_host_memory_t memory,
-              nd_buffer_pool_t& owner_pool) noexcept;
+              nd_buffer_pool_t& owner_pool,
+              std::shared_ptr<detail::nd_buffer_mem_control_t>
+                  memory_usage_recorder,
+              std::size_t accounted_size) noexcept;
   friend class nd_buffer_pool_t;
 
   nd_buffer_t(nd_buffer_t&&) = default;
@@ -85,21 +97,22 @@ struct nd_buffer_t {
     return mr_->cslice(start, length);
   }
   // Whole-buffer mutable view.
-  mutable_buffer mutable_view() const { return mr_->slice(std::size_t{0}, size()); }
+  mutable_buffer mutable_view() const {
+    return mr_->slice(std::size_t{0}, size());
+  }
 };
 
 // Pool of registered buffers bound to one ND device. Mirrors ib_buffer_pool_t
 // and stays CPU only.
 class nd_buffer_pool_t : public std::enable_shared_from_this<nd_buffer_pool_t> {
  public:
-  struct nd_buffer_mem_control_t {
-    std::atomic<std::size_t> now_usage = 0;
-    std::atomic<std::size_t> history_max_usage = 0;
-  };
+  using nd_buffer_mem_control_t = detail::nd_buffer_mem_control_t;
 
   struct config_t {
     std::size_t buffer_size = 256 * 1024;  // 256KB
     std::uint64_t max_memory_usage = UINT32_MAX;
+    // Matches ib_buffer_pool_t: nullptr shares a global recorder, so the
+    // default max_memory_usage is also a global ND memory limit.
     std::shared_ptr<nd_buffer_mem_control_t> memory_usage_recorder = nullptr;
     std::chrono::milliseconds idle_timeout = std::chrono::milliseconds{5000};
   };
@@ -115,15 +128,26 @@ class nd_buffer_pool_t : public std::enable_shared_from_this<nd_buffer_pool_t> {
   struct nd_buffer_impl_t {
     nd_host_memory_t memory_;
     std::unique_ptr<nd_memory_region> mr_;
+    std::shared_ptr<nd_buffer_mem_control_t> memory_usage_recorder_;
+    std::size_t accounted_size_ = 0;
+
     nd_buffer_t convert_to_buffer(nd_buffer_pool_t& pool) && {
-      return nd_buffer_t{std::move(mr_), std::move(memory_), pool};
+      auto accounted_size = accounted_size_;
+      accounted_size_ = 0;
+      return nd_buffer_t{std::move(mr_), std::move(memory_), pool,
+                         std::move(memory_usage_recorder_), accounted_size};
     }
     nd_buffer_impl_t& operator=(nd_buffer_impl_t&& o) noexcept = default;
     nd_buffer_impl_t(nd_buffer_impl_t&& o) noexcept = default;
     nd_buffer_impl_t() noexcept = default;
     nd_buffer_impl_t(nd_host_memory_t&& memory,
-                     std::unique_ptr<nd_memory_region>&& mr) noexcept
-        : memory_(std::move(memory)), mr_(std::move(mr)) {}
+                     std::unique_ptr<nd_memory_region>&& mr,
+                     std::shared_ptr<nd_buffer_mem_control_t> recorder,
+                     std::size_t accounted_size) noexcept
+        : memory_(std::move(memory)),
+          mr_(std::move(mr)),
+          memory_usage_recorder_(std::move(recorder)),
+          accounted_size_(accounted_size) {}
   };
 
   static async_simple::coro::Lazy<void> collect_idle_timeout_client(
@@ -169,9 +193,18 @@ class nd_buffer_pool_t : public std::enable_shared_from_this<nd_buffer_pool_t> {
   }
 
   void enqueue(nd_buffer_t& buffer) {
-    auto impl = std::make_unique<nd_buffer_impl_t>(std::move(buffer.memory_),
-                                                   std::move(buffer.mr_));
-    if (free_buffers_.enqueue(std::move(impl)) == 1) {
+    auto accounting_recorder = buffer.memory_usage_recorder_;
+    auto accounting_size = buffer.accounted_size_;
+    auto impl = std::make_unique<nd_buffer_impl_t>(
+        std::move(buffer.memory_), std::move(buffer.mr_),
+        std::move(buffer.memory_usage_recorder_), buffer.accounted_size_);
+    buffer.accounted_size_ = 0;
+    auto enqueue_count = free_buffers_.enqueue(std::move(impl));
+    if (enqueue_count == 0) {
+      release_accounting(accounting_recorder, accounting_size);
+      return;
+    }
+    if (enqueue_count == 1) {
       std::size_t expected = 0;
       if (free_buffers_.collecter_cnt_.compare_exchange_strong(expected, 1))
           [[unlikely]] {
@@ -206,6 +239,8 @@ class nd_buffer_pool_t : public std::enable_shared_from_this<nd_buffer_pool_t> {
                                               std::move(device), config);
   }
 
+  ~nd_buffer_pool_t() { drain_free_buffers(); }
+
   static std::size_t global_memory_usage() {
     return g_memory_usage_recorder()->now_usage.load(std::memory_order_acquire);
   }
@@ -234,33 +269,42 @@ class nd_buffer_pool_t : public std::enable_shared_from_this<nd_buffer_pool_t> {
     return max_memory_usage() < buffer_size() + memory_usage();
   }
 
-  void modify_memory_usage(std::int64_t count) {
+  static void modify_memory_usage(
+      std::shared_ptr<nd_buffer_mem_control_t> const& memory_usage_recorder,
+      std::int64_t count) {
+    if (!memory_usage_recorder) {
+      return;
+    }
     std::size_t new_usage = 0;
     if (count >= 0) {
       auto inc = static_cast<std::size_t>(count);
       auto old_usage =
-          memory_usage_recorder_->now_usage.fetch_add(
+          memory_usage_recorder->now_usage.fetch_add(
               inc, std::memory_order_release);
       new_usage = old_usage + inc;
     }
     else {
       auto dec = static_cast<std::size_t>(-count);
-      auto old_usage = memory_usage_recorder_->now_usage.load(
+      auto old_usage = memory_usage_recorder->now_usage.load(
           std::memory_order_acquire);
       do {
         new_usage = old_usage > dec ? old_usage - dec : 0;
-      } while (!memory_usage_recorder_->now_usage.compare_exchange_weak(
+      } while (!memory_usage_recorder->now_usage.compare_exchange_weak(
           old_usage, new_usage, std::memory_order_acq_rel));
     }
 
-    auto old_max = memory_usage_recorder_->history_max_usage.load(
+    auto old_max = memory_usage_recorder->history_max_usage.load(
         std::memory_order_acquire);
-    while (new_usage > old_max) [[likely]] {
-      if (memory_usage_recorder_->history_max_usage.compare_exchange_strong(
+    while (new_usage > old_max) {
+      if (memory_usage_recorder->history_max_usage.compare_exchange_strong(
               old_max, new_usage, std::memory_order_acq_rel)) [[likely]] {
         break;
       }
     }
+  }
+
+  void modify_memory_usage(std::int64_t count) {
+    modify_memory_usage(memory_usage_recorder_, count);
   }
 
   // Get a registered buffer (reused from the free list, or freshly allocated +
@@ -288,10 +332,33 @@ class nd_buffer_pool_t : public std::enable_shared_from_this<nd_buffer_pool_t> {
       return nd_buffer_t{};
     }
     modify_memory_usage(static_cast<std::int64_t>(length));
-    return nd_buffer_t{std::move(mr), std::move(memory), *this};
+    return nd_buffer_t{std::move(mr), std::move(memory), *this,
+                       memory_usage_recorder_, length};
   }
 
  private:
+  static void release_accounting(
+      std::shared_ptr<nd_buffer_mem_control_t>& memory_usage_recorder,
+      std::size_t& accounted_size) {
+    if (accounted_size != 0) {
+      modify_memory_usage(memory_usage_recorder,
+                          -static_cast<std::int64_t>(accounted_size));
+      accounted_size = 0;
+    }
+    memory_usage_recorder.reset();
+  }
+
+  void drain_free_buffers() {
+    std::unique_ptr<nd_buffer_impl_t> buffer;
+    while (free_buffers_.try_dequeue(buffer)) {
+      if (buffer) {
+        release_accounting(buffer->memory_usage_recorder_,
+                           buffer->accounted_size_);
+      }
+      buffer.reset();
+    }
+  }
+
   void collect_free(nd_buffer_t& buffer) {
     if (buffer && !memory_out_of_limit()) {
       enqueue(buffer);
@@ -306,11 +373,16 @@ class nd_buffer_pool_t : public std::enable_shared_from_this<nd_buffer_pool_t> {
 };
 
 inline nd_buffer_t::nd_buffer_t(std::unique_ptr<nd_memory_region> mr,
-                                nd_host_memory_t memory,
-                                nd_buffer_pool_t& owner_pool) noexcept
+                                 nd_host_memory_t memory,
+                                 nd_buffer_pool_t& owner_pool,
+                                 std::shared_ptr<detail::nd_buffer_mem_control_t>
+                                     memory_usage_recorder,
+                                 std::size_t accounted_size) noexcept
     : owner_pool_(owner_pool.weak_from_this()),
       memory_(std::move(memory)),
-      mr_(std::move(mr)) {}
+      mr_(std::move(mr)),
+      memory_usage_recorder_(std::move(memory_usage_recorder)),
+      accounted_size_(accounted_size) {}
 
 inline nd_buffer_t& nd_buffer_t::operator=(nd_buffer_t&& o) {
   if (this != &o) {
@@ -318,6 +390,9 @@ inline nd_buffer_t& nd_buffer_t::operator=(nd_buffer_t&& o) {
     owner_pool_ = std::move(o.owner_pool_);
     memory_ = std::move(o.memory_);
     mr_ = std::move(o.mr_);
+    memory_usage_recorder_ = std::move(o.memory_usage_recorder_);
+    accounted_size_ = o.accounted_size_;
+    o.accounted_size_ = 0;
   }
   return *this;
 }
@@ -329,9 +404,13 @@ inline void nd_buffer_t::release_resource() {
     if (auto pool = owner_pool_.lock(); pool) {
       pool->collect_free(*this);
       if (mr_) [[unlikely]] {
-        pool->modify_memory_usage(
-            -1 * static_cast<std::int64_t>(memory_.size()));
+        nd_buffer_pool_t::release_accounting(memory_usage_recorder_,
+                                             accounted_size_);
       }
+    }
+    else {
+      nd_buffer_pool_t::release_accounting(memory_usage_recorder_,
+                                           accounted_size_);
     }
     // If the pool collected it, mr_/memory_ were moved out; otherwise they are
     // freed here by their own destructors.

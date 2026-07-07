@@ -201,9 +201,6 @@ struct nd_socket_shared_state_t
   }
 
   void cancel() {
-    if (qp_.is_bound()) {
-      // best-effort: disconnect tears down in-flight ops
-    }
     if (conn_) {
       asio::error_code ec;
       conn_->disconnect(ec);
@@ -300,7 +297,7 @@ class nd_socket_t {
   const config_t& get_config() const noexcept { return conf_; }
   std::size_t get_buffer_size() const noexcept { return buffer_size_; }
   std::shared_ptr<nd_buffer_pool_t> buffer_pool() const noexcept {
-    return state_->pool_;
+    return state_ ? state_->pool_ : nullptr;
   }
   std::shared_ptr<detail::nd_socket_shared_state_t> get_state() const noexcept {
     return state_;
@@ -409,6 +406,10 @@ class nd_socket_t {
   async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
   async_send_one(const_buffer view) {
     auto self = state_;
+    if (!self) [[unlikely]] {
+      co_return std::pair{std::make_error_code(std::errc::bad_file_descriptor),
+                          std::size_t{0}};
+    }
     coro_io::callback_awaitor<std::pair<std::error_code, std::size_t>> awaitor;
     auto result = co_await awaitor.await_resume([&](auto handler) {
       self->qp_.async_send(view,
@@ -425,6 +426,10 @@ class nd_socket_t {
   async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
   async_recv_one() {
     auto self = state_;
+    if (!self) [[unlikely]] {
+      co_return std::pair{std::make_error_code(std::errc::bad_file_descriptor),
+                          std::size_t{0}};
+    }
     coro_io::callback_awaitor<std::pair<std::error_code, std::size_t>> awaitor;
     auto result = co_await awaitor.await_resume([&](auto handler) {
       self->post_recv_impl(
@@ -436,10 +441,10 @@ class nd_socket_t {
   }
 
   std::size_t remain_read_buffer_size() const noexcept {
-    return state_->remain_read_buffer_size();
+    return state_ ? state_->remain_read_buffer_size() : 0;
   }
   std::size_t consume(char* dst, std::size_t sz) {
-    return state_->consume(dst, sz);
+    return state_ ? state_->consume(dst, sz) : 0;
   }
 
   void close() {
@@ -517,9 +522,12 @@ class nd_socket_t {
     if (info.magic != nd_socket_info_magic || info.buffer_size == 0) {
       return false;
     }
+    auto pool = buffer_pool();
+    if (!pool) [[unlikely]] {
+      return false;
+    }
     buffer_size_ =
-        (std::min<std::size_t>)(buffer_pool()->buffer_size(),
-                                info.buffer_size);
+        (std::min<std::size_t>)(pool->buffer_size(), info.buffer_size);
     remote_port_ = info.port;
     try {
       if (info.address_size == 4) {

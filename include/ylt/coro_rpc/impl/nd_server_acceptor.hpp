@@ -78,6 +78,8 @@ class nd_server_acceptor : public coro_io::server_acceptor_base {
       return coro_io::listen_errc::open_error;
     }
 
+    // nd_address selects v4/v6 and validates the requested family. The actual
+    // local ND address comes from config_.device.
     auto endpoint = coro_io::detail::resolve_listen_endpoint(
         executor_->get_asio_executor(), address_, port_, ec);
     if (!endpoint) {
@@ -133,10 +135,13 @@ class nd_server_acceptor : public coro_io::server_acceptor_base {
 
     auto socket_executor = pool_->get_executor();
     asio::error_code ec;
+    // Accepted sockets may run on different executors, so ensure each executor
+    // has the ND device registered before creating socket state on it.
     if (!init_context(socket_executor, ec)) {
       ELOG_ERROR << "NetworkDirect use_device failed: " << ec.message();
+      notify_accept_finished();
       co_return ylt::expected<coro_io::socket_wrapper_t, std::error_code>{
-          ylt::unexpected<std::error_code>{ec}};
+          ylt::unexpected<std::error_code>{asio::error::bad_descriptor}};
     }
 
     coro_io::nd_socket_t socket(socket_executor, config_);

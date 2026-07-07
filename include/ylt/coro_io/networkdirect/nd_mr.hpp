@@ -17,8 +17,8 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <iostream>
 
+#include "ylt/easylog.hpp"
 #include "nd_buffer.hpp"
 #include "nd_device.hpp"
 #include "detail/nd_ops_verbs.hpp"
@@ -69,11 +69,12 @@ class nd_memory_region {
     if (diff < 0 || static_cast<std::size_t>(diff) >= length_) {
       return false;
     }
-    return static_cast<std::size_t>(diff) + length <= length_;
+    auto const offset = static_cast<std::size_t>(diff);
+    return length <= length_ - offset;
   }
 
   bool is_in_mr(std::size_t offset, std::size_t length) const noexcept {
-    return offset + length <= this->length();
+    return offset <= this->length() && length <= this->length() - offset;
   }
 
   void const* addr() const noexcept {
@@ -143,8 +144,8 @@ inline nd_memory_region::~nd_memory_region() {
   asio::error_code ec{};
   detail::verbs_ops::dereg_mr(mr_.Get(), ec);
   if (ec) {
-    std::cerr << "Failed to deregister memory region, errc(" << ec.value()
-              << ") message(" << ec.message() << ")\n";
+    ELOG_ERROR << "Failed to deregister memory region, errc(" << ec.value()
+               << ") message(" << ec.message() << ")";
   }
 }
 
@@ -183,7 +184,7 @@ inline const_buffer nd_memory_region::slice(std::size_t offset,
 inline mutable_buffer nd_memory_region::slice(void* addr, std::size_t length) {
   auto const ptr_diff = reinterpret_cast<std::uint8_t*>(addr) -
                         reinterpret_cast<std::uint8_t*>(this->addr());
-  if (ptr_diff > 0) {
+  if (ptr_diff >= 0) {
     return slice(static_cast<std::size_t>(ptr_diff), length);
   }
   return mutable_buffer{};
@@ -193,7 +194,7 @@ inline const_buffer nd_memory_region::slice(void const* addr,
                                             std::size_t length) const {
   auto const ptr_diff = reinterpret_cast<std::uint8_t const*>(addr) -
                         reinterpret_cast<std::uint8_t const*>(this->addr());
-  if (ptr_diff > 0) {
+  if (ptr_diff >= 0) {
     return cslice(static_cast<std::size_t>(ptr_diff), length);
   }
   return const_buffer{};

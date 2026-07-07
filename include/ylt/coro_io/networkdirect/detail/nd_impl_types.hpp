@@ -25,7 +25,7 @@ namespace coro_io::detail {
 
 struct handle_deleter {
   void operator()(HANDLE handle) const {
-    if (handle != INVALID_HANDLE_VALUE || handle != NULL) {
+    if (handle != INVALID_HANDLE_VALUE && handle != NULL) {
       ::CloseHandle(handle);
     }
   }

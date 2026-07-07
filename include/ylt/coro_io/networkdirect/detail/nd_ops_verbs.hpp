@@ -35,7 +35,7 @@ inline result_type post_send(native_qp_t* qp, void* request_context,
   return hr;
 }
 
-// poset recv
+// post recv
 inline result_type post_recv(native_qp_t* qp, void* request_context,
                              native_sge_t* sge_list, size_type sge_count,
                              asio::error_code& ec) {

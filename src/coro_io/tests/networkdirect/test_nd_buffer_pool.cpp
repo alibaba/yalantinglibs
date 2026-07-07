@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <atomic>
 #include <chrono>
 #include <exception>
 #include <memory>
@@ -47,6 +48,12 @@ bool wait_until(auto predicate, std::chrono::milliseconds timeout = 1s) {
     std::this_thread::sleep_for(10ms);
   } while (std::chrono::steady_clock::now() < deadline);
   return predicate();
+}
+
+std::size_t current_usage(
+    const std::shared_ptr<coro_io::nd_buffer_pool_t::nd_buffer_mem_control_t>&
+        recorder) {
+  return recorder->now_usage.load(std::memory_order_acquire);
 }
 
 }  // namespace
@@ -153,6 +160,77 @@ TEST_CASE("nd_buffer_pool release accounting when over limit") {
   auto buffer = pool->get_buffer();
   REQUIRE(buffer);
   CHECK(pool->memory_usage() == usage_before + kPoolBufferSize);
+}
+
+TEST_CASE("nd_buffer_pool destructor releases cached buffer accounting") {
+  auto device = try_get_device();
+  if (!device) {
+    return;
+  }
+
+  auto recorder =
+      std::make_shared<coro_io::nd_buffer_pool_t::nd_buffer_mem_control_t>();
+  {
+    auto pool = coro_io::nd_buffer_pool_t::create(
+        device, {.buffer_size = kPoolBufferSize,
+                 .max_memory_usage = kPoolBufferSize * 4,
+                 .memory_usage_recorder = recorder,
+                 .idle_timeout = 1h});
+    {
+      auto buffer = pool->get_buffer();
+      REQUIRE(buffer);
+      CHECK(current_usage(recorder) == kPoolBufferSize);
+    }
+
+    CHECK(pool->free_buffer_size() == 1);
+    CHECK(current_usage(recorder) == kPoolBufferSize);
+  }
+
+  CHECK(current_usage(recorder) == 0);
+}
+
+TEST_CASE("nd_buffer_pool accounting survives buffer outliving pool") {
+  auto device = try_get_device();
+  if (!device) {
+    return;
+  }
+
+  auto recorder =
+      std::make_shared<coro_io::nd_buffer_pool_t::nd_buffer_mem_control_t>();
+  coro_io::nd_buffer_t buffer;
+  {
+    auto pool = coro_io::nd_buffer_pool_t::create(
+        device, {.buffer_size = kPoolBufferSize,
+                 .max_memory_usage = kPoolBufferSize * 4,
+                 .memory_usage_recorder = recorder,
+                 .idle_timeout = 1h});
+    buffer = pool->get_buffer();
+    REQUIRE(buffer);
+    CHECK(current_usage(recorder) == kPoolBufferSize);
+  }
+
+  CHECK(current_usage(recorder) == kPoolBufferSize);
+  buffer = coro_io::nd_buffer_t{};
+  CHECK(current_usage(recorder) == 0);
+}
+
+TEST_CASE("nd_memory_region slice accepts base address") {
+  auto device = try_get_device();
+  if (!device) {
+    return;
+  }
+
+  coro_io::nd_host_memory_t memory{kPoolBufferSize};
+  coro_io::nd_memory_region mr(device, memory.data(), memory.size());
+
+  auto mutable_view = mr.slice(memory.data(), 128);
+  CHECK(mutable_view.data() == memory.data());
+  CHECK(mutable_view.length() == 128);
+
+  const auto& const_mr = mr;
+  auto const_view = const_mr.slice(static_cast<void const*>(memory.data()), 128);
+  CHECK(const_view.data() == memory.data());
+  CHECK(const_view.length() == 128);
 }
 
 TEST_CASE("nd_socket forwards buffer pool config") {

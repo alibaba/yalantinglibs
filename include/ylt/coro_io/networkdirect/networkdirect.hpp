@@ -1204,7 +1204,7 @@ NdThunkAdapterInfo(
 // Module Name:
 //
 //    ndspi.h
-// 
+//
 // Abstract:
 //
 //    NetworkDirect Service Provider Interfaces

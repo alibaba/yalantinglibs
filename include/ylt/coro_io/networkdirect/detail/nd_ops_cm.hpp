@@ -24,7 +24,7 @@
 // interfaces simular with rdma-cm
 namespace coro_io::detail {
 
-// conncetor interfaces
+// connector interfaces
 inline IND2Connector* create_connector(IND2Adapter* adapter,
                                           HANDLE overlapped_handle,
                                           asio::error_code& ec) {
@@ -42,7 +42,9 @@ inline result_type bind_addr(IND2Connector* connector,
   assert(connector);
   auto const hr = connector->Bind(addrin, static_cast<size_type>(addr_size));
   if (hr != ND_SUCCESS) {
-    assert(hr != ND_PENDING);  // TODO ... test
+    // IND2Connector::Bind is specified as synchronous; keep this assert as a
+    // defensive tripwire if a provider ever reports pending completion here.
+    assert(hr != ND_PENDING);
   }
   ec = static_cast<nd_errc>(hr);
   return hr;
@@ -153,7 +155,9 @@ inline result_type bind_addr(IND2Listener* listener, sockaddr const* addrin,
   assert(listener);
   auto const hr = listener->Bind(addrin, static_cast<size_type>(addr_size));
   if (hr != ND_SUCCESS) {
-    assert(hr != ND_PENDING);  // TODO ... test
+    // IND2Listener::Bind is specified as synchronous; keep this assert as a
+    // defensive tripwire if a provider ever reports pending completion here.
+    assert(hr != ND_PENDING);
   }
   ec = static_cast<nd_errc>(hr);
   return hr;
