@@ -14,8 +14,10 @@
 #include "async_simple/coro/Collect.h"
 #include "async_simple/coro/Lazy.h"
 #include "cmdline.h"
+#ifdef YLT_ENABLE_BAREX
 #include "ylt/coro_io/barex/barex_server_acceptor.hpp"
 #include "ylt/coro_io/barex/barex_socket.hpp"
+#endif
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_io/data_view.hpp"
 #include "ylt/coro_io/heterogeneous_buffer.hpp"
