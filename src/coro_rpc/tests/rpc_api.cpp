@@ -65,14 +65,14 @@ std::string to_string(coro_io::data_view attachment) {
     return std::string(attachment.begin(), attachment.end());
   }
   else {
-#ifdef YLT_ENABLE_CUDA
     std::string s;
+#ifdef YLT_ENABLE_CUDA
     s.resize(attachment.size());
     std::cout << "start copying!" << std::endl;
     coro_io::cuda_copy(s.data(), -1, attachment.data(), attachment.gpu_id(),
                        attachment.size());
-    return s;
 #endif
+    return s;
   }
 }
 

@@ -1023,7 +1023,8 @@ class ib_socket_t {
     attr.port_num = state_->device_->port();
     attr.pkey_index = 0;
     attr.qp_access_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ |
-                           IBV_ACCESS_REMOTE_WRITE;
+                           IBV_ACCESS_REMOTE_WRITE |
+                           IBV_ACCESS_RELAXED_ORDERING;
     int flags =
         IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS;
     if (auto ec = ibv_modify_qp(state_->qp_.get(), &attr, flags); ec) {
