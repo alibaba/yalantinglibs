@@ -1029,15 +1029,31 @@ class ib_socket_t {
     attr.port_num = state_->device_->port();
     attr.pkey_index = 0;
     attr.qp_access_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ |
-                           IBV_ACCESS_REMOTE_WRITE |
-                           IBV_ACCESS_RELAXED_ORDERING;
+                           IBV_ACCESS_REMOTE_WRITE;
+    bool use_relaxed_ordering =
+        state_->device_->is_support_relaxed_ordering();
+    if (use_relaxed_ordering) {
+      attr.qp_access_flags |= IBV_ACCESS_RELAXED_ORDERING;
+    }
     int flags =
         IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS;
     if (auto ec = ibv_modify_qp(state_->qp_.get(), &attr, flags); ec) {
-      auto err_code = std::make_error_code(std::errc{errno});
-      ELOG_ERROR << "modify qp to init failed: " << err_code.message()
-                 << ", QP=" << state_->qp_->qp_num;
-      throw std::system_error(err_code);
+      if (ec == (int)std::errc::invalid_argument && use_relaxed_ordering) {
+        attr.qp_access_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ |
+                               IBV_ACCESS_REMOTE_WRITE;
+        ec = ibv_modify_qp(state_->qp_.get(), &attr, flags);
+        if (!ec) {
+          ELOG_INFO << "IBDevice don't support IBV_ACCESS_RELAXED_ORDERING "
+                       "flag. Disable it.";
+          state_->device_->set_support_relaxed_ordering(false);
+        }
+      }
+      if (ec) {
+        auto err_code = std::make_error_code(std::errc{ec});
+        ELOG_ERROR << "modify qp to init failed: " << err_code.message()
+                   << ", QP=" << state_->qp_->qp_num;
+        throw std::system_error(err_code);
+      }
     }
   }
 
