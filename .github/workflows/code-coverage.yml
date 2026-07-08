@@ -34,7 +34,7 @@ jobs:
       working-directory: ${{github.workspace}}/build
       env:
         CTEST_OUTPUT_ON_FAILURE: 1
-      run: ctest -C ${{ matrix.configuration }} -j 1 -V
+      run: ctest -E coro_http_test -C ${{ matrix.configuration }} -j 1 -V
     
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v1

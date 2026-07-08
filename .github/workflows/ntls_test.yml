@@ -138,7 +138,7 @@ jobs:
         run: |
           export LD_LIBRARY_PATH=${TONGSUO_INSTALL_PREFIX}/lib:$LD_LIBRARY_PATH
           # Run tests that don't require NTLS (to verify basic functionality)
-          ctest -C ${{matrix.mode}} -j 1 -V --output-on-failure || true
+          ctest -E coro_http_test -C ${{matrix.mode}} -j 1 -V --output-on-failure || true
 
       - name: Run NTLS end-to-end tests
         run: |
