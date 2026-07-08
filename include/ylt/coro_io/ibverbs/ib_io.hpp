@@ -95,14 +95,14 @@ inline async_simple::coro::Lazy<std::error_code> async_connect(
 namespace detail {
 
 template <typename T>
-inline std::size_t consume_buffer(coro_io::ib_socket_t& ib_socket,
-                                  std::span<T>& sge_buffer) {
+inline async_simple::coro::Lazy<std::size_t> consume_buffer(
+    coro_io::ib_socket_t& ib_socket, std::span<T>& sge_buffer) {
   std::size_t transfer_total = 0;
   if (ib_socket.remain_read_buffer_size()) {
     while (sge_buffer.size()) {
-      auto length =
-          ib_socket.consume((char*)sge_buffer.front().addr,
-                            sge_buffer.front().length, sge_buffer.front().lkey);
+      auto length = co_await ib_socket.consume((char*)sge_buffer.front().addr,
+                                               sge_buffer.front().length,
+                                               sge_buffer.front().lkey);
 
       transfer_total += length;
       if (length < sge_buffer.front().length) {
@@ -116,7 +116,7 @@ inline std::size_t consume_buffer(coro_io::ib_socket_t& ib_socket,
   if (transfer_total) {
     ELOG_TRACE << "has completed size:" << transfer_total;
   }
-  return transfer_total;
+  co_return transfer_total;
 }
 
 inline std::size_t copy(cuda_stream_handler_t* handler, std::span<ibv_sge> src,
@@ -280,6 +280,11 @@ async_simple::coro::
   auto len = copy(handler, sge_list, socket_buffer);
   assert(len == io_size);
   if (enable_small_message_combine) {
+#ifdef YLT_ENABLE_CUDA
+    if (handler) {
+      co_await handler->record(ib_socket.get_coro_executor());
+    }
+#endif
     ELOG_TRACE << "combine small message, now buffer size:" << now_buffer_data;
     co_return std::pair{std::error_code{}, io_size};
   }
@@ -392,10 +397,12 @@ async_io_split_impl(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
   split_sge_block.reserve(sge_span.size());
   std::size_t io_completed_size = 0;
   if constexpr (io == ib_socket_t::io_type::recv) {
-    io_completed_size = consume_buffer(ib_socket, sge_span);
+    io_completed_size = co_await consume_buffer(ib_socket, sge_span);
     if (sge_span.empty()) {
 #ifdef YLT_ENABLE_CUDA
-      if (ib_socket.get_cuda_stream_handler()) {
+      // consume has already synced the stream when remain_data_ was emptied
+      if (ib_socket.remain_read_buffer_size() != 0 &&
+          ib_socket.get_cuda_stream_handler()) {
         co_await ib_socket.get_cuda_stream_handler().record(
             ib_socket.get_coro_executor());
       }
