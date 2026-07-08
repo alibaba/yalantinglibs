@@ -543,7 +543,8 @@ class ib_socket_t {
     return state_->device_->get_buffer_pool();
   }
 
-  std::size_t consume(char* dst, std::size_t sz, int dst_gpu_id) {
+  async_simple::coro::Lazy<std::size_t> consume(char* dst, std::size_t sz,
+                                                int dst_gpu_id) {
     auto len = std::min(sz, remain_data_.size());
     if (len) {
 #ifdef YLT_ENABLE_CUDA
@@ -561,11 +562,16 @@ class ib_socket_t {
       remain_data_ = remain_data_.substr(len);
       if (remain_data_.empty()) {
         assert(state_->recv_buf_);
+#ifdef YLT_ENABLE_CUDA
+        if (state_->handler_) {
+          co_await state_->handler_->record(executor_);
+        }
+#endif
         state_->add_recv_buffer(std::move(state_->recv_buf_),
                                 state_->recv_buffer_cnt_ + 1);
       }
     }
-    return len;
+    co_return len;
   }
 
   std::size_t remain_read_buffer_size() { return remain_data_.size(); }
