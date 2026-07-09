@@ -28,6 +28,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "async_simple/Signal.h"
+#include "async_simple/coro/LazyLocalBase.h"
 #include "asio/dispatch.hpp"
 #include "asio/ip/address.hpp"
 #include "asio/posix/stream_descriptor.hpp"
@@ -233,7 +235,8 @@ class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
     bool use_srq = true;  // auto-detect: falls back to per-QP mode if SRQ creation fails
     uint64_t max_srq_buffer_memory = 256 * 1024 * 1024;  // 256MB
     uint32_t srq_max_wr = 4096;
-    uint32_t srq_buffer_block = 32;  // initial/minimum SRQ buffer count
+    uint32_t srq_idle_timeout_ms = 3000;  // delay before SRQ destruction when all QPs are gone
+    uint32_t srq_buffer_block = 32;      // initial/minimum SRQ buffer count
   };
   static std::shared_ptr<ib_device_t> create(const config_t& conf,
                                              ibv_device* dev = nullptr) {
@@ -334,20 +337,29 @@ class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
     buffer_pool_ = ib_buffer_pool_t::create(*this, pool_config);
 
     if (conf.use_srq) {
-      ib_srq_buffer_manager_t::config_t srq_conf{
+      srq_enabled_ = true;
+      srq_conf_ = ib_srq_buffer_manager_t::config_t{
           .max_buffer_memory = conf.max_srq_buffer_memory,
           .srq_max_wr = conf.srq_max_wr,
           .srq_max_sge = 1,
           .buffer_size = pool_config.buffer_size,
           .buffer_block = conf.srq_buffer_block,
       };
+      srq_watermark_ = std::min(
+          static_cast<uint32_t>(srq_conf_.max_buffer_memory /
+                                srq_conf_.buffer_size),
+          srq_conf_.srq_max_wr);
+      if (srq_watermark_ == 0) {
+        srq_watermark_ = 1;
+      }
+      srq_idle_timeout_ms_ = conf.srq_idle_timeout_ms;
       try {
         srq_manager_ =
-            std::make_shared<ib_srq_buffer_manager_t>(*this, srq_conf);
-        srq_manager_->init();
+            std::make_shared<ib_srq_buffer_manager_t>(*this, srq_conf_);
       } catch (const std::system_error& e) {
         ELOG_WARN << "SRQ creation failed, falling back to per-QP mode: "
                   << e.what();
+        srq_enabled_ = false;
         srq_manager_.reset();
       }
     }
@@ -383,7 +395,38 @@ class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
   std::shared_ptr<ib_srq_buffer_manager_t> get_srq_manager() const noexcept {
     return srq_manager_;
   }
-  bool use_srq() const noexcept { return srq_manager_ != nullptr; }
+  bool use_srq() const noexcept { return srq_enabled_; }
+  uint32_t srq_watermark() const noexcept { return srq_watermark_; }
+
+  void ensure_srq() {
+    if (!srq_enabled_) return;
+    if (srq_manager_) {
+      srq_manager_->init();
+      return;
+    }
+    srq_manager_ = std::make_shared<ib_srq_buffer_manager_t>(*this, srq_conf_);
+    srq_manager_->init();
+  }
+
+  void on_qp_created() {
+    if (!srq_enabled_) return;
+    active_qp_count_.fetch_add(1, std::memory_order_acq_rel);
+  }
+
+  void on_qp_destroyed(coro_io::ExecutorWrapper<>* executor) {
+    if (!srq_enabled_) return;
+    uint32_t prev =
+        active_qp_count_.fetch_sub(1, std::memory_order_acq_rel);
+    if (prev == 1) {
+      if (!destruction_pending_.exchange(true,
+                                          std::memory_order_acq_rel)) {
+        srq_destruction_lazy()
+            .setLazyLocal(
+                async_simple::coro::LazyLocalBase{signal_.get()})
+            .directlyStart([](auto&&) {}, executor);
+      }
+    }
+  }
 
   struct async_event_watcher_manager_t
       : public std::unordered_map<ib_device_t*, std::weak_ptr<ib_device_t>> {
@@ -396,7 +439,10 @@ class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
     }
   };
 
-  ~ib_device_t() { stop_async_event_watcher(); }
+  ~ib_device_t() {
+    signal_->emits(async_simple::SignalType::Terminate);
+    stop_async_event_watcher();
+  }
 
  private:
   // Address priority rank for GID selection (lower is better)
@@ -606,12 +652,35 @@ class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
     async_event_watcher_fd_->release();
   }
 
+  async_simple::coro::Lazy<void> srq_destruction_lazy() {
+    auto result = co_await coro_io::sleep_for(
+        std::chrono::milliseconds(srq_idle_timeout_ms_));
+    destruction_pending_.store(false, std::memory_order_release);
+    if (!result) {
+      co_return;
+    }
+    if (active_qp_count_.load(std::memory_order_acquire) == 0) {
+      ELOG_INFO << "SRQ idle timeout (" << srq_idle_timeout_ms_
+                << "ms), destroying SRQ manager";
+      srq_manager_.reset();
+    }
+    co_return;
+  }
+
   std::string name_;
   std::unique_ptr<ibv_context, ib_deleter> ctx_;
   std::unique_ptr<ibv_pd, ib_deleter> pd_;
   std::unique_ptr<asio::posix::stream_descriptor> async_event_watcher_fd_;
   std::shared_ptr<ib_buffer_pool_t> buffer_pool_;
   std::shared_ptr<ib_srq_buffer_manager_t> srq_manager_;
+  std::shared_ptr<async_simple::Signal> signal_ =
+      async_simple::Signal::create();
+  ib_srq_buffer_manager_t::config_t srq_conf_;
+  std::atomic<uint32_t> active_qp_count_{0};
+  std::atomic<bool> destruction_pending_{false};
+  bool srq_enabled_ = false;
+  uint32_t srq_watermark_ = 0;
+  uint32_t srq_idle_timeout_ms_ = 3000;
   std::atomic<bool> support_inline_data_ = true;
   std::atomic<bool> support_relaxed_ordering_ = true;
   ibv_port_attr attr_;

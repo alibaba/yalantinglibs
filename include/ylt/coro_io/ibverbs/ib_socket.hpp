@@ -172,6 +172,14 @@ struct ib_socket_shared_state_t
   ib_socket_shared_state_t(ib_socket_shared_state_t&&) = delete;
   ib_socket_shared_state_t& operator=(ib_socket_shared_state_t&&) = delete;
 
+  ~ib_socket_shared_state_t() {
+    bool had_qp = qp_ != nullptr;
+    qp_.reset();
+    if (had_qp && use_srq_ && device_) {
+      device_->on_qp_destroyed(executor_);
+    }
+  }
+
   void return_send_buffer(ib_buffer_t buffer) {
     assert(!send_queue_.full());
     send_queue_.push(std::move(buffer));
@@ -722,6 +730,9 @@ class ib_socket_t {
     }
     try {
       init_qp();
+      if (state_->use_srq_) {
+        state_->device_->on_qp_created();
+      }
       modify_qp_to_init();
       modify_qp_to_rtr(peer_info.qp_num, peer_info.lid,
                        (uint8_t*)peer_info.gid);
@@ -808,6 +819,9 @@ class ib_socket_t {
   async_simple::coro::Lazy<std::error_code> connect_impl() noexcept {
     try {
       init_qp();
+      if (state_->use_srq_) {
+        state_->device_->on_qp_created();
+      }
       modify_qp_to_init();
       if (!state_->use_srq_) {
         for (int i = 0; i < conf_.recv_buffer_cnt; ++i) {
@@ -998,7 +1012,7 @@ class ib_socket_t {
     if (conf_.device->use_srq()) {
       conf_.cap.max_recv_wr = 0;
       conf_.cap.max_recv_sge = 0;
-      uint32_t srq_watermark = conf_.device->get_srq_manager()->watermark();
+      uint32_t srq_watermark = conf_.device->srq_watermark();
       conf_.cq_size =
           std::max(conf_.cap.max_send_wr + srq_watermark, conf_.cq_size);
     }
@@ -1044,6 +1058,9 @@ class ib_socket_t {
   }
 
   void init_qp() {
+    if (state_->use_srq_) {
+      state_->device_->ensure_srq();
+    }
     struct ibv_qp_init_attr qp_init_attr;
     memset(&qp_init_attr, 0, sizeof(qp_init_attr));
     qp_init_attr.qp_type = conf_.qp_type;
