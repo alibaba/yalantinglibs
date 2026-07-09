@@ -8,6 +8,9 @@ on:
     branches: [ main, develop ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: windows-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true

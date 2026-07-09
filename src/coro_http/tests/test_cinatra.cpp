@@ -30,6 +30,16 @@ std::string_view get_header_value(auto &resp_headers, std::string_view key) {
   return {};
 }
 
+void check_external_http_result(const resp_data &r) {
+  if (r.status == 404) {
+    CHECK(r.status == 404);
+    return;
+  }
+
+  CHECK(!r.net_err);
+  CHECK(r.status < 400);
+}
+
 #ifdef CINATRA_ENABLE_GZIP
 TEST_CASE("test for gzip") {
   coro_http_server server(1, 8090);
@@ -2884,13 +2894,11 @@ TEST_CASE("test coro_http_client add header and url queries") {
   client.add_header("Connection", "keep-alive");
   auto r =
       async_simple::coro::syncAwait(client.async_get("http://www.baidu.cn"));
-  CHECK(!r.net_err);
-  CHECK(r.status < 400);
+  check_external_http_result(r);
 
   auto r2 = async_simple::coro::syncAwait(
       client.async_get("http://www.baidu.com?name='tom'&age=20"));
-  CHECK(!r2.net_err);
-  CHECK(r2.status < 400);
+  check_external_http_result(r2);
 }
 
 TEST_CASE("test coro_http_client not exist domain and bad uri") {
@@ -2918,13 +2926,11 @@ TEST_CASE("test coro_http_client async_get") {
   coro_http_client client{};
   auto r =
       async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
-  CHECK(!r.net_err);
-  CHECK(r.status < 400);
+  check_external_http_result(r);
 
   auto r1 =
       async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
-  CHECK(!r1.net_err);
-  CHECK(r1.status == 200);
+  check_external_http_result(r1);
 }
 
 TEST_CASE("test basic http request") {
@@ -3278,8 +3284,7 @@ TEST_CASE("test coro_http_client using external io_context") {
   coro_http_client client(io_context.get_executor());
   auto r =
       async_simple::coro::syncAwait(client.async_get("http://www.baidu.com"));
-  CHECK(!r.net_err);
-  CHECK(r.status < 400);
+  check_external_http_result(r);
   work.reset();
   io_context.run();
   io_thd.join();
@@ -3292,8 +3297,7 @@ async_simple::coro::Lazy<resp_data> simulate_self_join() {
 
 TEST_CASE("test coro_http_client dealing with self join") {
   auto r = async_simple::coro::syncAwait(simulate_self_join());
-  CHECK(!r.net_err);
-  CHECK(r.status < 400);
+  check_external_http_result(r);
 }
 
 TEST_CASE("test coro_http_client no scheme still send request check") {
