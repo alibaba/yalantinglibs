@@ -2436,6 +2436,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
           }
         }
       }
+      if (socket_->is_timeout_) {
+        co_return resp_data{make_error_code(http_errc::connect_timeout), 404};
+      }
       CINATRA_LOG_TRACE
           << "start connect to endpoint lists. total endpoint count:"
           << eps->size()
@@ -2807,9 +2810,9 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       co_return false;
     }
     if (auto socket = watcher.lock(); socket) {
-      socket_->is_timeout_ = true;
+      socket->is_timeout_ = true;
       CINATRA_LOG_WARNING << msg << " timeout";
-      close_socket(*socket_);
+      close_socket(*socket);
     }
     co_return true;
   }
