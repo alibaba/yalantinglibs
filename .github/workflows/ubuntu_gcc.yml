@@ -8,6 +8,10 @@ on:
   workflow_call:
   workflow_dispatch:
 
+concurrency:
+  group: ubuntu-gcc-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 env:
   ccache: ON
 

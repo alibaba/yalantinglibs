@@ -22,6 +22,10 @@ on:
   workflow_call:
   workflow_dispatch:
 
+concurrency:
+  group: ntls-test-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 env:
   TONGSUO_VERSION: "8.4.2"
   TONGSUO_INSTALL_PREFIX: /usr/local/tongsuo

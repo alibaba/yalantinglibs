@@ -3,10 +3,15 @@ name: macOS 15
 on:
   workflow_call:
   push:
-   branches: [ main, develop ]
+    branches: [ main, develop ]
   pull_request:
-   branches: [ main, develop ]
+    branches: [ main, develop ]
   workflow_dispatch:
+
+concurrency:
+  group: mac-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   mac_clang:
     strategy:
