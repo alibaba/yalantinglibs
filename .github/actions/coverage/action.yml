@@ -85,7 +85,7 @@ runs:
         make -j$(($(nproc)/2 + 1))
         export LLVM_PROFILE_FILE="test_ylt-%m.profraw"
         cd output/tests
-        find . -maxdepth 1 -type f -executable ! -name coro_http_test | xargs -I {} sh -c '{}'
+        find . -maxdepth 1 -type f -executable | xargs -I {} sh -c '{}'
         llvm-profdata merge -sparse test_ylt-*.profraw -o test_ylt.profdata
         if [ -n "${{ inputs.reset-commit-id }}" ];then
           report=base-ylt-cov-report
