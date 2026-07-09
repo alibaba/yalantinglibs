@@ -1,4 +1,4 @@
-name: macOS Monterey 12
+name: macOS 15
 
 on:
   workflow_call:
@@ -14,29 +14,26 @@ jobs:
         mode: [ Debug ]  #mode: [Release, Debug]
         ssl: [ ON, OFF ]
 
-    runs-on: macos-latest
+    runs-on: macos-15
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
      # - name: SetUp HomeBrew
      #   id: set-up-homebrew
      #   uses: Homebrew/actions/setup-homebrew@master
 
       - name: Install Dependencies
-        run: HOMEBREW_NO_INSTALL_CLEANUP=1 HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1 brew install openssl
-
-      - name: Install ninja-build tool
-        uses: seanmiddleditch/gha-setup-ninja@master
+        run: HOMEBREW_NO_INSTALL_CLEANUP=1 HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1 brew install openssl@3 ninja
 
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2
+        uses: hendrikmuhs/ccache-action@v1.2.23
         with:
           key: ${{ github.job }}-${{ matrix.mode}}-ssl( ${{ matrix.ssl}} )
 
       - name: Configure CMake
-        run: OPENSSL_ROOT_DIR=/usr/local/opt/openssl@3 CXX=clang++ CC=clang cmake -B ${{github.workspace}}/build -G Ninja -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DYLT_ENABLE_SSL=${{matrix.ssl}} -DUSE_CCACHE=ON
+        run: OPENSSL_ROOT_DIR="$(brew --prefix openssl@3)" CXX=clang++ CC=clang cmake -B ${{github.workspace}}/build -G Ninja -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DYLT_ENABLE_SSL=${{matrix.ssl}} -DUSE_CCACHE=ON
 
       - name: Build
         run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}

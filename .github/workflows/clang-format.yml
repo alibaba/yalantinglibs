@@ -14,11 +14,11 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: install clang-format
-        run: pip install clang-format
+        run: pip install clang-format==18.1.8
       - name: check-diff
         run: |
             diff=$(git-clang-format --diff HEAD^) || true

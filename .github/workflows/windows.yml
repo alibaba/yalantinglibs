@@ -10,7 +10,7 @@ on:
 
 jobs:
   windows_msvc:
-    runs-on: windows-latest
+    runs-on: windows-2022
 
     strategy:
       matrix:
@@ -22,19 +22,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Enable Developer Command Prompt
-        uses: ilammy/msvc-dev-cmd@v1.12.0
+        uses: step-security/msvc-dev-cmd@v1
         with:
           arch: ${{ matrix.arch }}
-      - name: Install ninja-build tool
-        uses: seanmiddleditch/gha-setup-ninja@master
-        with:
-          version: 1.11.1
-      - name: latest ccache
-        run: choco install ccache
+      - name: Install build tools
+        run: choco install ninja ccache -y
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2
+        uses: hendrikmuhs/ccache-action@v1.2.23
         with:
           key: ${{ github.job }}-${{ matrix.mode}}-ssl( ${{ matrix.ssl}} )-arch-${{ matrix.arch}}
       - name: Configure CMake
