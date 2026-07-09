@@ -286,65 +286,94 @@ TEST_CASE("test brotli type") {
 #endif
 
 #ifdef CINATRA_ENABLE_SSL
+struct local_ssl_server {
+  coro_http_server server;
+  std::string connect_host;
+  std::string host;
+  std::string url;
+
+  local_ssl_server(std::string listen_address = "127.0.0.1:0",
+                   std::string connect_host = "127.0.0.1")
+      : server(1, std::move(listen_address), false),
+        connect_host(std::move(connect_host)) {
+    server.init_ssl("../openssl_files/server.crt",
+                    "../openssl_files/server.key", "test");
+    server.set_http_handler<GET>(
+        "/", [](coro_http_request &, coro_http_response &resp) {
+          resp.set_status_and_content(status_type::ok, "ssl ok");
+        });
+    server.set_http_handler<GET>(
+        "/redirect", [](coro_http_request &, coro_http_response &resp) {
+          resp.redirect("/");
+        });
+    server.async_start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    REQUIRE(server.port() > 0);
+    host = this->connect_host + ":" + std::to_string(server.port());
+    url = "https://" + host;
+  }
+
+  ~local_ssl_server() { server.stop(); }
+};
+
 TEST_CASE("test ssl client") {
+  local_ssl_server server;
+
   {
     coro_http_client client4{};
     client4.set_ssl_schema(true);
-    auto result = client4.get("www.baidu.com");
-    CHECK(result.status >= 200);
+    auto result = client4.get(server.host);
+    CHECK(result.status == 200);
+    CHECK(result.resp_body == "ssl ok");
 
-    auto lazy = []() -> async_simple::coro::Lazy<void> {
+    auto lazy = [host = server.host]() -> async_simple::coro::Lazy<void> {
       coro_http_client client5{};
       client5.set_ssl_schema(true);
-      co_await client5.connect("www.baidu.com");
+      co_await client5.connect(host);
       auto result = co_await client5.async_get("/");
-      CHECK(result.status >= 200);
+      CHECK(result.status == 200);
+      CHECK(result.resp_body == "ssl ok");
     };
     async_simple::coro::syncAwait(lazy());
   }
   {
     coro_http_client client{};
-    auto result = client.get("https://www.bing.com");
-    CHECK(result.status >= 200);
+    auto result = client.get(server.url);
+    CHECK(result.status == 200);
+    CHECK(result.resp_body == "ssl ok");
   }
   {
     coro_http_client client{};
-    auto ret = client.get("https://baidu.com");
+    auto ret = client.get(server.url);
+    CHECK(ret.status == 200);
     client.reset();
-    ret = client.get("http://cn.bing.com");
-    CINATRA_LOG_DEBUG << ret.status;
-    client.reset();
-    ret = client.get("https://baidu.com");
-    CINATRA_LOG_DEBUG << ret.status;
+    ret = client.get(server.url);
+    CHECK(ret.status == 200);
   }
   {
     coro_http_client client{};
-    auto r =
-        async_simple::coro::syncAwait(client.connect("https://www.baidu.com"));
+    auto r = async_simple::coro::syncAwait(client.connect(server.url));
     if (r.status == 200) {
       auto result = client.get("/");
-      CHECK(result.status >= 200);
+      CHECK(result.status == 200);
+      CHECK(result.resp_body == "ssl ok");
     }
   }
 
   {
     coro_http_client client{};
-    auto result = client.get("http://www.bing.com");
-    CHECK(result.status >= 200);
-  }
-
-  {
-    coro_http_client client{};
     client.set_ssl_schema(true);
-    auto result = client.get("www.bing.com");
-    CHECK(result.status >= 200);
+    auto result = client.get(server.host);
+    CHECK(result.status == 200);
+    CHECK(result.resp_body == "ssl ok");
   }
 
   {
     coro_http_client client{};
     client.set_ssl_schema(false);
-    auto result = client.get("https://www.bing.com");
-    CHECK(result.status >= 200);
+    auto result = client.get(server.url);
+    CHECK(result.status == 200);
+    CHECK(result.resp_body == "ssl ok");
   }
 
   {
@@ -353,38 +382,41 @@ TEST_CASE("test ssl client") {
     bool ok = client.init_ssl();
     client.reset();
     REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
-    auto result = client.get("https://www.bing.com");
-    CHECK(result.status >= 200);
-  }
-
-  {
-    coro_http_client client{};
-    client.set_req_timeout(8s);
-    client.enable_auto_redirect(true);
-    std::string uri = "http://www.bing.com";
-    // Make sure the host and port are matching with your proxy server
-    client.set_proxy("106.14.255.124", "80");
-    resp_data result = async_simple::coro::syncAwait(client.async_get(uri));
-    if (!result.net_err)
-      CHECK(result.status >= 200);
+    auto result = client.get(server.url + "/redirect");
+    CHECK(result.status == 200);
+    CHECK(result.resp_body == "ssl ok");
   }
 
   {
     coro_http_client client{};
     bool ok = client.init_ssl();
     REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
-    auto result = client.get("https://www.bing.com");
-    CHECK(result.status >= 200);
+    auto result = client.get(server.url);
+    CHECK(result.status == 200);
+    CHECK(result.resp_body == "ssl ok");
   }
 }
 
-TEST_CASE("test ssl client") {
+TEST_CASE("test ssl client init_ssl") {
+  local_ssl_server server;
+
   coro_http_client client{};
   bool ok = client.init_ssl();
   REQUIRE_MESSAGE(ok == true, "init ssl fail, please check ssl config");
-  // client.set_sni_hostname("https://www.bing.com");
-  auto result = client.get("https://www.bing.com");
-  CHECK(result.status >= 200);
+  auto result = client.get(server.url);
+  CHECK(result.status == 200);
+  CHECK(result.resp_body == "ssl ok");
+}
+
+TEST_CASE("test ssl client with ipv6 loopback") {
+  local_ssl_server server{"[::1]:0", "[::1]"};
+
+  coro_http_client client{};
+  client.set_conn_timeout(1s);
+  client.set_req_timeout(1s);
+  auto result = client.get(server.url);
+  CHECK(result.status == 200);
+  CHECK(result.resp_body == "ssl ok");
 }
 #endif
 
