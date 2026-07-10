@@ -82,7 +82,6 @@ class client_pool : public std::enable_shared_from_this<
       self = nullptr;
       auto is_canceled = co_await coro_io::sleep_for(sleep_time);
       if (!is_canceled) {
-        ELOG_TRACE << "coroutine destroyed, stop collect timeout client";
         break;
       }
       if ((self = self_weak.lock()) == nullptr) {
