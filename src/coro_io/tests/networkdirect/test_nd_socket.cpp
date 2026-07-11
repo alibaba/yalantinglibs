@@ -68,9 +68,11 @@ async_simple::coro::Lazy<std::error_code> echo_server(
 }
 
 // Client: connect, then send/recv `echo_count` messages and verify the echo.
-async_simple::coro::Lazy<std::error_code> echo_client(
-    ExecutorWrapper<>* ex, nd_device_ptr device, std::string host,
-    std::uint16_t port, int echo_count) {
+async_simple::coro::Lazy<std::error_code> echo_client(ExecutorWrapper<>* ex,
+                                                      nd_device_ptr device,
+                                                      std::string host,
+                                                      std::uint16_t port,
+                                                      int echo_count) {
   nd_socket_t sock(ex, make_config(device));
   auto ec = co_await async_connect(sock, host, std::to_string(port));
   if (ec) {
@@ -86,7 +88,8 @@ async_simple::coro::Lazy<std::error_code> echo_client(
 
     std::string in;
     in.resize(msg.size());
-    auto [rec, rn] = co_await async_read(sock, asio::buffer(in.data(), in.size()));
+    auto [rec, rn] =
+        co_await async_read(sock, asio::buffer(in.data(), in.size()));
     if (rec) {
       co_return rec;
     }

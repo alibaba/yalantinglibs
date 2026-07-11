@@ -51,8 +51,8 @@ bool wait_until(auto predicate, std::chrono::milliseconds timeout = 1s) {
 }
 
 std::size_t current_usage(
-    const std::shared_ptr<coro_io::nd_buffer_pool_t::nd_buffer_mem_control_t>&
-        recorder) {
+    const std::shared_ptr<coro_io::nd_buffer_pool_t::nd_buffer_mem_control_t>
+        &recorder) {
   return recorder->now_usage.load(std::memory_order_acquire);
 }
 
@@ -227,8 +227,9 @@ TEST_CASE("nd_memory_region slice accepts base address") {
   CHECK(mutable_view.data() == memory.data());
   CHECK(mutable_view.length() == 128);
 
-  const auto& const_mr = mr;
-  auto const_view = const_mr.slice(static_cast<void const*>(memory.data()), 128);
+  const auto &const_mr = mr;
+  auto const_view =
+      const_mr.slice(static_cast<void const *>(memory.data()), 128);
   CHECK(const_view.data() == memory.data());
   CHECK(const_view.length() == 128);
 }
@@ -253,8 +254,8 @@ TEST_CASE("nd_socket forwards buffer pool config") {
   asio::error_code ec;
   coro_io::use_device(static_cast<asio::io_context &>(executor->context()),
                       device, {}, ec);
-  if (ec && ec != coro_io::make_error_code(
-                    coro_io::rdma_errc::already_registered)) {
+  if (ec &&
+      ec != coro_io::make_error_code(coro_io::rdma_errc::already_registered)) {
     MESSAGE("use_device failed, skipping socket config test: " << ec.message());
     return;
   }

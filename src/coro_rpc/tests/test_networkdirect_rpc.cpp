@@ -79,8 +79,8 @@ TEST_CASE("coro_rpc over NetworkDirect") {
   try {
     host = device->get_v4_address().to_string();
   } catch (const std::exception &e) {
-    MESSAGE("ND device has no IPv4 address, skipping RPC ND test: "
-            << e.what());
+    MESSAGE(
+        "ND device has no IPv4 address, skipping RPC ND test: " << e.what());
     return;
   }
   auto nd_port = pick_unused_tcp_port();
@@ -115,8 +115,8 @@ TEST_CASE("coro_rpc over NetworkDirect") {
   CHECK(hello_result.value() == "hello");
 
   std::string payload(128 * 1024, 'n');
-  auto large_result = async_simple::coro::syncAwait(
-      client.call<large_arg_fun>(payload));
+  auto large_result =
+      async_simple::coro::syncAwait(client.call<large_arg_fun>(payload));
   REQUIRE(large_result);
   CHECK(large_result.value() == payload);
 
