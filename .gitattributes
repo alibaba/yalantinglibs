@@ -1,0 +1,14 @@
+# Pin the NetworkDirect (ND) backend sources and their tests to LF line
+# endings. The repository stores LF in the index, but with core.autocrlf=true
+# (common on Windows) git rewrites the working copy to CRLF on checkout, which
+# clashes with editors that save LF and produces the recurring
+# "LF will be replaced by CRLF the next time Git touches it" warning.
+#
+# Declaring `text eol=lf` makes line-ending handling explicit and deterministic
+# for these paths regardless of each developer's core.autocrlf setting: LF in
+# the working tree, LF in the index, LF on checkout -> no conversion, no warning.
+include/ylt/coro_io/networkdirect/** text eol=lf
+src/coro_io/tests/networkdirect/** text eol=lf
+
+# Pin this file too, so it isn't itself subject to autocrlf CRLF conversion.
+.gitattributes text eol=lf

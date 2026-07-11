@@ -44,6 +44,9 @@
 #include "coro_connection.hpp"
 #include "ylt/coro_io/coro_io.hpp"
 #include "ylt/coro_io/io_context_pool.hpp"
+#ifdef YLT_ENABLE_ND
+#include "ylt/coro_rpc/impl/nd_server_acceptor.hpp"
+#endif
 #include "ylt/coro_io/server_acceptor.hpp"
 #include "ylt/coro_rpc/impl/errno.h"
 #include "ylt/coro_rpc/impl/expected.hpp"
@@ -180,6 +183,17 @@ class coro_rpc_server_base {
     else {
       init_acceptors(config.address, config.port);
     }
+#ifdef YLT_ENABLE_ND
+    if constexpr (requires {
+                    config.nd_config;
+                    config.nd_port;
+                    config.nd_address;
+                  }) {
+      if (config.nd_config) {
+        init_nd(config.nd_config.value(), config.nd_port, config.nd_address);
+      }
+    }
+#endif
   }
 
   ~coro_rpc_server_base() {
@@ -203,6 +217,22 @@ class coro_rpc_server_base {
       std::vector<std::shared_ptr<coro_io::ib_device_t>> ibv_dev_lists = {}) {
     ibv_config_ = conf;
     ibv_dev_lists_ = std::move(ibv_dev_lists);
+  }
+#endif
+#ifdef YLT_ENABLE_ND
+  void init_nd(const coro_io::nd_socket_t::config_t& conf = {},
+               uint16_t nd_port = 0, std::string nd_address = {}) {
+    coro_io::server_acceptor_base* fallback_acceptor = nullptr;
+    std::string fallback_address;
+    if (!acceptors_.empty()) {
+      fallback_acceptor = acceptors_.front().get();
+      fallback_address = std::string(acceptors_.front()->address());
+    }
+    if (nd_address.empty()) {
+      nd_address = std::move(fallback_address);
+    }
+    acceptors_.push_back(std::make_unique<nd_server_acceptor>(
+        nd_address, nd_port, conf, fallback_acceptor));
   }
 #endif
 
