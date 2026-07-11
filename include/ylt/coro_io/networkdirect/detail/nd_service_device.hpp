@@ -16,21 +16,21 @@
 #pragma once
 
 #include "asio/execution_context.hpp"
-#include "ylt/coro_io/networkdirect/nd_types.hpp"
 #include "nd_impl_types.hpp"
+#include "ylt/coro_io/networkdirect/nd_types.hpp"
 
 namespace coro_io::detail {
 
 // Per-io_context registration of the device (adapter) + effective config that
 // use_device selected. Single responsibility: hold {device, effective_config}.
 //
-// Distinct from the process-wide nd_device_manager_t (device *discovery*) -- this
-// is the per-io_context binding and the single source of truth for "use_device
-// was called on this io_context" (is_registered()). The CQ/IOCP notify mechanism
-// lives in the separate nd_io_completion_service.
+// Distinct from the process-wide nd_device_manager_t (device *discovery*) --
+// this is the per-io_context binding and the single source of truth for
+// "use_device was called on this io_context" (is_registered()). The CQ/IOCP
+// notify mechanism lives in the separate nd_io_completion_service.
 class nd_device_service
     : public asio::detail::execution_context_service_base<nd_device_service> {
-public:
+ public:
   using base_type =
       asio::detail::execution_context_service_base<nd_device_service>;
 
@@ -54,7 +54,7 @@ public:
     return effective_config_;
   }
 
-private:
+ private:
   nd_adapter_ptr device_;
   nd_config_t effective_config_{};
   bool registered_ = false;

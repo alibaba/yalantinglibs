@@ -135,9 +135,7 @@ enum class nd_errc : int {
 
 class nd_error_category : public std::error_category {
  public:
-  inline const char* name() const noexcept override {
-    return "nd_error_code";
-  }
+  inline const char* name() const noexcept override { return "nd_error_code"; }
 
   inline std::string message(int status) const override {
     switch (static_cast<HRESULT>(status)) {

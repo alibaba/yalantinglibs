@@ -17,8 +17,8 @@
 
 #include <algorithm>
 
-#include "ylt/coro_io/networkdirect/nd_types.hpp"
 #include "nd_impl_types.hpp"
+#include "ylt/coro_io/networkdirect/nd_types.hpp"
 
 namespace coro_io::detail {
 
@@ -29,8 +29,8 @@ inline constexpr size_type default_max_recv_wr = 128;
 inline constexpr size_type default_max_send_sge = 4;
 inline constexpr size_type default_max_recv_sge = 4;
 
-inline nd_config_t derive_effective_config(nd_config_t const& user_config,
-                                           native_context_config_t const& caps) {
+inline nd_config_t derive_effective_config(
+    nd_config_t const& user_config, native_context_config_t const& caps) {
   nd_config_t effective = user_config;
 
   if (effective.cqe_ == 0) {

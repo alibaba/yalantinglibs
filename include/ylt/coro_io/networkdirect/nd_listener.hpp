@@ -22,10 +22,10 @@
 #include <utility>
 
 #include "asio/associator.hpp"
-#include "asio/io_context.hpp"
 #include "asio/detail/io_object_impl.hpp"
-#include "nd_connector.hpp"
+#include "asio/io_context.hpp"
 #include "detail/nd_service_listener.hpp"
+#include "nd_connector.hpp"
 
 namespace coro_io::detail {
 
@@ -46,10 +46,12 @@ struct nd_get_connection_adapter {
     std::size_t n = 0;
     if (!ec) {
       n = (std::min)(pd.size(), request_.size());
-      if (n) std::memcpy(request_.data(), pd.data(), n);
+      if (n)
+        std::memcpy(request_.data(), pd.data(), n);
       asio::error_code aec;
       conn.assign(std::move(handle), aec);
-      if (aec) ec = aec;
+      if (aec)
+        ec = aec;
     }
     std::move(handler_)(ec, std::move(conn), n);
   }
@@ -66,10 +68,12 @@ struct nd_get_connection_fill_adapter {
     std::size_t n = 0;
     if (!ec) {
       n = (std::min)(pd.size(), request_.size());
-      if (n) std::memcpy(request_.data(), pd.data(), n);
+      if (n)
+        std::memcpy(request_.data(), pd.data(), n);
       asio::error_code aec;
       conn_->assign(std::move(handle), aec);
-      if (aec) ec = aec;
+      if (aec)
+        ec = aec;
     }
     std::move(handler_)(ec, n);
   }
@@ -83,17 +87,16 @@ template <template <typename, typename> class Associator, typename Handler,
           typename ConnectorType, typename Default>
 struct associator<
     Associator,
-    coro_io::detail::nd_get_connection_adapter<Handler, ConnectorType>,
-    Default> : Associator<Handler, Default> {
+    coro_io::detail::nd_get_connection_adapter<Handler, ConnectorType>, Default>
+    : Associator<Handler, Default> {
   static typename Associator<Handler, Default>::type get(
       coro_io::detail::nd_get_connection_adapter<Handler, ConnectorType> const&
           a) noexcept {
     return Associator<Handler, Default>::get(a.handler_);
   }
-  static auto get(
-      coro_io::detail::nd_get_connection_adapter<Handler, ConnectorType> const&
-          a,
-      Default const& d) noexcept
+  static auto get(coro_io::detail::nd_get_connection_adapter<
+                      Handler, ConnectorType> const& a,
+                  Default const& d) noexcept
       -> decltype(Associator<Handler, Default>::get(a.handler_, d)) {
     return Associator<Handler, Default>::get(a.handler_, d);
   }
@@ -110,10 +113,9 @@ struct associator<
           Handler, ConnectorType> const& a) noexcept {
     return Associator<Handler, Default>::get(a.handler_);
   }
-  static auto get(
-      coro_io::detail::nd_get_connection_fill_adapter<
-          Handler, ConnectorType> const& a,
-      Default const& d) noexcept
+  static auto get(coro_io::detail::nd_get_connection_fill_adapter<
+                      Handler, ConnectorType> const& a,
+                  Default const& d) noexcept
       -> decltype(Associator<Handler, Default>::get(a.handler_, d)) {
     return Associator<Handler, Default>::get(a.handler_, d);
   }
@@ -130,14 +132,13 @@ namespace coro_io {
 //   - async_get_connection(conn)    -> fill a pre-built connector
 template <typename PortSpace>
 class nd_listener {
-public:
+ public:
   using service_type = detail::nd_listener_service<PortSpace>;
   using endpoint_type = typename PortSpace::endpoint;
   using connector_type = nd_connector<PortSpace>;
   using native_connector_type = detail::nd_connector_handle_t;
 
-  explicit nd_listener(asio::io_context& io_ctx) : impl_(0, 0, io_ctx) {
-  }
+  explicit nd_listener(asio::io_context& io_ctx) : impl_(0, 0, io_ctx) {}
 
   ~nd_listener() = default;
   nd_listener(nd_listener&&) = default;
@@ -180,9 +181,7 @@ public:
     return impl_.get_service().is_open(impl_.get_implementation());
   }
 
-  void cancel() {
-    impl_.get_service().cancel(impl_.get_implementation());
-  }
+  void cancel() { impl_.get_service().cancel(impl_.get_implementation()); }
 
   // Return form: handler(error_code, connector_type, std::size_t request_len).
   // The connector is built on the listener's io_context; the client's request
@@ -191,8 +190,8 @@ public:
   // until completion; pass {} to ignore it. Mirrors ibv.
   template <typename AcceptToken>
   auto async_get_connection(asio::mutable_buffer request, AcceptToken&& token) {
-    return asio::async_initiate<
-        AcceptToken, void(asio::error_code, connector_type, std::size_t)>(
+    return asio::async_initiate<AcceptToken, void(asio::error_code,
+                                                  connector_type, std::size_t)>(
         [this, request](auto handler) {
           auto io_ex = impl_.get_executor();
           detail::nd_get_connection_adapter<std::decay_t<decltype(handler)>,
@@ -222,7 +221,7 @@ public:
         token);
   }
 
-private:
+ private:
   asio::detail::io_object_impl<service_type> impl_;
 };
 

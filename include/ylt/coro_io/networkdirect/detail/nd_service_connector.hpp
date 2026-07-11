@@ -25,14 +25,14 @@
 #include "asio/detail/handler_alloc_helpers.hpp"
 #include "asio/detail/memory.hpp"
 #include "asio/ip/address.hpp"
-#include "nd_service_base.hpp"
-#include "nd_service_device.hpp"
-#include "nd_ops_cm.hpp"
-#include "nd_op_connect.hpp"
+#include "nd_config_derive.hpp"
 #include "nd_op_accept.hpp"
+#include "nd_op_connect.hpp"
 #include "nd_op_disconnect.hpp"
 #include "nd_op_wait_disconnect.hpp"
-#include "nd_config_derive.hpp"
+#include "nd_ops_cm.hpp"
+#include "nd_service_base.hpp"
+#include "nd_service_device.hpp"
 
 namespace coro_io::detail {
 
@@ -44,9 +44,9 @@ namespace coro_io::detail {
 template <typename PortSpace>
 class nd_connector_service
     : public asio::detail::execution_context_service_base<
-          nd_connector_service<PortSpace>>
-    , public nd_service_base {
-public:
+          nd_connector_service<PortSpace>>,
+      public nd_service_base {
+ public:
   using base_type = asio::detail::execution_context_service_base<
       nd_connector_service<PortSpace>>;
   using endpoint_type = typename PortSpace::endpoint;
@@ -67,10 +67,9 @@ public:
   };
 
   explicit nd_connector_service(asio::execution_context& ctx)
-      : base_type(ctx)
-      , nd_service_base(ctx)
-      , device_svc_(asio::use_service<nd_device_service>(ctx)) {
-  }
+      : base_type(ctx),
+        nd_service_base(ctx),
+        device_svc_(asio::use_service<nd_device_service>(ctx)) {}
 
   ~nd_connector_service() = default;
 
@@ -141,7 +140,8 @@ public:
 
   // assign (server): adopt a connector handle from the listener. The client's
   // request private data is delivered separately, into the caller's buffer at
-  // async_get_connection (see nd_listener), so it is not stored here. Mirrors ibv.
+  // async_get_connection (see nd_listener), so it is not stored here. Mirrors
+  // ibv.
   void assign(implementation_type& impl, native_connector_type&& handle,
               asio::error_code& ec) {
     if (impl.connector_) {
@@ -173,16 +173,16 @@ public:
   }
 
   // cancel() is intentionally removed from the connector -- disconnect() is the
-  // unified teardown mechanism (mirrors ibv). Per-op cancellation is handled via
-  // cancellation_slot (CancelIoEx on the individual OVERLAPPED).
+  // unified teardown mechanism (mirrors ibv). Per-op cancellation is handled
+  // via cancellation_slot (CancelIoEx on the individual OVERLAPPED).
 
   // async connect: borrow qp from the queue_pair, auto-open if needed, then
   // Bind + Connect. CompleteConnect captures the server's reply private data.
   template <typename Handler, typename IoExecutor>
   void async_connect(implementation_type& impl, native_qp_t* qp,
-                     endpoint_type const& endpoint,
-                     asio::const_buffer request, asio::mutable_buffer reply,
-                     Handler& handler, IoExecutor const& io_ex) {
+                     endpoint_type const& endpoint, asio::const_buffer request,
+                     asio::mutable_buffer reply, Handler& handler,
+                     IoExecutor const& io_ex) {
     auto cancel_slot = asio::get_associated_cancellation_slot(handler);
     // Auto-open (mirrors asio socket.connect opening with the protocol).
     asio::error_code open_ec;
@@ -193,10 +193,11 @@ public:
     using op = nd_connect_op<Handler, IoExecutor>;
     typename op::ptr p = {asio::detail::addressof(handler),
                           op::ptr::allocate(handler), 0};
-    // reply is the caller's mutable buffer, filled with the server's reply pd on
-    // CompleteConnect. The request (below) is copied by ND2 Connect synchronously.
-    p.p = new (p.v) op{impl.connector_.Get(), &impl.connect_state_,
-                       reply, handler, io_ex};
+    // reply is the caller's mutable buffer, filled with the server's reply pd
+    // on CompleteConnect. The request (below) is copied by ND2 Connect
+    // synchronously.
+    p.p = new (p.v)
+        op{impl.connector_.Get(), &impl.connect_state_, reply, handler, io_ex};
 
     if (open_ec) {
       this->scheduler_.work_started();
@@ -212,9 +213,10 @@ public:
       return;
     }
     // Terminal / non-fresh connector: a prior connect attempt (one-shot) or a
-    // disconnect()/failure left it non-idle. Early-exit with a clear code instead
-    // of reusing a stranded IND2Connector; the user must create a fresh connector.
-    // Mirrors the ibv `connect_state_ != idle` guard. [Windows verify]
+    // disconnect()/failure left it non-idle. Early-exit with a clear code
+    // instead of reusing a stranded IND2Connector; the user must create a fresh
+    // connector. Mirrors the ibv `connect_state_ != idle` guard. [Windows
+    // verify]
     if (impl.connect_state_.load(std::memory_order_acquire) !=
         connect_state::idle) {
       asio::error_code ec = rdma_errc::connector_terminal;
@@ -238,14 +240,14 @@ public:
   // async accept: borrow qp from the queue_pair, then Accept.
   template <typename Handler, typename IoExecutor>
   void async_accept(implementation_type& impl, native_qp_t* qp,
-                    asio::const_buffer private_data,
-                    Handler& handler, IoExecutor const& io_ex) {
+                    asio::const_buffer private_data, Handler& handler,
+                    IoExecutor const& io_ex) {
     auto cancel_slot = asio::get_associated_cancellation_slot(handler);
     using op = nd_accept_op<Handler, IoExecutor>;
     typename op::ptr p = {asio::detail::addressof(handler),
                           op::ptr::allocate(handler), 0};
-    p.p = new (p.v) op{impl.connector_.Get(), &impl.connect_state_, handler,
-                       io_ex};
+    p.p = new (p.v)
+        op{impl.connector_.Get(), &impl.connect_state_, handler, io_ex};
     if (!device_registered()) {
       asio::error_code ec = rdma_errc::device_not_registered;
       this->scheduler_.work_started();
@@ -294,9 +296,9 @@ public:
 
     auto old = impl.connect_state_.load(std::memory_order_acquire);
     while (old != connect_state::closed) {
-      if (impl.connect_state_.compare_exchange_weak(
-              old, connect_state::closed,
-              std::memory_order_acq_rel, std::memory_order_acquire))
+      if (impl.connect_state_.compare_exchange_weak(old, connect_state::closed,
+                                                    std::memory_order_acq_rel,
+                                                    std::memory_order_acquire))
         break;
     }
     if (old == connect_state::closed) {
@@ -307,44 +309,46 @@ public:
     impl.peer_closed_.store(true, std::memory_order_release);
 
     switch (old) {
-    case connect_state::idle:
-      ec.clear();
-      break;
-
-    case connect_state::connecting:
-      ::CancelIoEx(impl.connector_handle_.get(), NULL);
-      ec.clear();
-      break;
-
-    case connect_state::connected: {
-      ::CancelIoEx(impl.connector_handle_.get(), NULL);
-      nd_disconnect_op::Handler h{};
-      nd_disconnect_op::ptr p = {asio::detail::addressof(h),
-                                    nd_disconnect_op::ptr::allocate(h), 0};
-      p.p = new (p.v) nd_disconnect_op{impl.connector_.Get()};
-      this->scheduler_.work_started();
-      asio::error_code dec{};
-      auto const hr = detail::disconnect(impl.connector_.Get(), p.p, dec);
-      if (!dec && hr == ND_PENDING) {
-        this->scheduler_.on_pending(p.p);
+      case connect_state::idle:
         ec.clear();
-      } else {
-        this->scheduler_.on_completion(p.p, dec);
-        ec = dec;
-      }
-      p.v = p.p = 0;
-      break;
-    }
+        break;
 
-    default:
-      ec.clear();
-      break;
+      case connect_state::connecting:
+        ::CancelIoEx(impl.connector_handle_.get(), NULL);
+        ec.clear();
+        break;
+
+      case connect_state::connected: {
+        ::CancelIoEx(impl.connector_handle_.get(), NULL);
+        nd_disconnect_op::Handler h{};
+        nd_disconnect_op::ptr p = {asio::detail::addressof(h),
+                                   nd_disconnect_op::ptr::allocate(h), 0};
+        p.p = new (p.v) nd_disconnect_op{impl.connector_.Get()};
+        this->scheduler_.work_started();
+        asio::error_code dec{};
+        auto const hr = detail::disconnect(impl.connector_.Get(), p.p, dec);
+        if (!dec && hr == ND_PENDING) {
+          this->scheduler_.on_pending(p.p);
+          ec.clear();
+        }
+        else {
+          this->scheduler_.on_completion(p.p, dec);
+          ec = dec;
+        }
+        p.v = p.p = 0;
+        break;
+      }
+
+      default:
+        ec.clear();
+        break;
     }
   }
 
   // Disconnect NOTIFICATION (on_disconnect). One-shot; armed on demand via
   // IND2Connector::NotifyDisconnect. Level-triggered: completes immediately if
-  // peer_closed_ OR connect_state_ == closed. Completion code: rdma_errc::disconnected.
+  // peer_closed_ OR connect_state_ == closed. Completion code:
+  // rdma_errc::disconnected.
   template <typename Handler, typename IoExecutor>
   void async_wait_disconnect(implementation_type& impl, Handler& handler,
                              IoExecutor const& io_ex) {
@@ -352,8 +356,8 @@ public:
     using op = nd_wait_disconnect_op<Handler, IoExecutor>;
     typename op::ptr p = {asio::detail::addressof(handler),
                           op::ptr::allocate(handler), 0};
-    p.p = new (p.v) op{impl.connector_.Get(), &impl.peer_closed_, handler,
-                       io_ex};
+    p.p =
+        new (p.v) op{impl.connector_.Get(), &impl.peer_closed_, handler, io_ex};
     this->scheduler_.work_started();
     if (impl.peer_closed_.load(std::memory_order_acquire) ||
         impl.connect_state_.load(std::memory_order_acquire) ==
@@ -381,7 +385,7 @@ public:
     p.v = p.p = 0;
   }
 
-private:
+ private:
   // Worker for both public open(ps, ...) and auto-open inside async_connect.
   void do_open(implementation_type& impl, asio::error_code& ec) {
     if (impl.connector_) {
@@ -404,9 +408,8 @@ private:
       return;
     }
 
-    impl.connector_.Attach(
-        create_connector(adapter->adapter_.Get(),
-                         impl.connector_handle_.get(), ec));
+    impl.connector_.Attach(create_connector(adapter->adapter_.Get(),
+                                            impl.connector_handle_.get(), ec));
     if (ec) {
       impl.connector_handle_.reset();
       ASIO_ERROR_LOCATION(ec);
@@ -424,8 +427,9 @@ private:
     impl.adapter_ = adapter;
   }
 
-  // device_service holds the device + effective config (installed by use_device)
-  // and answers the registration guard. Cached as a ref in the ctor.
+  // device_service holds the device + effective config (installed by
+  // use_device) and answers the registration guard. Cached as a ref in the
+  // ctor.
   bool device_registered() { return device_svc_.is_registered(); }
   nd_config_t effective_config() {
     return device_svc_.is_registered() ? device_svc_.get_effective_config()
@@ -440,17 +444,16 @@ private:
     // CAS idle -> connecting (if disconnect() raced to closed, abort).
     connect_state expected = connect_state::idle;
     if (!impl.connect_state_.compare_exchange_strong(
-            expected, connect_state::connecting,
-            std::memory_order_acq_rel, std::memory_order_acquire)) {
+            expected, connect_state::connecting, std::memory_order_acq_rel,
+            std::memory_order_acquire)) {
       this->scheduler_.on_completion(op, asio::error::operation_aborted);
       return;
     }
 
     asio::ip::address address;
     try {
-      address = endpoint.address().is_v4()
-                    ? impl.adapter_->get_v4_address()
-                    : impl.adapter_->get_v6_address();
+      address = endpoint.address().is_v4() ? impl.adapter_->get_v4_address()
+                                           : impl.adapter_->get_v6_address();
     } catch (std::system_error const& e) {
       this->scheduler_.on_completion(op, e.code());
       return;
@@ -465,13 +468,11 @@ private:
     }
 
     auto const eff = effective_config();
-    auto const hr = connect(impl.connector_.Get(), qp,
-                            endpoint.data(), endpoint.size(),
-                            eff.inbound_read_limit_,
-                            eff.outbound_read_limit_,
-                            private_data.size() == 0 ? nullptr : private_data.data(),
-                            static_cast<ULONG>(private_data.size()),
-                            op, ec);
+    auto const hr =
+        connect(impl.connector_.Get(), qp, endpoint.data(), endpoint.size(),
+                eff.inbound_read_limit_, eff.outbound_read_limit_,
+                private_data.size() == 0 ? nullptr : private_data.data(),
+                static_cast<ULONG>(private_data.size()), op, ec);
     if (ec) {
       this->scheduler_.on_completion(op, ec);
       return;
@@ -484,25 +485,23 @@ private:
   }
 
   void start_accept_op(implementation_type& impl, native_qp_t* qp,
-                       asio::const_buffer private_data,
-                       nd_op_base* op) {
+                       asio::const_buffer private_data, nd_op_base* op) {
     this->scheduler_.work_started();
     // CAS idle -> connecting (if disconnect() raced to closed, abort).
     connect_state expected = connect_state::idle;
     if (!impl.connect_state_.compare_exchange_strong(
-            expected, connect_state::connecting,
-            std::memory_order_acq_rel, std::memory_order_acquire)) {
+            expected, connect_state::connecting, std::memory_order_acq_rel,
+            std::memory_order_acquire)) {
       this->scheduler_.on_completion(op, asio::error::operation_aborted);
       return;
     }
     asio::error_code ec{};
     auto const eff = effective_config();
-    auto const hr = accept(impl.connector_.Get(), qp,
-                           eff.inbound_read_limit_,
-                           eff.outbound_read_limit_,
-                           private_data.size() == 0 ? nullptr : private_data.data(),
-                           static_cast<ULONG>(private_data.size()),
-                           op, ec);
+    auto const hr =
+        accept(impl.connector_.Get(), qp, eff.inbound_read_limit_,
+               eff.outbound_read_limit_,
+               private_data.size() == 0 ? nullptr : private_data.data(),
+               static_cast<ULONG>(private_data.size()), op, ec);
     if (ec) {
       this->scheduler_.on_completion(op, ec);
       return;
@@ -514,7 +513,8 @@ private:
     this->scheduler_.on_pending(op);
   }
 
-  nd_device_service& device_svc_;  // cached (registration guard + device + conn params)
+  nd_device_service&
+      device_svc_;  // cached (registration guard + device + conn params)
 };
 
 }  // namespace coro_io::detail

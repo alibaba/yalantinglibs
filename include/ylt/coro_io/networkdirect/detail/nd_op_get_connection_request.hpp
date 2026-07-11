@@ -31,24 +31,21 @@ namespace coro_io::detail {
 
 template <typename Handler, typename IoExecutor>
 class nd_get_connection_request_op final : public nd_op_base {
-public:
+ public:
   ASIO_DEFINE_HANDLER_PTR(nd_get_connection_request_op);
 
   nd_get_connection_request_op(IND2Listener* listener,
                                nd_connector_handle_t&& connector_handle,
                                Handler& handler, const IoExecutor& io_ex)
       : nd_op_base(listener, &nd_op_base::default_process,
-                   &nd_get_connection_request_op::do_complete)
-      , connector_handle_(std::move(connector_handle))
-      , handler_(ASIO_MOVE_CAST(Handler)(handler))
-      , work_(handler_, io_ex) {
-  }
+                   &nd_get_connection_request_op::do_complete),
+        connector_handle_(std::move(connector_handle)),
+        handler_(ASIO_MOVE_CAST(Handler)(handler)),
+        work_(handler_, io_ex) {}
 
-  nd_connector_handle_t& get_connector_handle() {
-    return connector_handle_;
-  }
+  nd_connector_handle_t& get_connector_handle() { return connector_handle_; }
 
-private:
+ private:
   nd_connector_handle_t connector_handle_;
   std::array<std::byte, max_private_data_size> private_data_buf_{};
   std::size_t private_data_len_ = 0;
@@ -65,12 +62,11 @@ private:
     if (!ec && o->connector_handle_.connector_) {
       auto* connector = o->connector_handle_.connector_.Get();
       ULONG pd_size = static_cast<ULONG>(o->private_data_buf_.size());
-      auto const hr = connector->GetPrivateData(o->private_data_buf_.data(),
-                                                &pd_size);
+      auto const hr =
+          connector->GetPrivateData(o->private_data_buf_.data(), &pd_size);
       if (SUCCEEDED(hr) || hr == ND_BUFFER_OVERFLOW) {
-        o->private_data_len_ =
-            (std::min)(static_cast<std::size_t>(pd_size),
-                       o->private_data_buf_.size());
+        o->private_data_len_ = (std::min)(static_cast<std::size_t>(pd_size),
+                                          o->private_data_buf_.size());
       }
     }
 
@@ -83,9 +79,8 @@ private:
 
     ASIO_HANDLER_COMPLETION((*o));
 
-    asio::detail::handler_work<Handler, IoExecutor> w(
-        ASIO_MOVE_CAST2(asio::detail::handler_work<Handler, IoExecutor>)(
-            o->work_));
+    asio::detail::handler_work<Handler, IoExecutor> w(ASIO_MOVE_CAST2(
+        asio::detail::handler_work<Handler, IoExecutor>)(o->work_));
 
     ASIO_ERROR_LOCATION(ec);
 

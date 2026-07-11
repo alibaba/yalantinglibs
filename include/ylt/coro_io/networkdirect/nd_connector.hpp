@@ -50,8 +50,8 @@ struct associator<Associator,
                   coro_io::detail::nd_connect_drop_reply_adapter<Handler>,
                   Default> : Associator<Handler, Default> {
   static typename Associator<Handler, Default>::type get(
-      coro_io::detail::nd_connect_drop_reply_adapter<Handler> const& a)
-      noexcept {
+      coro_io::detail::nd_connect_drop_reply_adapter<Handler> const&
+          a) noexcept {
     return Associator<Handler, Default>::get(a.handler_);
   }
   static auto get(
@@ -68,7 +68,8 @@ namespace coro_io {
 
 // Control-plane connector over NetworkDirect. Mirrors ibv_connector / asio's
 // basic_socket:
-//   - open(port_space)            create the IND2Connector (like socket.open(protocol))
+//   - open(port_space)            create the IND2Connector (like
+//   socket.open(protocol))
 //   - assign(native_handle)       adopt a connector handle from the listener
 //   - async_connect(qp, ...)      Bind + Connect using qp.native_handle()
 //   - async_accept(qp, ...)       Accept using qp.native_handle()
@@ -76,14 +77,12 @@ namespace coro_io {
 // borrowed at connect/accept time (unlike ibv where the connector creates it).
 template <typename PortSpace>
 class nd_connector {
-public:
+ public:
   using service_type = detail::nd_connector_service<PortSpace>;
   using endpoint_type = typename PortSpace::endpoint;
   using native_connector_type = detail::nd_connector_handle_t;
 
-  explicit nd_connector(asio::io_context& io_ctx)
-      : impl_(0, 0, io_ctx) {
-  }
+  explicit nd_connector(asio::io_context& io_ctx) : impl_(0, 0, io_ctx) {}
 
   // opening constructor (mirrors basic_socket(io_context, protocol)). Requires
   // use_device() on this io_context (config is centralized there).
@@ -174,16 +173,14 @@ public:
 
   // async accept: Accept using qp.native_handle(). handler(error_code)
   template <typename AcceptToken>
-  auto async_accept(nd_queue_pair& qp,
-                    asio::const_buffer outgoing_private_data,
+  auto async_accept(nd_queue_pair& qp, asio::const_buffer outgoing_private_data,
                     AcceptToken&& token) {
     return asio::async_initiate<AcceptToken, void(asio::error_code)>(
         [this, &qp, outgoing_private_data](auto handler) {
           auto io_ex = impl_.get_executor();
-          impl_.get_service().async_accept(impl_.get_implementation(),
-                                           qp.native_handle(),
-                                           outgoing_private_data, handler,
-                                           io_ex);
+          impl_.get_service().async_accept(
+              impl_.get_implementation(), qp.native_handle(),
+              outgoing_private_data, handler, io_ex);
         },
         token);
   }
@@ -210,8 +207,9 @@ public:
   }
 
   // Disconnect NOTIFICATION (on_disconnect): one-shot, completes when the
-  // connection is disconnected. handler(error_code) -- rdma_errc::disconnected. If
-  // already disconnected, completes immediately (level-triggered). Mirrors ibv.
+  // connection is disconnected. handler(error_code) -- rdma_errc::disconnected.
+  // If already disconnected, completes immediately (level-triggered). Mirrors
+  // ibv.
   template <typename WaitToken>
   auto async_wait_disconnect(WaitToken&& token) {
     return asio::async_initiate<WaitToken, void(asio::error_code)>(
@@ -223,7 +221,7 @@ public:
         token);
   }
 
-private:
+ private:
   asio::detail::io_object_impl<service_type> impl_;
 };
 

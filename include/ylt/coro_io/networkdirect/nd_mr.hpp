@@ -18,10 +18,10 @@
 #include <cstddef>
 #include <cstdint>
 
-#include "ylt/easylog.hpp"
+#include "detail/nd_ops_verbs.hpp"
 #include "nd_buffer.hpp"
 #include "nd_device.hpp"
-#include "detail/nd_ops_verbs.hpp"
+#include "ylt/easylog.hpp"
 
 namespace coro_io {
 
@@ -64,8 +64,8 @@ class nd_memory_region {
     if (!mr_) {
       return false;
     }
-    auto const diff = static_cast<char const*>(addr) -
-                      static_cast<char const*>(addr_);
+    auto const diff =
+        static_cast<char const*>(addr) - static_cast<char const*>(addr_);
     if (diff < 0 || static_cast<std::size_t>(diff) >= length_) {
       return false;
     }
@@ -77,17 +77,11 @@ class nd_memory_region {
     return offset <= this->length() && length <= this->length() - offset;
   }
 
-  void const* addr() const noexcept {
-    return addr_;
-  }
+  void const* addr() const noexcept { return addr_; }
 
-  void* addr() noexcept {
-    return addr_;
-  }
+  void* addr() noexcept { return addr_; }
 
-  std::size_t length() const noexcept {
-    return length_;
-  }
+  std::size_t length() const noexcept { return length_; }
 
   // Advertise a sub-range of this MR to the peer (the rkey/remote-access role,
   // distinct from the local-SGE buffer elements which only carry lkey/local
@@ -102,11 +96,11 @@ class nd_memory_region {
       mr_acccess_flag_t flag, int extra_flag);
 
  public:
-  // slice/cslice return the shared, value-semantic coro_io::{mutable,const}_buffer.
+  // slice/cslice return the shared, value-semantic
+  // coro_io::{mutable,const}_buffer.
   inline mutable_buffer slice(std::size_t offset, std::size_t length);
 
-  inline const_buffer slice(std::size_t offset,
-                            std::size_t length) const;
+  inline const_buffer slice(std::size_t offset, std::size_t length) const;
 
   inline mutable_buffer slice(void* addr, std::size_t length);
 
@@ -114,27 +108,26 @@ class nd_memory_region {
 
   inline const_buffer cslice(std::size_t offset, std::size_t length);
 
-  inline const_buffer cslice(std::size_t offset,
-                             std::size_t length) const;
+  inline const_buffer cslice(std::size_t offset, std::size_t length) const;
 
   inline const_buffer cslice(void const* addr, std::size_t length);
 
-  inline const_buffer cslice(void const* addr,
-                             std::size_t length) const;
+  inline const_buffer cslice(void const* addr, std::size_t length) const;
 };
 
 // ---------------------------------------------------------------------------
 // Implementation
 // ---------------------------------------------------------------------------
 
-inline nd_memory_region::nd_memory_region(nd_device_ptr const& device, void* addr,
-                                          std::size_t length,
-                                          mr_acccess_flag_t flag, int extra_flag)
-    : mr_(throw_reg_mr(device, addr, length, flag, extra_flag))
-    , addr_(addr)
-    , length_(length)
-    , flag_(flag)
-    , extra_flag_(extra_flag) {}
+inline nd_memory_region::nd_memory_region(nd_device_ptr const& device,
+                                          void* addr, std::size_t length,
+                                          mr_acccess_flag_t flag,
+                                          int extra_flag)
+    : mr_(throw_reg_mr(device, addr, length, flag, extra_flag)),
+      addr_(addr),
+      length_(length),
+      flag_(flag),
+      extra_flag_(extra_flag) {}
 
 inline nd_memory_region::~nd_memory_region() {
   if (!mr_) {
@@ -149,13 +142,13 @@ inline nd_memory_region::~nd_memory_region() {
   }
 }
 
-inline nd_remote_addr_t nd_memory_region::remote_addr(std::size_t offset,
-                                                      std::size_t length) const {
+inline nd_remote_addr_t nd_memory_region::remote_addr(
+    std::size_t offset, std::size_t length) const {
   if (!is_in_mr(offset, length)) {
     return nd_remote_addr_t{0, 0};
   }
-  return nd_remote_addr_t{
-      reinterpret_cast<std::uint64_t>(addr_) + offset, remote_key()};
+  return nd_remote_addr_t{reinterpret_cast<std::uint64_t>(addr_) + offset,
+                          remote_key()};
 }
 
 inline detail::nd2_memory_region_ptr nd_memory_region::throw_reg_mr(

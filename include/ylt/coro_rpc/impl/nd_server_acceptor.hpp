@@ -44,10 +44,10 @@ namespace coro_rpc {
 
 class nd_server_acceptor : public coro_io::server_acceptor_base {
  public:
-  nd_server_acceptor(std::string_view address, uint16_t port,
-                     const coro_io::nd_socket_t::config_t& conf,
-                     const coro_io::server_acceptor_base* fallback_acceptor =
-                         nullptr)
+  nd_server_acceptor(
+      std::string_view address, uint16_t port,
+      const coro_io::nd_socket_t::config_t& conf,
+      const coro_io::server_acceptor_base* fallback_acceptor = nullptr)
       : server_acceptor_base(address, port),
         config_(conf),
         fallback_acceptor_(fallback_acceptor) {}
@@ -218,8 +218,8 @@ class nd_server_acceptor : public coro_io::server_acceptor_base {
     config.cqe_ = config_.cq_size;
     coro_io::use_device(static_cast<asio::io_context&>(executor->context()),
                         config_.device, config, ec);
-    if (ec == coro_io::make_error_code(
-                  coro_io::rdma_errc::already_registered)) {
+    if (ec ==
+        coro_io::make_error_code(coro_io::rdma_errc::already_registered)) {
       ec.clear();
     }
     if (!ec) {

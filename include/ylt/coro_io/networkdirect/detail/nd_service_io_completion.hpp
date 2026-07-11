@@ -23,16 +23,16 @@
 #include "asio/detail/config.hpp"
 #include "asio/detail/handler_alloc_helpers.hpp"
 #include "asio/detail/op_queue.hpp"
-#include "asio/execution_context.hpp"
 #include "asio/detail/win_iocp_io_context.hpp"
-#include "ylt/coro_io/networkdirect/nd_types.hpp"
-#include "ylt/coro_io/networkdirect/nd_error.hpp"
+#include "asio/execution_context.hpp"
 #include "nd_config_derive.hpp"
-#include "nd_impl_types.hpp"
 #include "nd_device_impl.hpp"
+#include "nd_impl_types.hpp"
 #include "nd_op_base.hpp"
 #include "nd_ops_verbs.hpp"
 #include "nd_verbs_op.hpp"
+#include "ylt/coro_io/networkdirect/nd_error.hpp"
+#include "ylt/coro_io/networkdirect/nd_types.hpp"
 
 namespace coro_io::detail {
 
@@ -52,49 +52,49 @@ namespace coro_io::detail {
 class nd_io_completion_service
     : public asio::detail::execution_context_service_base<
           nd_io_completion_service> {
-public:
+ public:
   using base_type =
       asio::detail::execution_context_service_base<nd_io_completion_service>;
 
   explicit nd_io_completion_service(asio::execution_context& ctx)
-      : base_type(ctx)
-      , scheduler_(asio::use_service<asio::detail::win_iocp_io_context>(ctx)) {
-  }
+      : base_type(ctx),
+        scheduler_(asio::use_service<asio::detail::win_iocp_io_context>(ctx)) {}
 
   ~nd_io_completion_service() = default;
 
   inline void shutdown() override;
 
-  // Create the shared CQ + overlapped handle on the IOCP scheduler. The device is
-  // used transiently for its adapter (not stored); cqe is the derived CQ depth.
+  // Create the shared CQ + overlapped handle on the IOCP scheduler. The device
+  // is used transiently for its adapter (not stored); cqe is the derived CQ
+  // depth.
   inline void initialize(nd_adapter_ptr const& device, std::uint32_t cqe,
-                            std::uint32_t poll_batch, asio::error_code& ec);
+                         std::uint32_t poll_batch, asio::error_code& ec);
 
   native_cq_t* get_cq() const noexcept { return cq_.Get(); }
 
   // Start the self-perpetuating CQ poller. Idempotent + thread-safe: the first
-  // event-mode queue_pair to bind fires it; after that it re-arms itself forever.
+  // event-mode queue_pair to bind fires it; after that it re-arms itself
+  // forever.
   inline void ensure_poller_started();
 
-private:
+ private:
   // Single-in-flight, self-perpetuating CQ poller. Each cycle uses a fresh IOCP
   // overlapped op (allocated in arm_poller), so only one is ever outstanding --
   // GetResults is serialized. On completion it drains+dispatches the CQ and
   // re-arms; owner == nullptr (io_context shutdown) frees without re-arming.
   class nd_poll_wc_op final : public asio::detail::operation {
-  public:
+   public:
     using base_type = asio::detail::operation;
     struct Handler {};
     ASIO_DEFINE_HANDLER_PTR(nd_poll_wc_op);
 
     explicit nd_poll_wc_op(nd_io_completion_service* svc)
-        : base_type(&nd_poll_wc_op::do_complete), svc_(svc) {
-    }
+        : base_type(&nd_poll_wc_op::do_complete), svc_(svc) {}
 
-  private:
+   private:
     inline static void do_complete(void* owner, base_type* base,
-                                      asio::error_code const& result_ec,
-                                      std::size_t bytes_transferred);
+                                   asio::error_code const& result_ec,
+                                   std::size_t bytes_transferred);
 
     nd_io_completion_service* svc_;
   };
@@ -103,8 +103,8 @@ private:
 
   inline void poll_and_dispatch(void* owner);
 
-  // Arm (or re-arm) the single poller: allocate a fresh overlapped op and request
-  // an IOCP completion notification for the next CQ event.
+  // Arm (or re-arm) the single poller: allocate a fresh overlapped op and
+  // request an IOCP completion notification for the next CQ event.
   inline void arm_poller();
 
   asio::detail::win_iocp_io_context& scheduler_;
@@ -124,9 +124,9 @@ inline void nd_io_completion_service::shutdown() {
 // Create the shared CQ + overlapped handle on the IOCP scheduler. The device is
 // used transiently for its adapter (not stored); cqe is the derived CQ depth.
 inline void nd_io_completion_service::initialize(nd_adapter_ptr const& device,
-                                        std::uint32_t cqe,
-                                        std::uint32_t poll_batch,
-                                        asio::error_code& ec) {
+                                                 std::uint32_t cqe,
+                                                 std::uint32_t poll_batch,
+                                                 asio::error_code& ec) {
   if (cq_) {
     ec = rdma_errc::already_registered;
     ASIO_ERROR_LOCATION(ec);
@@ -149,8 +149,8 @@ inline void nd_io_completion_service::initialize(nd_adapter_ptr const& device,
       .processor_group_ = 0,
       .processor_affinity_ = 0,
   };
-  cq_.Attach(verbs_ops::create_cq(device->adapter_.Get(), cqe, cq_init_attr,
-                                  ec));
+  cq_.Attach(
+      verbs_ops::create_cq(device->adapter_.Get(), cqe, cq_init_attr, ec));
   if (ec) {
     cq_handle_.reset();
     ASIO_ERROR_LOCATION(ec);
@@ -215,8 +215,8 @@ inline void nd_io_completion_service::poll_and_dispatch(void* owner) {
   asio::detail::op_queue<nd_verbs_op_base> ops;
   ULONG n = 0;
   do {
-    n = verbs_ops::poll_cq(
-        cq_.Get(), wc_buf_.data(), static_cast<size_type>(wc_buf_.size()));
+    n = verbs_ops::poll_cq(cq_.Get(), wc_buf_.data(),
+                           static_cast<size_type>(wc_buf_.size()));
     std::ranges::for_each_n(wc_buf_.begin(), n, [&](auto const& wc) {
       ops.push(resolve_wc(wc));
     });

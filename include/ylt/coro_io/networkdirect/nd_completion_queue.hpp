@@ -19,14 +19,14 @@
 
 #include "asio/detail/mutex.hpp"
 #include "asio/detail/op_queue.hpp"
-#include "nd_types.hpp"
-#include "nd_error.hpp"
-#include "nd_device.hpp"
-#include "detail/nd_impl_types.hpp"
-#include "detail/nd_ops_verbs.hpp"
-#include "detail/nd_op_base.hpp"
 #include "detail/nd_config_derive.hpp"
+#include "detail/nd_impl_types.hpp"
+#include "detail/nd_op_base.hpp"
+#include "detail/nd_ops_verbs.hpp"
 #include "detail/nd_verbs_op.hpp"
+#include "nd_device.hpp"
+#include "nd_error.hpp"
+#include "nd_types.hpp"
 
 namespace coro_io {
 
@@ -35,7 +35,7 @@ namespace coro_io {
 // data-plane ops that complete without a CQE (empty buffers / sync post errors)
 // are queued here and drained by poll()/poll_one().
 class nd_completion_queue {
-public:
+ public:
   inline nd_completion_queue(nd_device_ptr const& device,
                              nd_config_t const& config = {});
 
@@ -60,10 +60,11 @@ public:
     return effective_config_;
   }
 
-  // Enqueue an op that completes without a CQE (empty buffer / sync post error).
+  // Enqueue an op that completes without a CQE (empty buffer / sync post
+  // error).
   inline void push_ready(detail::nd_verbs_op_base* op);
 
-private:
+ private:
   inline static void dispatch_completion(void* owner,
                                          detail::native_wc_t const& wc);
 
@@ -85,7 +86,7 @@ private:
 // ---------------------------------------------------------------------------
 
 inline nd_completion_queue::nd_completion_queue(nd_device_ptr const& device,
-                                               nd_config_t const& config)
+                                                nd_config_t const& config)
     : device_(device) {
   assert(device && device->adapter_);
   asio::error_code ec;
@@ -95,8 +96,7 @@ inline nd_completion_queue::nd_completion_queue(nd_device_ptr const& device,
                      ? effective_config_.cq_poll_batch_
                      : detail::default_cq_poll_batch);
 
-  handle_.reset(
-      detail::create_overlapped_file(device->adapter_.Get(), ec));
+  handle_.reset(detail::create_overlapped_file(device->adapter_.Get(), ec));
   if (ec) {
     asio::detail::throw_error(ec);
   }
@@ -168,9 +168,10 @@ inline void nd_completion_queue::push_ready(detail::nd_verbs_op_base* op) {
   ready_.push(op);
 }
 
-inline void nd_completion_queue::dispatch_completion(void* owner,
-                                                    detail::native_wc_t const& wc) {
-  if (!wc.RequestContext) return;
+inline void nd_completion_queue::dispatch_completion(
+    void* owner, detail::native_wc_t const& wc) {
+  if (!wc.RequestContext)
+    return;
   auto* op = reinterpret_cast<detail::nd_verbs_op_base*>(wc.RequestContext);
   op->ec_ = static_cast<nd_errc>(wc.Status);
   if (!op->ec_) {
@@ -178,7 +179,8 @@ inline void nd_completion_queue::dispatch_completion(void* owner,
         wc.RequestType != ND2_REQUEST_TYPE::Nd2RequestTypeWrite) {
       op->bytes_transferred_ = wc.BytesTransferred;
     }
-  } else {
+  }
+  else {
     op->bytes_transferred_ = 0;
   }
   // Non-null owner so the handler upcall fires (mirrors ibv_completion_queue).

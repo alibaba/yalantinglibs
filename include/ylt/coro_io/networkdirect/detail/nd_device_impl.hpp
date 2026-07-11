@@ -28,9 +28,9 @@
 #include <vector>
 
 #include "asio/ip/tcp.hpp"
-#include "ylt/coro_io/networkdirect/nd_types.hpp"
-#include "ylt/coro_io/networkdirect/nd_error.hpp"
 #include "nd_impl_types.hpp"
+#include "ylt/coro_io/networkdirect/nd_error.hpp"
+#include "ylt/coro_io/networkdirect/nd_types.hpp"
 
 namespace coro_io::detail {
 
@@ -178,9 +178,9 @@ inline std::optional<asio::ip::address> to_ip_address(
 
 inline std::vector<nd2_sockaddr_t> copy_socket_address_list(
     SOCKET_ADDRESS_LIST const& addr_list) {
-  auto addr_range = std::ranges::subrange{
-      addr_list.Address,
-      addr_list.Address + addr_list.iAddressCount} |
+  auto addr_range =
+      std::ranges::subrange{addr_list.Address,
+                            addr_list.Address + addr_list.iAddressCount} |
       std::views::transform([](auto const& sock_addr) {
         nd2_sockaddr_t result{};
         if (static_cast<std::size_t>(sock_addr.iSockaddrLength) >
@@ -295,10 +295,9 @@ inline std::wstring get_provider_path(WSAPROTOCOL_INFOW const& proto,
   return result;
 }
 
-inline auto create_provider_factory(std::wstring provider_path,
-                                    WSAPROTOCOL_INFOW const& proto,
-                                    asio::error_code& ec)
-    -> nd_provider_factory_ptr {
+inline auto create_provider_factory(
+    std::wstring provider_path, WSAPROTOCOL_INFOW const& proto,
+    asio::error_code& ec) -> nd_provider_factory_ptr {
   unique_module_t provier_module{LoadLibraryW(provider_path.c_str())};
   if (!provier_module) {
     ec = make_system_error_code(::GetLastError());
@@ -434,8 +433,7 @@ inline auto query_adapter_addr_list(nd2_adapter_ptr const& adapter)
 }
 
 inline UINT64 resolve_adapter_id(nd2_provider_ptr const& provider,
-                                 sockaddr const* addrin,
-                                 std::size_t addr_size,
+                                 sockaddr const* addrin, std::size_t addr_size,
                                  asio::error_code& ec) {
   UINT64 adapter_id = 0;
   HRESULT hr = provider->ResolveAddress(addrin, static_cast<ULONG>(addr_size),
@@ -533,8 +531,7 @@ inline HANDLE create_overlapped_file(native_context_t* context,
 
 inline nd_adapter_ptr create_device(nd_provider_ptr const& provider,
                                     nd2_sockaddr_t const& addr,
-                                    UINT64 adapter_id,
-                                    asio::error_code& ec) {
+                                    UINT64 adapter_id, asio::error_code& ec) {
   auto result = std::make_shared<nd_adapter_t>();
   nd2_adapter_ptr adapter_ptr{};
   HRESULT hr = provider->provider_->OpenAdapter(
@@ -548,8 +545,8 @@ inline nd_adapter_ptr create_device(nd_provider_ptr const& provider,
   if (ec) {
     return nullptr;
   }
-  auto const adapter_name = query_adapter_name(
-      adapter_info, &addr.src_addr_, addr.address_size_, ec);
+  auto const adapter_name =
+      query_adapter_name(adapter_info, &addr.src_addr_, addr.address_size_, ec);
   if (ec) {
     return nullptr;
   }
@@ -567,9 +564,8 @@ inline nd_adapter_ptr create_device(nd_provider_ptr const& provider,
   return result;
 }
 
-inline void attach_device_addresses(
-    nd_adapter_ptr const& device,
-    std::span<nd2_sockaddr_t const> addresses) {
+inline void attach_device_addresses(nd_adapter_ptr const& device,
+                                    std::span<nd2_sockaddr_t const> addresses) {
   assert(device);
   for (auto const& addr :
        addresses | std::views::filter(is_supported_addr_family)) {
@@ -588,15 +584,14 @@ inline void attach_device_addresses(
 
 inline nd_adapter_ptr open_device(
     nd_provider_ptr const& provider, UINT64 adapter_id,
-    std::span<nd2_sockaddr_t const> provider_addresses,
-    asio::error_code& ec) {
+    std::span<nd2_sockaddr_t const> provider_addresses, asio::error_code& ec) {
   if (provider_addresses.empty()) {
     ec = make_error_code(std::errc::invalid_argument);
     return nullptr;
   }
 
-  auto device = create_device(provider, provider_addresses.front(),
-                              adapter_id, ec);
+  auto device =
+      create_device(provider, provider_addresses.front(), adapter_id, ec);
   if (ec || !device) {
     return nullptr;
   }
@@ -629,14 +624,13 @@ inline std::vector<nd_adapter_ptr> discover_provider_devices(
     return {};
   }
 
-  return addr_list |
-         std::views::filter(is_supported_addr_family) |
+  return addr_list | std::views::filter(is_supported_addr_family) |
          filter_map([provider](nd2_sockaddr_t const& addr)
                         -> std::optional<resolved_nd_address> {
            asio::error_code resolve_ec;
-           auto const id = resolve_adapter_id(
-               provider->provider_, &addr.src_addr_, addr.address_size_,
-               resolve_ec);
+           auto const id =
+               resolve_adapter_id(provider->provider_, &addr.src_addr_,
+                                  addr.address_size_, resolve_ec);
            if (resolve_ec) {
              return std::nullopt;
            }
@@ -648,10 +642,10 @@ inline std::vector<nd_adapter_ptr> discover_provider_devices(
          sort_by([](resolved_nd_address const& item) {
            return item.adapter_id;
          }) |
-         chunk_by([](resolved_nd_address const& a,
-                     resolved_nd_address const& b) {
-           return a.adapter_id == b.adapter_id;
-         }) |
+         chunk_by(
+             [](resolved_nd_address const& a, resolved_nd_address const& b) {
+               return a.adapter_id == b.adapter_id;
+             }) |
          std::views::transform([provider](auto const& chunk) {
            auto const adapter_id = chunk.front().adapter_id;
            auto provider_addresses =
@@ -678,31 +672,29 @@ inline std::vector<nd_provider_ptr> get_providers(asio::error_code& ec) {
   if (ec) {
     return result;
   }
-  auto providers =
-      protos |
-      std::views::transform([](auto const& proto) {
-        asio::error_code ec{};
-        auto result = std::make_shared<nd_provider_t>();
-        auto const provider_path = get_provider_path(proto, ec);
-        if (ec) {
-          return result;
-        }
-        auto provider_factory =
-            create_provider_factory(provider_path, proto, ec);
-        if (ec) {
-          return result;
-        }
-        auto provider = create_provider(*provider_factory, ec);
-        if (ec) {
-          return result;
-        }
-        result->factory_ = provider_factory;
-        result->provider_ = provider;
-        return result;
-      }) |
-      std::views::filter([](auto const& provider) {
-        return provider->provider_ != nullptr;
-      });
+  auto providers = protos | std::views::transform([](auto const& proto) {
+                     asio::error_code ec{};
+                     auto result = std::make_shared<nd_provider_t>();
+                     auto const provider_path = get_provider_path(proto, ec);
+                     if (ec) {
+                       return result;
+                     }
+                     auto provider_factory =
+                         create_provider_factory(provider_path, proto, ec);
+                     if (ec) {
+                       return result;
+                     }
+                     auto provider = create_provider(*provider_factory, ec);
+                     if (ec) {
+                       return result;
+                     }
+                     result->factory_ = provider_factory;
+                     result->provider_ = provider;
+                     return result;
+                   }) |
+                   std::views::filter([](auto const& provider) {
+                     return provider->provider_ != nullptr;
+                   });
 
   result = {std::ranges::begin(providers), std::ranges::end(providers)};
   if (result.empty()) {
@@ -746,8 +738,7 @@ inline bool is_valid_adapter(nd_adapter_ptr const& adapter,
       config.MaxReceiveSge > capabilities.MaxReceiveSge) {
     return false;
   }
-  if (config.MaxReadSge != 0 &&
-      config.MaxReadSge > capabilities.MaxReadSge) {
+  if (config.MaxReadSge != 0 && config.MaxReadSge > capabilities.MaxReadSge) {
     return false;
   }
   if (config.MaxTransferLength != 0 &&

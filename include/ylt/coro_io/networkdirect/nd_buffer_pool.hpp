@@ -24,12 +24,12 @@
 #include <memory>
 
 #include "async_simple/coro/Lazy.h"
-#include "ylt/coro_io/coro_io.hpp"
-#include "ylt/coro_io/detail/client_queue.hpp"
-#include "ylt/easylog.hpp"
 #include "nd_buffer.hpp"
 #include "nd_device.hpp"
 #include "nd_mr.hpp"
+#include "ylt/coro_io/coro_io.hpp"
+#include "ylt/coro_io/detail/client_queue.hpp"
+#include "ylt/easylog.hpp"
 
 namespace coro_io {
 
@@ -72,11 +72,11 @@ struct nd_buffer_t {
 
  public:
   nd_buffer_t() = default;
-  nd_buffer_t(std::unique_ptr<nd_memory_region> mr, nd_host_memory_t memory,
-              nd_buffer_pool_t& owner_pool,
-              std::shared_ptr<detail::nd_buffer_mem_control_t>
-                  memory_usage_recorder,
-              std::size_t accounted_size) noexcept;
+  nd_buffer_t(
+      std::unique_ptr<nd_memory_region> mr, nd_host_memory_t memory,
+      nd_buffer_pool_t& owner_pool,
+      std::shared_ptr<detail::nd_buffer_mem_control_t> memory_usage_recorder,
+      std::size_t accounted_size) noexcept;
   friend class nd_buffer_pool_t;
 
   nd_buffer_t(nd_buffer_t&&) = default;
@@ -210,10 +210,9 @@ class nd_buffer_pool_t : public std::enable_shared_from_this<nd_buffer_pool_t> {
           [[unlikely]] {
         ELOG_TRACE << "start timeout collector of nd_buffer_pool{" << this
                    << "}";
-        collect_idle_timeout_client(
-            this->weak_from_this(),
-            (std::max)(pool_config_.idle_timeout,
-                       std::chrono::milliseconds{50}))
+        collect_idle_timeout_client(this->weak_from_this(),
+                                    (std::max)(pool_config_.idle_timeout,
+                                               std::chrono::milliseconds{50}))
             .directlyStart(
                 [](auto&&) {
                 },
@@ -234,7 +233,7 @@ class nd_buffer_pool_t : public std::enable_shared_from_this<nd_buffer_pool_t> {
         pool_config_(config) {}
 
   static std::shared_ptr<nd_buffer_pool_t> create(nd_device_ptr device,
-                                                    const config_t& config) {
+                                                  const config_t& config) {
     return std::make_shared<nd_buffer_pool_t>(private_construct_token{},
                                               std::move(device), config);
   }
@@ -258,9 +257,7 @@ class nd_buffer_pool_t : public std::enable_shared_from_this<nd_buffer_pool_t> {
     return memory_usage_recorder_->history_max_usage.load(
         std::memory_order_relaxed);
   }
-  std::size_t free_buffer_size() const noexcept {
-    return free_buffers_.size();
-  }
+  std::size_t free_buffer_size() const noexcept { return free_buffers_.size(); }
   std::size_t max_memory_usage() const noexcept {
     return pool_config_.max_memory_usage;
   }
@@ -278,15 +275,14 @@ class nd_buffer_pool_t : public std::enable_shared_from_this<nd_buffer_pool_t> {
     std::size_t new_usage = 0;
     if (count >= 0) {
       auto inc = static_cast<std::size_t>(count);
-      auto old_usage =
-          memory_usage_recorder->now_usage.fetch_add(
-              inc, std::memory_order_release);
+      auto old_usage = memory_usage_recorder->now_usage.fetch_add(
+          inc, std::memory_order_release);
       new_usage = old_usage + inc;
     }
     else {
       auto dec = static_cast<std::size_t>(-count);
-      auto old_usage = memory_usage_recorder->now_usage.load(
-          std::memory_order_acquire);
+      auto old_usage =
+          memory_usage_recorder->now_usage.load(std::memory_order_acquire);
       do {
         new_usage = old_usage > dec ? old_usage - dec : 0;
       } while (!memory_usage_recorder->now_usage.compare_exchange_weak(
@@ -372,12 +368,11 @@ class nd_buffer_pool_t : public std::enable_shared_from_this<nd_buffer_pool_t> {
       free_buffers_;
 };
 
-inline nd_buffer_t::nd_buffer_t(std::unique_ptr<nd_memory_region> mr,
-                                 nd_host_memory_t memory,
-                                 nd_buffer_pool_t& owner_pool,
-                                 std::shared_ptr<detail::nd_buffer_mem_control_t>
-                                     memory_usage_recorder,
-                                 std::size_t accounted_size) noexcept
+inline nd_buffer_t::nd_buffer_t(
+    std::unique_ptr<nd_memory_region> mr, nd_host_memory_t memory,
+    nd_buffer_pool_t& owner_pool,
+    std::shared_ptr<detail::nd_buffer_mem_control_t> memory_usage_recorder,
+    std::size_t accounted_size) noexcept
     : owner_pool_(owner_pool.weak_from_this()),
       memory_(std::move(memory)),
       mr_(std::move(mr)),

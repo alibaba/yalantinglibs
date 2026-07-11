@@ -16,10 +16,10 @@
 #pragma once
 
 #include "asio/io_context.hpp"
-#include "nd_device.hpp"
 #include "detail/nd_config_derive.hpp"
 #include "detail/nd_service_device.hpp"
 #include "detail/nd_service_io_completion.hpp"
+#include "nd_device.hpp"
 
 namespace coro_io {
 
@@ -27,8 +27,8 @@ namespace coro_io {
 // caller discovers the device beforehand via
 // nd_device_manager_t::instance().get_first_available_device(config).
 //
-// Returns void: the caller already holds the device_ptr. The same device_ptr may
-// be passed to use_device on multiple io_contexts. Mirrors ibv use_device.
+// Returns void: the caller already holds the device_ptr. The same device_ptr
+// may be passed to use_device on multiple io_contexts. Mirrors ibv use_device.
 inline void use_device(asio::io_context& io_ctx, nd_device_ptr const& device,
                        nd_config_t const& config, asio::error_code& ec) {
   auto& dev_svc = asio::use_service<detail::nd_device_service>(io_ctx);
@@ -43,7 +43,8 @@ inline void use_device(asio::io_context& io_ctx, nd_device_ptr const& device,
     return;
   }
   auto const effective = detail::derive_effective_config(config, device->info_);
-  // Initialize the CQ/notify service first; register the device only on success.
+  // Initialize the CQ/notify service first; register the device only on
+  // success.
   auto& io_svc = asio::use_service<detail::nd_io_completion_service>(io_ctx);
   io_svc.initialize(device, effective.cqe_, effective.cq_poll_batch_, ec);
   if (ec) {

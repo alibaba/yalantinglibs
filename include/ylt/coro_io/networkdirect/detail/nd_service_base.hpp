@@ -16,28 +16,28 @@
 #pragma once
 
 #include "asio/detail/config.hpp"
-#include "asio/detail/object_pool.hpp"
 #include "asio/detail/io_object_impl.hpp"
-#include "asio/execution_context.hpp"
+#include "asio/detail/object_pool.hpp"
 #include "asio/detail/win_iocp_io_context.hpp"
+#include "asio/execution_context.hpp"
 #include "ylt/coro_io/networkdirect/nd_device.hpp"
 
 namespace coro_io::detail {
 
 // base class of network direct service
 class nd_service_base {
-public:
- struct base_implementation_type {
-  base_implementation_type* next_;
-  base_implementation_type* prev_;
-};
+ public:
+  struct base_implementation_type {
+    base_implementation_type* next_;
+    base_implementation_type* prev_;
+  };
 
-protected:
+ protected:
   asio::detail::win_iocp_io_context& scheduler_;
   asio::detail::mutex mutex_;
   base_implementation_type* impl_list_;
 
-protected:
+ protected:
   inline static asio::detail::win_iocp_io_context& use_asio_scheduler(
       asio::execution_context& context);
 
@@ -46,7 +46,7 @@ protected:
   inline void base_construct(base_implementation_type& impl);
 
   inline void base_move_construct(base_implementation_type& impl,
-                                     base_implementation_type& other_impl);
+                                  base_implementation_type& other_impl);
 
   inline void base_destroy(base_implementation_type& impl);
 
@@ -77,18 +77,15 @@ inline asio::detail::win_iocp_io_context& nd_service_base::use_asio_scheduler(
 }
 
 inline nd_service_base::nd_service_base(asio::execution_context& context)
-    : scheduler_(use_asio_scheduler(context))
-    , mutex_()
-    , impl_list_(nullptr) {
-}
+    : scheduler_(use_asio_scheduler(context)), mutex_(), impl_list_(nullptr) {}
 
 inline void nd_service_base::base_construct(base_implementation_type& impl) {
   asio::detail::mutex::scoped_lock lock(mutex_);
   do_insert(impl);
 }
 
-inline void nd_service_base::base_move_construct(base_implementation_type& impl,
-                                          base_implementation_type& other_impl) {
+inline void nd_service_base::base_move_construct(
+    base_implementation_type& impl, base_implementation_type& other_impl) {
   asio::detail::mutex::scoped_lock lock(mutex_);
   do_insert(impl);
 }

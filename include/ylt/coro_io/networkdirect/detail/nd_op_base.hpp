@@ -19,32 +19,32 @@
 
 #include "asio/detail/operation.hpp"
 #include "asio/detail/win_iocp_io_context.hpp"
-#include "ylt/coro_io/networkdirect/nd_types.hpp"
-#include "ylt/coro_io/networkdirect/nd_error.hpp"
-#include "ylt/coro_io/networkdirect/nd_buffer.hpp"
 #include "nd_verbs_op.hpp"
+#include "ylt/coro_io/networkdirect/nd_buffer.hpp"
+#include "ylt/coro_io/networkdirect/nd_error.hpp"
+#include "ylt/coro_io/networkdirect/nd_types.hpp"
 
 namespace coro_io::detail {
 
 class nd_op_base : public asio::detail::operation {
-public:
+ public:
   enum class status_t {
     completed,
     continuation,
   };
-  using process_func = status_t(*)(void* owner, nd_op_base* base, asio::error_code& ec);
+  using process_func = status_t (*)(void* owner, nd_op_base* base,
+                                    asio::error_code& ec);
 
-private:
+ private:
   IND2Overlapped* overlapped_;
   process_func process_func_;
 
-protected:
+ protected:
   nd_op_base(IND2Overlapped* overlapped, process_func perform_function,
              func_type complete_func)
-      : asio::detail::operation(complete_func)
-      , overlapped_(overlapped)
-      , process_func_(perform_function) {
-  }
+      : asio::detail::operation(complete_func),
+        overlapped_(overlapped),
+        process_func_(perform_function) {}
 
   IND2Overlapped* get_overlapped() const { return overlapped_; }
 
@@ -55,14 +55,14 @@ protected:
 
   inline status_t resume_process(void* owner, asio::error_code& ec);
 
-private:
+ private:
   inline status_t do_process(void* owner, asio::error_code& ec);
 };
 
 // --- inlined from nd_op_base.ipp ---
 
 inline nd_op_base::status_t nd_op_base::resume_process(void* owner,
-                                                asio::error_code& ec) {
+                                                       asio::error_code& ec) {
   if (ec) {
     return status_t::completed;
   }
@@ -76,7 +76,8 @@ inline nd_op_base::status_t nd_op_base::resume_process(void* owner,
   return status;
 }
 
-inline nd_op_base::status_t nd_op_base::do_process(void* owner, asio::error_code& ec) {
+inline nd_op_base::status_t nd_op_base::do_process(void* owner,
+                                                   asio::error_code& ec) {
   assert(overlapped_);
 
   if (process_func_) {

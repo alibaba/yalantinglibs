@@ -22,20 +22,19 @@
 #include "asio/detail/handler_alloc_helpers.hpp"
 #include "asio/detail/memory.hpp"
 #include "asio/ip/address.hpp"
+#include "nd_config_derive.hpp"
+#include "nd_op_get_connection_request.hpp"
+#include "nd_ops_cm.hpp"
 #include "nd_service_base.hpp"
 #include "nd_service_device.hpp"
-#include "nd_ops_cm.hpp"
-#include "nd_op_get_connection_request.hpp"
-#include "nd_config_derive.hpp"
 
 namespace coro_io::detail {
 
 template <typename PortSpace>
-class nd_listener_service
-    : public asio::detail::execution_context_service_base<
-          nd_listener_service<PortSpace>>
-    , public nd_service_base {
-public:
+class nd_listener_service : public asio::detail::execution_context_service_base<
+                                nd_listener_service<PortSpace>>,
+                            public nd_service_base {
+ public:
   using base_type = asio::detail::execution_context_service_base<
       nd_listener_service<PortSpace>>;
   using endpoint_type = typename PortSpace::endpoint;
@@ -48,10 +47,9 @@ public:
   };
 
   explicit nd_listener_service(asio::execution_context& ctx)
-      : base_type(ctx)
-      , nd_service_base(ctx)
-      , device_svc_(asio::use_service<nd_device_service>(ctx)) {
-  }
+      : base_type(ctx),
+        nd_service_base(ctx),
+        device_svc_(asio::use_service<nd_device_service>(ctx)) {}
 
   ~nd_listener_service() = default;
 
@@ -126,9 +124,8 @@ public:
       return;
     }
 
-    impl.listener_.Attach(
-        create_listener(adapter->adapter_.Get(),
-                        impl.listener_handle_.get(), ec));
+    impl.listener_.Attach(create_listener(adapter->adapter_.Get(),
+                                          impl.listener_handle_.get(), ec));
     if (ec) {
       impl.listener_handle_.reset();
       ASIO_ERROR_LOCATION(ec);
@@ -195,8 +192,8 @@ public:
 
   // async get_connection_request
   template <typename Handler, typename IoExecutor>
-  void async_get_connection_request(implementation_type& impl,
-                                    Handler& handler, IoExecutor const& io_ex) {
+  void async_get_connection_request(implementation_type& impl, Handler& handler,
+                                    IoExecutor const& io_ex) {
     auto cancel_slot = asio::get_associated_cancellation_slot(handler);
     using op = nd_get_connection_request_op<Handler, IoExecutor>;
 
@@ -206,8 +203,8 @@ public:
     if (!is_open(impl) || !impl.adapter_) {
       typename op::ptr p = {asio::detail::addressof(handler),
                             op::ptr::allocate(handler), 0};
-      p.p = new (p.v) op{impl.listener_.Get(),
-                          std::move(connector_handle), handler, io_ex};
+      p.p = new (p.v)
+          op{impl.listener_.Get(), std::move(connector_handle), handler, io_ex};
       this->scheduler_.work_started();
       this->scheduler_.on_completion(
           p.p, make_error_code(rdma_errc::invalid_handle));
@@ -221,8 +218,8 @@ public:
     if (ec) {
       typename op::ptr p = {asio::detail::addressof(handler),
                             op::ptr::allocate(handler), 0};
-      p.p = new (p.v) op{impl.listener_.Get(),
-                          std::move(connector_handle), handler, io_ex};
+      p.p = new (p.v)
+          op{impl.listener_.Get(), std::move(connector_handle), handler, io_ex};
       this->scheduler_.work_started();
       this->scheduler_.on_completion(p.p, ec);
       p.v = p.p = 0;
@@ -235,8 +232,8 @@ public:
     if (ec) {
       typename op::ptr p = {asio::detail::addressof(handler),
                             op::ptr::allocate(handler), 0};
-      p.p = new (p.v) op{impl.listener_.Get(),
-                          std::move(connector_handle), handler, io_ex};
+      p.p = new (p.v)
+          op{impl.listener_.Get(), std::move(connector_handle), handler, io_ex};
       this->scheduler_.work_started();
       this->scheduler_.on_completion(p.p, ec);
       p.v = p.p = 0;
@@ -246,18 +243,20 @@ public:
     auto* connector_ptr = connector_handle.connector_.Get();
     typename op::ptr p = {asio::detail::addressof(handler),
                           op::ptr::allocate(handler), 0};
-    p.p = new (p.v) op{impl.listener_.Get(),
-                        std::move(connector_handle), handler, io_ex};
+    p.p = new (p.v)
+        op{impl.listener_.Get(), std::move(connector_handle), handler, io_ex};
 
     this->scheduler_.work_started();
     auto const hr =
         get_connection_request(impl.listener_.Get(), connector_ptr, p.p, ec);
     if (ec) {
       this->scheduler_.on_completion(p.p, ec);
-    } else if (hr == ND_PENDING) {
+    }
+    else if (hr == ND_PENDING) {
       arm_nd_cancellation(cancel_slot, impl.listener_handle_.get(), p.p);
       this->scheduler_.on_pending(p.p);
-    } else {
+    }
+    else {
       this->scheduler_.on_completion(p.p, ec);
     }
     p.v = p.p = 0;

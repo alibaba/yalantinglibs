@@ -103,8 +103,8 @@ class small_sglist {
     if (target > inline_sge_count) {
       auto capacity = target;
       if (target > heap_capacity_) {
-        auto const doubled = heap_capacity_ == 0 ? inline_sge_count * 2
-                                                 : heap_capacity_ * 2;
+        auto const doubled =
+            heap_capacity_ == 0 ? inline_sge_count * 2 : heap_capacity_ * 2;
         capacity = (std::max)(target, doubled);
       }
       reserve(capacity, ec);
@@ -128,9 +128,7 @@ class small_sglist {
   }
   bool uses_heap() const noexcept { return heap_ && data_ == heap_.get(); }
   NativeSge& operator[](std::size_t i) noexcept { return data_[i]; }
-  NativeSge const& operator[](std::size_t i) const noexcept {
-    return data_[i];
-  }
+  NativeSge const& operator[](std::size_t i) const noexcept { return data_[i]; }
 
  private:
   std::array<NativeSge, inline_sge_count> inline_{};

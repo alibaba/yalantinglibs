@@ -24,10 +24,10 @@
 #include <ranges>
 #include <type_traits>
 
-#include "nd_commons.hpp"
-#include "nd_types.hpp"
 #include "detail/nd_impl_types.hpp"
 #include "detail/nd_small_sglist.hpp"
+#include "nd_commons.hpp"
+#include "nd_types.hpp"
 
 namespace coro_io {
 
@@ -119,7 +119,8 @@ inline const_buffer buffer(MR const& mr) {
 template <typename MR>
   requires memory_region_like<MR> && (!std::is_const_v<MR>)
 inline mutable_buffer buffer(MR& mr, std::size_t offset, std::size_t n) {
-  if (!mr.is_in_mr(offset, n)) return mutable_buffer{};
+  if (!mr.is_in_mr(offset, n))
+    return mutable_buffer{};
   return mutable_buffer{static_cast<std::uint8_t*>(mr.addr()) + offset, n,
                         mr.local_key()};
 }
@@ -127,7 +128,8 @@ inline mutable_buffer buffer(MR& mr, std::size_t offset, std::size_t n) {
 template <typename MR>
   requires memory_region_like<MR>
 inline const_buffer buffer(MR const& mr, std::size_t offset, std::size_t n) {
-  if (!mr.is_in_mr(offset, n)) return const_buffer{};
+  if (!mr.is_in_mr(offset, n))
+    return const_buffer{};
   return const_buffer{static_cast<std::uint8_t const*>(mr.addr()) + offset, n,
                       mr.local_key()};
 }
@@ -230,8 +232,7 @@ inline void fill_native_sge(native_sge_t& sge, mutable_buffer const& buffer) {
 
 template <mr_adapted_buffer_sequence BufferSequence>
 inline built_sglist<native_sge_t> build_native_sglist(
-    BufferSequence const& bs, nd_sglist_t& sglist,
-    std::uint32_t max_sge = 0) {
+    BufferSequence const& bs, nd_sglist_t& sglist, std::uint32_t max_sge = 0) {
   built_sglist<native_sge_t> built;
   sglist.clear();
 

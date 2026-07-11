@@ -37,8 +37,7 @@ class nd_write_op final : public nd_one_sided_op<BufferSequence> {
 
  public:
   ASIO_DEFINE_HANDLER_PTR(nd_write_op);
-  nd_write_op(asio::error_code const& ec,
-              BufferSequence const& buffer_sequence,
+  nd_write_op(asio::error_code const& ec, BufferSequence const& buffer_sequence,
               nd_remote_addr_t const& remote_addr, Handler& handler,
               IoExecutor const& io_ex)
       : base_type(&nd_write_op::do_complete, ec, buffer_sequence, remote_addr),

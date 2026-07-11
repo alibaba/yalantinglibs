@@ -27,30 +27,29 @@ namespace coro_io::detail {
 // to be enqueued into the IOCP completion queue.
 // The nd_complete_op actually covers this.
 class nd_complete_op final : public asio::detail::operation {
-public:
+ public:
   struct Handler {};
   ASIO_DEFINE_HANDLER_PTR(nd_complete_op);
 
-private:
+ private:
   nd_verbs_op_base* op_;
 
-public:
+ public:
   explicit nd_complete_op(nd_verbs_op_base* verbs_op)
-      : asio::detail::operation(&nd_complete_op::do_complete)
-      , op_(verbs_op){
-  }
+      : asio::detail::operation(&nd_complete_op::do_complete), op_(verbs_op) {}
 
-private:
+ private:
   inline static void do_complete(void* owner, asio::detail::operation* base_op,
-                                    asio::error_code const& ec,
-                                    std::size_t bytes_transferred);
+                                 asio::error_code const& ec,
+                                 std::size_t bytes_transferred);
 };
 
 // --- inlined from nd_op_complete.ipp ---
 
-inline void nd_complete_op::do_complete(void* owner, asio::detail::operation* base_op,
-                                 asio::error_code const& /*ec*/,
-                                 std::size_t /*bytes_transferred*/) {
+inline void nd_complete_op::do_complete(void* owner,
+                                        asio::detail::operation* base_op,
+                                        asio::error_code const& /*ec*/,
+                                        std::size_t /*bytes_transferred*/) {
   nd_complete_op* o = static_cast<nd_complete_op*>(base_op);
   auto* op = o->op_;
   assert(op);

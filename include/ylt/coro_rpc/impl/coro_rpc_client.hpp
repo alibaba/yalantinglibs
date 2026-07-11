@@ -145,7 +145,7 @@ struct async_rpc_result_value_t : public detail::async_rpc_result_base {
   T result_;
 
  public:
-  async_rpc_result_value_t(T&& result, resp_body&& buffer,
+  async_rpc_result_value_t(T &&result, resp_body &&buffer,
                            coro_io::data_view attachment)
       : async_rpc_result_base(std::move(buffer), attachment),
         result_(std::move(result)) {}
@@ -282,7 +282,7 @@ class coro_rpc_client {
    * @param executor coro_io's executor, default executor is come
    */
   coro_rpc_client(
-      coro_io::ExecutorWrapper<>* executor = coro_io::get_global_executor(),
+      coro_io::ExecutorWrapper<> *executor = coro_io::get_global_executor(),
       config conf = {})
       : timer_(std::make_unique<coro_io::period_timer>(
             executor->get_asio_executor())),
@@ -718,7 +718,7 @@ class coro_rpc_client {
                               .ssl_domain = std::move(ssl_domain)};
     }
     else {
-      auto& conf = std::get<tcp_with_ssl_config>(config_.socket_config);
+      auto &conf = std::get<tcp_with_ssl_config>(config_.socket_config);
       conf.ssl_cert_path = std::move(ssl_cert_path);
       conf.ssl_domain = domain = std::move(ssl_domain);
     }
@@ -1005,8 +1005,8 @@ class coro_rpc_client {
 #ifdef YLT_ENABLE_CUDA
   // Reuse the cuda stream handler owned by the underlying ib_socket.
   // Returns nullptr when the connection is not RDMA/ib based.
-  coro_io::cuda_stream_handler_t* get_cuda_stream_handler() noexcept {
-    coro_io::cuda_stream_handler_t* handler = nullptr;
+  coro_io::cuda_stream_handler_t *get_cuda_stream_handler() noexcept {
+    coro_io::cuda_stream_handler_t *handler = nullptr;
     control_->socket_wrapper_.visit([&](auto &socket) {
       using socket_type = std::decay_t<decltype(socket)>;
       if constexpr (std::is_same_v<socket_type, coro_io::ib_socket_t>) {
@@ -1192,10 +1192,9 @@ class coro_rpc_client {
     // Use socket_wrapper_.visit() to get a fresh socket reference instead of
     // the `soc` parameter, which may dangle if reset() destroyed and
     // recreated ssl_stream_ above.
-    ec = co_await control_->socket_wrapper_.visit(
-        [eps](auto &fresh_soc) {
-          return coro_io::async_connect(fresh_soc, *eps);
-        });
+    ec = co_await control_->socket_wrapper_.visit([eps](auto &fresh_soc) {
+      return coro_io::async_connect(fresh_soc, *eps);
+    });
     std::error_code ignore_ec;
     timer_->cancel(ignore_ec);
     if (control_->is_timeout_) {
@@ -1499,7 +1498,8 @@ class coro_rpc_client {
       co_await coro_io::post(
           []() {
           },
-          control->executor_);  // drain: wait for any pending close_socket_async dispatch
+          control->executor_);  // drain: wait for any pending
+                                // close_socket_async dispatch
       co_return;
     }
     co_await coro_io::post(
@@ -1526,8 +1526,8 @@ class coro_rpc_client {
  private:
   template <auto func, typename Socket, typename... Args>
   async_simple::coro::Lazy<rpc_error> send_request_for_impl(
-      Socket& soc, request_config_t& config, uint32_t& id,
-      coro_io::period_timer& timer, Args&&... args) {
+      Socket &soc, request_config_t &config, uint32_t &id,
+      coro_io::period_timer &timer, Args &&...args) {
     if (control_->has_closed_)
       AS_UNLIKELY {
         ELOG_ERROR << "client has been closed, please re-connect"
@@ -1586,8 +1586,7 @@ class coro_rpc_client {
                      << ", cost time = "
                      << (std::chrono::steady_clock::now() - tp) /
                             std::chrono::microseconds(1)
-                     << "us"
-                     << ", client_id: " << controller->client_id;
+                     << "us" << ", client_id: " << controller->client_id;
         }
         break;
       }
@@ -1974,8 +1973,7 @@ class coro_rpc_client {
                    << ", client_id: " << config_.client_id << ", cost time = "
                    << (std::chrono::steady_clock::now() - tp) /
                           std::chrono::microseconds(1)
-                   << "us"
-                   << ", request ID: " << id;
+                   << "us" << ", request ID: " << id;
         co_return rpc_error{errc::io_error, ret.first.message()};
       }
     }
@@ -1983,8 +1981,7 @@ class coro_rpc_client {
                << ", cost time = "
                << (std::chrono::steady_clock::now() - tp) /
                       std::chrono::microseconds(1)
-               << "us"
-               << ", request ID: " << id;
+               << "us" << ", request ID: " << id;
     co_return rpc_error{};
   }
 

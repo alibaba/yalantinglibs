@@ -18,9 +18,9 @@
 #include <cassert>
 #include <memory>
 
-#include "ylt/coro_io/networkdirect/nd_types.hpp"
-#include "ylt/coro_io/networkdirect/nd_error.hpp"
 #include "nd_device_impl.hpp"
+#include "ylt/coro_io/networkdirect/nd_error.hpp"
+#include "ylt/coro_io/networkdirect/nd_types.hpp"
 
 namespace coro_io::detail::verbs_ops {
 
@@ -74,9 +74,8 @@ inline result_type post_write(native_qp_t* qp, void* request_context,
 
 // simulate ibv_allocate_pd
 inline native_pd_t* allocate_pd(native_context_t* context,
-                                   asio::error_code& ec) {
-  if (!context)
-    [[unlikely]] {
+                                asio::error_code& ec) {
+  if (!context) [[unlikely]] {
     return nullptr;
   }
 
@@ -87,8 +86,7 @@ inline native_pd_t* allocate_pd(native_context_t* context,
 
   auto new_pd = std::make_unique<native_pd_t>();
 #ifndef __cpp_exceptions
-  if (!new_pd)
-  {
+  if (!new_pd) {
     ec = std::errc::not_enough_memory;
     return nullptr;
   }
@@ -102,8 +100,8 @@ inline native_pd_t* allocate_pd(native_context_t* context,
 /// cq ops
 // create cq
 inline native_cq_t* create_cq(native_context_t* context, size_type cqe,
-                                 native_cq_init_attr const& init_attr,
-                                 asio::error_code& ec) {
+                              native_cq_init_attr const& init_attr,
+                              asio::error_code& ec) {
   assert(context);
   native_cq_t* result{nullptr};
   auto const hr = context->CreateCompletionQueue(
@@ -115,14 +113,14 @@ inline native_cq_t* create_cq(native_context_t* context, size_type cqe,
 }
 
 // notify cq
-inline result_type notify_cq(native_cq_t* cq,
-                                native_cq_notify_attr const& attr,
-                                asio::error_code& ec) {
+inline result_type notify_cq(native_cq_t* cq, native_cq_notify_attr const& attr,
+                             asio::error_code& ec) {
   assert(cq);
   auto const hr = cq->Notify(attr.type_, attr.op_);
   if (hr != ND_SUCCESS && hr != ND_PENDING) {
     ec = static_cast<nd_errc>(hr);
-  } else {
+  }
+  else {
     ec.clear();
   }
   return hr;
@@ -146,8 +144,8 @@ inline size_type poll_cq(native_cq_t* cq, std::array<native_wc_t, Num>& wcs) {
 /// qp ops
 // create qp
 inline native_qp_t* create_qp(native_pd_t* pd,
-                                 native_qp_init_attr const& qp_init_attr,
-                                 asio::error_code& ec) {
+                              native_qp_init_attr const& qp_init_attr,
+                              asio::error_code& ec) {
   assert(pd && pd->context_);
   native_qp_t* result{nullptr};
   auto const hr = pd->context_->CreateQueuePair(
@@ -162,15 +160,14 @@ inline native_qp_t* create_qp(native_pd_t* pd,
 
 /// memory region ops
 inline ULONG to_native_access_flag(mr_acccess_flag_t access_flag,
-                                      int extra_access_flag) {
-  ULONG native_access_flag = ND_MR_FLAG_ALLOW_LOCAL_WRITE |
-                             ND_MR_FLAG_ALLOW_REMOTE_WRITE |
-                             ND_MR_FLAG_ALLOW_REMOTE_READ |
-                             static_cast<ULONG>(extra_access_flag);
+                                   int extra_access_flag) {
+  ULONG native_access_flag =
+      ND_MR_FLAG_ALLOW_LOCAL_WRITE | ND_MR_FLAG_ALLOW_REMOTE_WRITE |
+      ND_MR_FLAG_ALLOW_REMOTE_READ | static_cast<ULONG>(extra_access_flag);
   switch (access_flag) {
     case mr_access_local_write:
-      native_access_flag = ND_MR_FLAG_ALLOW_LOCAL_WRITE |
-                           static_cast<ULONG>(extra_access_flag);
+      native_access_flag =
+          ND_MR_FLAG_ALLOW_LOCAL_WRITE | static_cast<ULONG>(extra_access_flag);
       break;
     case mr_access_remote_read:
       native_access_flag = ND_MR_FLAG_ALLOW_LOCAL_WRITE |
@@ -178,10 +175,9 @@ inline ULONG to_native_access_flag(mr_acccess_flag_t access_flag,
                            static_cast<ULONG>(extra_access_flag);
       break;
     case mr_access_remote_write:
-      native_access_flag = ND_MR_FLAG_ALLOW_LOCAL_WRITE |
-                           ND_MR_FLAG_ALLOW_REMOTE_WRITE |
-                           ND_MR_FLAG_ALLOW_REMOTE_READ |
-                           static_cast<ULONG>(extra_access_flag);
+      native_access_flag =
+          ND_MR_FLAG_ALLOW_LOCAL_WRITE | ND_MR_FLAG_ALLOW_REMOTE_WRITE |
+          ND_MR_FLAG_ALLOW_REMOTE_READ | static_cast<ULONG>(extra_access_flag);
       break;
   }
   return native_access_flag;
@@ -189,8 +185,8 @@ inline ULONG to_native_access_flag(mr_acccess_flag_t access_flag,
 
 // register memory region
 inline native_mr_t* reg_mr(native_pd_t* pd, void* addr, size_t length,
-                              mr_acccess_flag_t access_flag,
-                              int extra_access_flag, asio::error_code& ec) {
+                           mr_acccess_flag_t access_flag, int extra_access_flag,
+                           asio::error_code& ec) {
   assert(pd && pd->context_);
   nd2_memory_region_ptr result{};
   // create memory region interface

@@ -184,8 +184,11 @@ class coro_rpc_server_base {
       init_acceptors(config.address, config.port);
     }
 #ifdef YLT_ENABLE_ND
-    if constexpr (requires { config.nd_config; config.nd_port;
-                             config.nd_address; }) {
+    if constexpr (requires {
+                    config.nd_config;
+                    config.nd_port;
+                    config.nd_address;
+                  }) {
       if (config.nd_config) {
         init_nd(config.nd_config.value(), config.nd_port, config.nd_address);
       }
@@ -217,7 +220,7 @@ class coro_rpc_server_base {
   }
 #endif
 #ifdef YLT_ENABLE_ND
-  void init_nd(const coro_io::nd_socket_t::config_t &conf = {},
+  void init_nd(const coro_io::nd_socket_t::config_t& conf = {},
                uint16_t nd_port = 0, std::string nd_address = {}) {
     coro_io::server_acceptor_base* fallback_acceptor = nullptr;
     std::string fallback_address;

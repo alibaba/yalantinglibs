@@ -15,6 +15,12 @@
  */
 #pragma once
 
+#include <guiddef.h>
+#include <libloaderapi.h>
+#include <winnt.h>
+#include <wrl/client.h>
+#include <ws2spi.h>
+
 #include <array>
 #include <iterator>
 #include <memory>
@@ -23,14 +29,8 @@
 #include <string>
 #include <vector>
 
-#include <guiddef.h>
-#include <libloaderapi.h>
-#include <winnt.h>
-#include <wrl/client.h>
-#include <ws2spi.h>
-
-#include "networkdirect.hpp"
 #include "nd_commons.hpp"
+#include "networkdirect.hpp"
 
 namespace coro_io {
 

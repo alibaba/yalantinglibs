@@ -171,7 +171,7 @@ struct socket_wrapper_t {
     coro_io::use_device(static_cast<asio::io_context &>(executor->context()),
                         config.device, nd_config, ec);
     if (ec && ec != coro_io::make_error_code(
-                   coro_io::rdma_errc::already_registered)) {
+                        coro_io::rdma_errc::already_registered)) {
       ELOG_WARN << "init NetworkDirect client failed: " << ec.message();
       return false;
     }
@@ -302,8 +302,8 @@ struct socket_wrapper_t {
     ssl_stream_ = std::make_unique<asio::ssl::stream<asio::ip::tcp::socket &>>(
         *socket_, ssl_ctx);
   }
-  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>>
-      &ssl_stream() noexcept {
+  std::unique_ptr<asio::ssl::stream<asio::ip::tcp::socket &>> &
+  ssl_stream() noexcept {
     return ssl_stream_;
   }
   using tcp_socket_with_ssl_t = asio::ssl::stream<asio::ip::tcp::socket &>;

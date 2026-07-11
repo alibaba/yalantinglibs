@@ -32,43 +32,43 @@ namespace coro_io::detail {
 // rdma_errc::disconnected. Mirrors ibv_wait_disconnect_op.
 template <typename Handler, typename IoExecutor>
 class nd_wait_disconnect_op final : public nd_op_base {
-private:
+ private:
   std::atomic<bool>* peer_closed_;
   Handler handler_;
   asio::detail::handler_work<Handler, IoExecutor> work_;
 
-public:
+ public:
   ASIO_DEFINE_HANDLER_PTR(nd_wait_disconnect_op);
   nd_wait_disconnect_op(IND2Connector* connector,
-                        std::atomic<bool>* peer_closed,
-                        Handler& handler, const IoExecutor& io_ex)
+                        std::atomic<bool>* peer_closed, Handler& handler,
+                        const IoExecutor& io_ex)
       : nd_op_base(connector, &nd_op_base::default_process,
-                   &nd_wait_disconnect_op::do_complete)
-      , peer_closed_(peer_closed)
-      , handler_(ASIO_MOVE_CAST(Handler)(handler))
-      , work_(handler_, io_ex) {
-  }
+                   &nd_wait_disconnect_op::do_complete),
+        peer_closed_(peer_closed),
+        handler_(ASIO_MOVE_CAST(Handler)(handler)),
+        work_(handler_, io_ex) {}
 
-private:
+ private:
   static void do_complete(void* owner, asio::detail::operation* base,
                           const asio::error_code& result_ec,
                           std::size_t /*bytes_transferred*/) {
     nd_wait_disconnect_op* o = static_cast<nd_wait_disconnect_op*>(base);
 
     bool const already_closed =
-        o->peer_closed_ &&
-        o->peer_closed_->load(std::memory_order_acquire);
+        o->peer_closed_ && o->peer_closed_->load(std::memory_order_acquire);
     asio::error_code ec = result_ec;
     if (!ec) {
       if (o->peer_closed_) {
         o->peer_closed_->store(true, std::memory_order_release);
       }
       ec = make_error_code(rdma_errc::disconnected);
-    } else if (ec == asio::error::operation_aborted && !already_closed) {
+    }
+    else if (ec == asio::error::operation_aborted && !already_closed) {
       // Per-operation cancellation of NotifyDisconnect must not make the
       // connection appear closed. A self/peer disconnect sets peer_closed_ via
       // disconnect() or a real notification and is reported below.
-    } else if (ec == asio::error::operation_aborted && already_closed) {
+    }
+    else if (ec == asio::error::operation_aborted && already_closed) {
       if (o->peer_closed_) {
         o->peer_closed_->store(true, std::memory_order_release);
       }

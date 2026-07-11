@@ -27,30 +27,28 @@ namespace coro_io::detail {
 // completes the overlapped, do_complete simply frees the op (no user upcall).
 // Mirrors nd_poll_wc_op's self-perpetuating/self-reaping pattern.
 class nd_disconnect_op final : public nd_op_base {
-public:
+ public:
   struct Handler {};
   ASIO_DEFINE_HANDLER_PTR(nd_disconnect_op);
 
   inline explicit nd_disconnect_op(IND2Connector* connector);
 
-private:
-  inline static void do_complete(void* /*owner*/,
-                                    asio::detail::operation* base,
-                                    const asio::error_code& /*result_ec*/,
-                                    std::size_t /*bytes_transferred*/);
+ private:
+  inline static void do_complete(void* /*owner*/, asio::detail::operation* base,
+                                 const asio::error_code& /*result_ec*/,
+                                 std::size_t /*bytes_transferred*/);
 };
 
 // --- inlined from nd_op_disconnect.ipp ---
 
 inline nd_disconnect_op::nd_disconnect_op(IND2Connector* connector)
     : nd_op_base(connector, &nd_op_base::default_process,
-                 &nd_disconnect_op::do_complete) {
-}
+                 &nd_disconnect_op::do_complete) {}
 
 inline void nd_disconnect_op::do_complete(void* /*owner*/,
-                                   asio::detail::operation* base,
-                                   const asio::error_code& /*result_ec*/,
-                                   std::size_t /*bytes_transferred*/) {
+                                          asio::detail::operation* base,
+                                          const asio::error_code& /*result_ec*/,
+                                          std::size_t /*bytes_transferred*/) {
   auto* o = static_cast<nd_disconnect_op*>(base);
   ptr p = {nullptr, o, o};
   p.reset();  // fire-and-forget: free the op, no upcall

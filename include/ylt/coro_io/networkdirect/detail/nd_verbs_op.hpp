@@ -29,8 +29,8 @@ class nd_verbs_op_base {
  public:
   friend class asio::detail::op_queue_access;
 
-  using complete_func =
-      void (*)(void*, nd_verbs_op_base*, asio::error_code const&, std::size_t);
+  using complete_func = void (*)(void*, nd_verbs_op_base*,
+                                 asio::error_code const&, std::size_t);
 
   enum class op_type {
     post_recv = 0,
@@ -85,8 +85,7 @@ class nd_two_sided_op<BufferSequence> : public nd_verbs_op_base {
   BufferSequence buffer_seq_;
 
  public:
-  nd_two_sided_op(complete_func complete_cb,
-                  asio::error_code const& success_ec,
+  nd_two_sided_op(complete_func complete_cb, asio::error_code const& success_ec,
                   BufferSequence const& buffer_seq)
       : nd_verbs_op_base(complete_cb, success_ec), buffer_seq_(buffer_seq) {}
 
@@ -106,8 +105,7 @@ class nd_one_sided_op : public nd_two_sided_op<BufferSequence> {
   nd_remote_addr_t remote_addr_;
 
  public:
-  nd_one_sided_op(complete_func complete_cb,
-                  asio::error_code const& success_ec,
+  nd_one_sided_op(complete_func complete_cb, asio::error_code const& success_ec,
                   BufferSequence const& buffer_seq,
                   nd_remote_addr_t const& remote_addr)
       : base_type(complete_cb, success_ec, buffer_seq),

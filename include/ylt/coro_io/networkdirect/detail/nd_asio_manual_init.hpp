@@ -16,7 +16,6 @@
 #pragma once
 
 #include <asio/detail/winsock_init.hpp>
-
 #include <iostream>
 #include <system_error>
 
@@ -76,9 +75,7 @@ inline nd_process_global_initializer_t nd_process_global_initializer
 #endif
 
 struct nd_global_t {
-  inline nd_global_t() {
-    nd_process_global().throw_on_error();
-  }
+  inline nd_global_t() { nd_process_global().throw_on_error(); }
 
   nd_global_t(nd_global_t const&) = delete;
   nd_global_t& operator=(nd_global_t const&) = delete;

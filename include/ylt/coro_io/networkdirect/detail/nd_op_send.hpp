@@ -37,9 +37,8 @@ class nd_send_op final : public nd_two_sided_op<BufferSequence> {
 
  public:
   ASIO_DEFINE_HANDLER_PTR(nd_send_op);
-  nd_send_op(asio::error_code const& ec,
-             BufferSequence const& buffer_sequence, Handler& handler,
-             IoExecutor const& io_ex)
+  nd_send_op(asio::error_code const& ec, BufferSequence const& buffer_sequence,
+             Handler& handler, IoExecutor const& io_ex)
       : base_type(&nd_send_op::do_complete, ec, buffer_sequence),
         handler_(ASIO_MOVE_CAST(Handler)(handler)),
         work_(handler_, io_ex) {}

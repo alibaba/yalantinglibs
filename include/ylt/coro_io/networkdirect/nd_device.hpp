@@ -16,11 +16,12 @@
 #pragma once
 
 #include <ranges>
+
 #include "asio/detail/throw_error.hpp"
 #include "detail/nd_asio_manual_init.hpp"
-#include "nd_types.hpp"
-#include "nd_error.hpp"
 #include "detail/nd_device_impl.hpp"
+#include "nd_error.hpp"
+#include "nd_types.hpp"
 
 namespace coro_io {
 
@@ -32,9 +33,7 @@ class nd_device_manager_t {
   detail::nd_global_t global_;
   std::vector<detail::nd_provider_ptr> providers_;
 
-  nd_device_manager_t()
-    : global_()
-    , providers_(detail::get_providers()) {
+  nd_device_manager_t() : global_(), providers_(detail::get_providers()) {
     detail::open_adapters(providers_);
   }
 
@@ -45,9 +44,10 @@ class nd_device_manager_t {
   }
 
   // Return the first device whose capabilities satisfy the (non-zero) config
-  // constraints. A device may carry v4 and/or v6 local addresses; callers select
-  // a concrete address with get_v4_address() / get_v6_address().
-  nd_device_ptr get_first_available_device(nd_config_t const& config = {}) const {
+  // constraints. A device may carry v4 and/or v6 local addresses; callers
+  // select a concrete address with get_v4_address() / get_v6_address().
+  nd_device_ptr get_first_available_device(
+      nd_config_t const& config = {}) const {
     for (auto const& provider : providers_) {
       assert(provider);
       for (auto const& device : provider->devices_) {
@@ -64,13 +64,13 @@ class nd_device_manager_t {
     for (auto const& provider : providers_) {
       assert(provider);
       for (auto const& device : provider->devices_) {
-        if (!func(device)) return;
+        if (!func(device))
+          return;
       }
     }
   }
 
  private:
-
 };
 
 namespace detail {

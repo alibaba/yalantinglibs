@@ -35,9 +35,6 @@
 #include "asio/ip/address.hpp"
 #include "async_simple/coro/Lazy.h"
 #include "async_simple/util/move_only_function.h"
-#include "ylt/coro_io/coro_io.hpp"
-#include "ylt/coro_io/io_context_pool.hpp"
-#include "ylt/easylog.hpp"
 #include "nd_buffer.hpp"
 #include "nd_buffer_pool.hpp"
 #include "nd_connector.hpp"
@@ -46,6 +43,9 @@
 #include "nd_listener.hpp"
 #include "nd_queue_pair.hpp"
 #include "nd_tcp.hpp"
+#include "ylt/coro_io/coro_io.hpp"
+#include "ylt/coro_io/io_context_pool.hpp"
+#include "ylt/easylog.hpp"
 
 namespace coro_io {
 
@@ -113,8 +113,8 @@ struct nd_socket_shared_state_t
     }
   }
 
-  // Deliver one completed recv to a waiting/queued consumer: stash its buffer as
-  // the current recv buffer, then resume the callback with (ec, len).
+  // Deliver one completed recv to a waiting/queued consumer: stash its buffer
+  // as the current recv buffer, then resume the callback with (ec, len).
   void deliver(recv_result_t&& result, callback_t&& cb) {
     current_recv_ = std::move(result.buf);
     recv_off_ = 0;
@@ -172,8 +172,9 @@ struct nd_socket_shared_state_t
       return;
     }
     if (has_close_) [[unlikely]] {
-      resume(std::pair{make_error_code(rdma_errc::disconnected), std::size_t{0}},
-             std::move(cb));
+      resume(
+          std::pair{make_error_code(rdma_errc::disconnected), std::size_t{0}},
+          std::move(cb));
       return;
     }
     recv_cb_ = std::move(cb);
@@ -214,8 +215,9 @@ struct nd_socket_shared_state_t
     }
     // resume any pending consumer with a disconnected error
     if (recv_cb_) {
-      resume(std::pair{make_error_code(rdma_errc::disconnected), std::size_t{0}},
-             std::move(recv_cb_));
+      resume(
+          std::pair{make_error_code(rdma_errc::disconnected), std::size_t{0}},
+          std::move(recv_cb_));
     }
   }
 
@@ -341,7 +343,10 @@ class nd_socket_t {
   async_simple::coro::Lazy<std::error_code> connect(
       const EndPoint& endpoint) noexcept {
     try {
-      if constexpr (requires { endpoint.address(); endpoint.port(); }) {
+      if constexpr (requires {
+                      endpoint.address();
+                      endpoint.port();
+                    }) {
         auto ec = co_await connect_one_endpoint(endpoint);
         if (ec) [[unlikely]] {
           close();
@@ -364,7 +369,7 @@ class nd_socket_t {
         }
         close();
         co_return tried ? last_ec
-                       : std::make_error_code(std::errc::invalid_argument);
+                        : std::make_error_code(std::errc::invalid_argument);
       }
     } catch (const std::exception& e) {
       ELOG_ERROR << "nd_socket connect failed: " << e.what();
@@ -412,11 +417,10 @@ class nd_socket_t {
     }
     coro_io::callback_awaitor<std::pair<std::error_code, std::size_t>> awaitor;
     auto result = co_await awaitor.await_resume([&](auto handler) {
-      self->qp_.async_send(view,
-                           [handler](asio::error_code ec, std::size_t n) mutable {
-                             handler.set_value_then_resume(
-                                 std::pair{std::error_code(ec), n});
-                           });
+      self->qp_.async_send(
+          view, [handler](asio::error_code ec, std::size_t n) mutable {
+            handler.set_value_then_resume(std::pair{std::error_code(ec), n});
+          });
     });
     co_return result;
   }
@@ -478,7 +482,8 @@ class nd_socket_t {
   }
 
   template <typename EndPoint>
-  async_simple::coro::Lazy<std::error_code> connect_op(const EndPoint& endpoint) {
+  async_simple::coro::Lazy<std::error_code> connect_op(
+      const EndPoint& endpoint) {
     auto self = state_;
     auto local_info = make_socket_info();
     nd_socket_info peer_info{};
@@ -561,8 +566,8 @@ class nd_socket_t {
   }
 
   void set_local_address_by_family(bool use_v4) {
-    local_address_ =
-        use_v4 ? conf_.device->get_v4_address() : conf_.device->get_v6_address();
+    local_address_ = use_v4 ? conf_.device->get_v4_address()
+                            : conf_.device->get_v6_address();
   }
 
   void init(const config_t& config) {

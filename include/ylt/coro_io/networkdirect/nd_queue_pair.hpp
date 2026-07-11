@@ -18,38 +18,39 @@
 #include "asio/async_result.hpp"
 #include "asio/io_context.hpp"
 #include "asio/system_executor.hpp"
-#include "nd_completion_queue.hpp"
-#include "nd_error.hpp"
 #include "detail/nd_service_device.hpp"
 #include "detail/nd_service_io_completion.hpp"
 #include "detail/nd_service_verbs.hpp"
+#include "nd_completion_queue.hpp"
+#include "nd_error.hpp"
 
 namespace coro_io {
 
 // Queue pair IO object. Two mutually-exclusive modes, distinguished by io_ctx_:
 //
-//   nd_queue_pair(io_context&)        event mode -- completions via use_device's
+//   nd_queue_pair(io_context&)        event mode -- completions via
+//   use_device's
 //                                      shared CQ (IOCP).
 //   nd_queue_pair(completion_queue&)  poll mode  -- io_context-free data plane;
 //                                      completions reaped by the user's poll().
 //
 // No io_object_impl: the QP owns the verbs-service implementation_type directly
-// and selects the static (poll) or member (event) service entry points per call.
-// Unlike ibv, nd creates and OWNS the native QP at construction (impl_.qp_); the
-// connector borrows it via native_handle(). Rule of five = move impl_ + io_ctx_
-// (the nd2 smart ptr in impl_ moves/frees the QP). Config is read from the holder
-// (use_device / completion_queue), not passed here.
+// and selects the static (poll) or member (event) service entry points per
+// call. Unlike ibv, nd creates and OWNS the native QP at construction
+// (impl_.qp_); the connector borrows it via native_handle(). Rule of five =
+// move impl_ + io_ctx_ (the nd2 smart ptr in impl_ moves/frees the QP). Config
+// is read from the holder (use_device / completion_queue), not passed here.
 class nd_queue_pair {
-public:
+ public:
   using service_type = detail::nd_verbs_service;
 
   nd_queue_pair() = default;
   ~nd_queue_pair() = default;
 
   nd_queue_pair(nd_queue_pair&& other) noexcept
-      : impl_(std::move(other.impl_))
-      , io_ctx_(other.io_ctx_)
-      , verbs_svc_(other.verbs_svc_) {
+      : impl_(std::move(other.impl_)),
+        io_ctx_(other.io_ctx_),
+        verbs_svc_(other.verbs_svc_) {
     other.impl_ = impl_type{};
     other.io_ctx_ = nullptr;
     other.verbs_svc_ = nullptr;
@@ -102,18 +103,19 @@ public:
       ASIO_ERROR_LOCATION(ec);
       return;
     }
-    auto& io_svc =
-        asio::use_service<detail::nd_io_completion_service>(io_ctx);
+    auto& io_svc = asio::use_service<detail::nd_io_completion_service>(io_ctx);
     io_ctx_ = &io_ctx;
     impl_.device_ = dev_svc.get_device();
     impl_.cq_ = io_svc.get_cq();
     impl_.config_ = dev_svc.get_effective_config();
     impl_.poll_cq_ = nullptr;
-    // Cache the verbs service once -- the event-mode async_* path uses it per op.
+    // Cache the verbs service once -- the event-mode async_* path uses it per
+    // op.
     verbs_svc_ = &asio::use_service<detail::nd_verbs_service>(io_ctx);
     ec = detail::nd_verbs_service::create_qp(impl_);
     if (!ec) {
-      // Start the shared-CQ poller (idempotent); the data plane never arms again.
+      // Start the shared-CQ poller (idempotent); the data plane never arms
+      // again.
       io_svc.ensure_poller_started();
     }
   }
@@ -148,7 +150,8 @@ public:
 
   // Which completion mechanism this QP is bound to.
   completion_mode bound_type() const noexcept {
-    if (!is_bound()) return completion_mode::none;
+    if (!is_bound())
+      return completion_mode::none;
     return io_ctx_ ? completion_mode::event : completion_mode::poll;
   }
 
@@ -164,7 +167,8 @@ public:
           if (io_ctx_) {
             (*verbs_svc_)
                 .async_send(impl_, bufs, handler, io_ctx_->get_executor());
-          } else {
+          }
+          else {
             detail::nd_verbs_service::async_send_static(
                 impl_, bufs, handler, asio::system_executor{});
           }
@@ -174,13 +178,13 @@ public:
 
   template <typename MutableBufferSequence, typename ReadToken>
   auto async_recv(MutableBufferSequence const& buffers, ReadToken&& token) {
-    return asio::async_initiate<ReadToken,
-                                void(asio::error_code, std::size_t)>(
+    return asio::async_initiate<ReadToken, void(asio::error_code, std::size_t)>(
         [this](auto handler, auto const& bufs) {
           if (io_ctx_) {
             (*verbs_svc_)
                 .async_recv(impl_, bufs, handler, io_ctx_->get_executor());
-          } else {
+          }
+          else {
             detail::nd_verbs_service::async_recv_static(
                 impl_, bufs, handler, asio::system_executor{});
           }
@@ -198,7 +202,8 @@ public:
             (*verbs_svc_)
                 .async_write(impl_, bufs, remote_addr, handler,
                              io_ctx_->get_executor());
-          } else {
+          }
+          else {
             detail::nd_verbs_service::async_write_static(
                 impl_, bufs, remote_addr, handler, asio::system_executor{});
           }
@@ -209,14 +214,14 @@ public:
   template <typename MutableBufferSequence, typename ReadToken>
   auto async_read(MutableBufferSequence const& buffers,
                   nd_remote_addr_t const& remote_addr, ReadToken&& token) {
-    return asio::async_initiate<ReadToken,
-                                void(asio::error_code, std::size_t)>(
+    return asio::async_initiate<ReadToken, void(asio::error_code, std::size_t)>(
         [this, &remote_addr](auto handler, auto const& bufs) {
           if (io_ctx_) {
             (*verbs_svc_)
                 .async_read(impl_, bufs, remote_addr, handler,
                             io_ctx_->get_executor());
-          } else {
+          }
+          else {
             detail::nd_verbs_service::async_read_static(
                 impl_, bufs, remote_addr, handler, asio::system_executor{});
           }
@@ -224,11 +229,12 @@ public:
         token, buffers);
   }
 
-private:
+ private:
   using impl_type = detail::nd_verbs_service::implementation_type;
   impl_type impl_;
-  asio::io_context* io_ctx_ = nullptr;             // null => poll mode
-  detail::nd_verbs_service* verbs_svc_ = nullptr;  // cached in bind(io) (event mode)
+  asio::io_context* io_ctx_ = nullptr;  // null => poll mode
+  detail::nd_verbs_service* verbs_svc_ =
+      nullptr;  // cached in bind(io) (event mode)
 };
 
 }  // namespace coro_io

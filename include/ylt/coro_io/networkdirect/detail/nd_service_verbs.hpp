@@ -21,62 +21,65 @@
 #include "asio/detail/config.hpp"
 #include "asio/detail/handler_alloc_helpers.hpp"
 #include "asio/detail/memory.hpp"
-#include "ylt/coro_io/networkdirect/nd_completion_queue.hpp"
-#include "nd_service_base.hpp"
-#include "nd_ops_verbs.hpp"
 #include "nd_op_base.hpp"
 #include "nd_op_complete.hpp"
-#include "nd_op_send.hpp"
-#include "nd_op_recv.hpp"
 #include "nd_op_read.hpp"
+#include "nd_op_recv.hpp"
+#include "nd_op_send.hpp"
 #include "nd_op_write.hpp"
+#include "nd_ops_verbs.hpp"
+#include "nd_service_base.hpp"
 #include "ylt/coro_io/networkdirect/nd_buffer.hpp"
+#include "ylt/coro_io/networkdirect/nd_completion_queue.hpp"
 
 namespace coro_io::detail {
 
-// Data-plane service backing nd_queue_pair. The per-QP state (implementation_type)
-// is owned by the queue_pair (no io_object_impl); this service supplies the verbs
-// logic in two flavors:
-//   - static methods (poll mode): operate purely on implementation_type, touch no
-//     io_context. Immediate completions are queued on the bound nd_completion_queue.
+// Data-plane service backing nd_queue_pair. The per-QP state
+// (implementation_type) is owned by the queue_pair (no io_object_impl); this
+// service supplies the verbs logic in two flavors:
+//   - static methods (poll mode): operate purely on implementation_type, touch
+//   no
+//     io_context. Immediate completions are queued on the bound
+//     nd_completion_queue.
 //   - member methods (event mode): arm the shared-CQ (IOCP) notify and route
 //     immediate completions to the scheduler.
 //
 // Unlike ibv, nd creates and OWNS the QP at construction (impl.qp_ is a
 // nd2_queue_pair_ptr); the connector borrows it via native_handle().
 class nd_verbs_service
-    : public asio::detail::execution_context_service_base<nd_verbs_service>
-    , public nd_service_base {
-public:
+    : public asio::detail::execution_context_service_base<nd_verbs_service>,
+      public nd_service_base {
+ public:
   using base_type =
       asio::detail::execution_context_service_base<nd_verbs_service>;
 
-  // Owned by the queue_pair. event mode: poll_cq_ == nullptr; poll mode: non-null.
+  // Owned by the queue_pair. event mode: poll_cq_ == nullptr; poll mode:
+  // non-null.
   struct implementation_type {
-    nd2_queue_pair_ptr qp_;                 // owned (created at construction)
-    native_cq_t* cq_ = nullptr;             // CQ the QP is bound to
-    nd_adapter_ptr device_;                 // for create_qp (pd)
-    nd_config_t config_;                    // effective config
-    nd_completion_queue* poll_cq_ = nullptr;  // poll-mode immediate-completion sink
+    nd2_queue_pair_ptr qp_;      // owned (created at construction)
+    native_cq_t* cq_ = nullptr;  // CQ the QP is bound to
+    nd_adapter_ptr device_;      // for create_qp (pd)
+    nd_config_t config_;         // effective config
+    nd_completion_queue* poll_cq_ =
+        nullptr;  // poll-mode immediate-completion sink
   };
 
   explicit nd_verbs_service(asio::execution_context& ctx)
-      : base_type(ctx)
-      , nd_service_base(ctx)
-      , success_ec_() {
-  }
+      : base_type(ctx), nd_service_base(ctx), success_ec_() {}
 
   ~nd_verbs_service() = default;
 
-  // The native QP is owned by the queue_pair's impl_; nothing to tear down here.
+  // The native QP is owned by the queue_pair's impl_; nothing to tear down
+  // here.
   void shutdown() override {}
 
-  // Create the QP from the impl's device/cq/config. Static: no io_context needed.
+  // Create the QP from the impl's device/cq/config. Static: no io_context
+  // needed.
   inline static asio::error_code create_qp(implementation_type& impl);
 
   // "bound" = associated with a completion mechanism (a CQ). On nd the QP is
-  // created at bind time, so native_handle() is also non-null then; the predicate
-  // is named for the binding, to match ibv.
+  // created at bind time, so native_handle() is also non-null then; the
+  // predicate is named for the binding, to match ibv.
   static bool is_bound(implementation_type const& impl) noexcept {
     return impl.cq_ != nullptr;
   }
@@ -119,7 +122,8 @@ public:
     using op = nd_read_op<BufferSequence, Handler, IoExecutor>;
     typename op::ptr p = {asio::detail::addressof(handler),
                           op::ptr::allocate(handler), 0};
-    p.p = new (p.v) op{asio::error_code{}, buffers, remote_addr, handler, io_ex};
+    p.p =
+        new (p.v) op{asio::error_code{}, buffers, remote_addr, handler, io_ex};
     finish_poll(impl, p.p, do_post_read(impl, p.p));
     p.v = p.p = 0;
   }
@@ -132,7 +136,8 @@ public:
     using op = nd_write_op<BufferSequence, Handler, IoExecutor>;
     typename op::ptr p = {asio::detail::addressof(handler),
                           op::ptr::allocate(handler), 0};
-    p.p = new (p.v) op{asio::error_code{}, buffers, remote_addr, handler, io_ex};
+    p.p =
+        new (p.v) op{asio::error_code{}, buffers, remote_addr, handler, io_ex};
     finish_poll(impl, p.p, do_post_write(impl, p.p));
     p.v = p.p = 0;
   }
@@ -185,13 +190,13 @@ public:
     p.v = p.p = 0;
   }
 
-private:
+ private:
   asio::error_code success_ec_;
 
-  // Reject a buffer sequence whose SGE count exceeds the device's max_sge before
-  // posting -- a clean library error instead of a raw HW failure. Returns true
-  // (and sets ec) when over the limit. (sge_max == 0 means the effective config
-  // was never derived; treat as "no limit".)
+  // Reject a buffer sequence whose SGE count exceeds the device's max_sge
+  // before posting -- a clean library error instead of a raw HW failure.
+  // Returns true (and sets ec) when over the limit. (sge_max == 0 means the
+  // effective config was never derived; treat as "no limit".)
   static bool exceeds_sge_limit(std::size_t sge_count, std::uint32_t sge_max,
                                 asio::error_code& ec) {
     if (sge_max != 0 && sge_count > sge_max) {
@@ -226,7 +231,8 @@ private:
     }
 
     nd_sglist_t sglist;
-    auto built = build_native_sglist(buffers, sglist, impl.config_.max_send_sge_);
+    auto built =
+        build_native_sglist(buffers, sglist, impl.config_.max_send_sge_);
     if (built.all_empty) {
       return true;
     }
@@ -256,7 +262,8 @@ private:
     }
 
     nd_sglist_t sglist;
-    auto built = build_native_sglist(buffers, sglist, impl.config_.max_recv_sge_);
+    auto built =
+        build_native_sglist(buffers, sglist, impl.config_.max_recv_sge_);
     if (built.all_empty) {
       return true;
     }
@@ -264,8 +271,7 @@ private:
       op->ec_ = make_error_code(rdma_errc::too_many_sge);
       return true;
     }
-    verbs_ops::post_recv(impl.qp_.Get(), op, built.data, built.count,
-                         op->ec_);
+    verbs_ops::post_recv(impl.qp_.Get(), op, built.data, built.count, op->ec_);
     return static_cast<bool>(op->ec_);
   }
 
@@ -288,7 +294,8 @@ private:
     }
 
     nd_sglist_t sglist;
-    auto built = build_native_sglist(buffers, sglist, impl.config_.max_send_sge_);
+    auto built =
+        build_native_sglist(buffers, sglist, impl.config_.max_send_sge_);
     if (built.all_empty) {
       return true;
     }
@@ -297,8 +304,8 @@ private:
       return true;
     }
     auto const& ra = op->get_remote_addr();
-    verbs_ops::post_read(impl.qp_.Get(), op, built.data, built.count,
-                         ra.addr_, ra.token_, 0, op->ec_);
+    verbs_ops::post_read(impl.qp_.Get(), op, built.data, built.count, ra.addr_,
+                         ra.token_, 0, op->ec_);
     return static_cast<bool>(op->ec_);
   }
 
@@ -315,13 +322,14 @@ private:
       native_sge_t sge{};
       fill_native_sge(sge, buffers);
       auto const& ra = op->get_remote_addr();
-      verbs_ops::post_write(impl.qp_.Get(), op, &sge, 1, ra.addr_, ra.token_,
-                            0, op->ec_);
+      verbs_ops::post_write(impl.qp_.Get(), op, &sge, 1, ra.addr_, ra.token_, 0,
+                            op->ec_);
       return static_cast<bool>(op->ec_);
     }
 
     nd_sglist_t sglist;
-    auto built = build_native_sglist(buffers, sglist, impl.config_.max_send_sge_);
+    auto built =
+        build_native_sglist(buffers, sglist, impl.config_.max_send_sge_);
     if (built.all_empty) {
       return true;
     }
@@ -330,8 +338,8 @@ private:
       return true;
     }
     auto const& ra = op->get_remote_addr();
-    verbs_ops::post_write(impl.qp_.Get(), op, built.data, built.count,
-                          ra.addr_, ra.token_, 0, op->ec_);
+    verbs_ops::post_write(impl.qp_.Get(), op, built.data, built.count, ra.addr_,
+                          ra.token_, 0, op->ec_);
     return static_cast<bool>(op->ec_);
   }
 
@@ -345,9 +353,10 @@ private:
   }
 
   // event mode: a posted op needs nothing here -- the io_completion_service's
-  // poller is already armed (started at queue_pair::bind) and self-perpetuating,
-  // so it reaps this op's completion. Only an immediate completion (empty buffers
-  // / synchronous post error) needs scheduling onto the io_context.
+  // poller is already armed (started at queue_pair::bind) and
+  // self-perpetuating, so it reaps this op's completion. Only an immediate
+  // completion (empty buffers / synchronous post error) needs scheduling onto
+  // the io_context.
   void finish_event(implementation_type& /*impl*/, nd_verbs_op_base* op,
                     bool immediate) {
     if (immediate) [[unlikely]] {
