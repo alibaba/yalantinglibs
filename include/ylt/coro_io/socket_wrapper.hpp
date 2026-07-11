@@ -89,6 +89,7 @@ struct socket_wrapper_t {
       init_ok_ = false;
       return false;
     }
+    init_ok_ = true;
     return true;
   }
 #ifdef YLT_ENABLE_SSL
@@ -103,6 +104,7 @@ struct socket_wrapper_t {
       init_ok_ = false;
       return false;
     }
+    init_ok_ = true;
     return true;
   }
 #endif
@@ -121,6 +123,7 @@ struct socket_wrapper_t {
       init_ok_ = false;
       return false;
     }
+    init_ok_ = true;
     return true;
   }
 #endif

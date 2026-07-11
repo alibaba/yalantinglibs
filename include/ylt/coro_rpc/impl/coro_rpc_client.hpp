@@ -942,7 +942,7 @@ class coro_rpc_client {
     return call<func>(request_config_t{{},
                                        req_attachment_,
                                        (std::span<char>)resp_attachment_buffer_,
-                                       resp_attachment_.gpu_id(),
+                                       req_attachment_.gpu_id(),
                                        resp_attachment_buffer_.gpu_id()},
                       std::forward<Args>(args)...);
   }
@@ -964,7 +964,7 @@ class coro_rpc_client {
     return call<func>(
         request_config_t{request_timeout_duration, req_attachment_,
                          (std::span<char>)resp_attachment_buffer_,
-                         resp_attachment_.gpu_id(),
+                         req_attachment_.gpu_id(),
                          resp_attachment_buffer_.gpu_id()},
         std::forward<Args>(args)...);
   }
@@ -1642,7 +1642,7 @@ class coro_rpc_client {
                 *buffer,
                 std::max<uint64_t>(header.attach_length, sizeof(std::string)));
             attachment_buffer = {
-                std::span<char>{buffer->data(), header.attach_length}, 0};
+                std::span<char>{buffer->data(), header.attach_length}, -1};
           }
         }
         else if (attachment_buffer.size() > header.attach_length) {

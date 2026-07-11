@@ -507,8 +507,11 @@ class coro_rpc_server_base {
  private:
   async_simple::coro::Lazy<coro_rpc::err_code> accept() {
     std::vector<async_simple::coro::Lazy<coro_rpc::err_code>> tasks;
-    acceptors_[0]->address();
-    acceptors_[0]->port();
+    if (acceptors_.empty()) {
+      ELOG_ERROR << "no acceptor to accept, you need init server by at least "
+                    "one acceptor to start server";
+      co_return coro_rpc::err_code{coro_rpc::errc::io_error};
+    }
     for (auto& acceptor : acceptors_) {
       tasks.emplace_back(accept_impl(*acceptor));
     }

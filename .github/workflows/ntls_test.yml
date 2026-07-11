@@ -22,6 +22,10 @@ on:
   workflow_call:
   workflow_dispatch:
 
+concurrency:
+  group: ntls-test-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 env:
   TONGSUO_VERSION: "8.4.2"
   TONGSUO_INSTALL_PREFIX: /usr/local/tongsuo
@@ -35,7 +39,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install build dependencies
         run: |
@@ -91,9 +95,6 @@ jobs:
           # Verify NTLS support
           ${TONGSUO_INSTALL_PREFIX}/bin/tongsuo s_client -help 2>&1 | grep -i ntls || \
           ${TONGSUO_INSTALL_PREFIX}/bin/openssl s_client -help 2>&1 | grep -i ntls || true
-
-      - name: Install ninja-build tool
-        uses: seanmiddleditch/gha-setup-ninja@master
 
       - name: Configure CMake with NTLS (GCC)
         run: |
@@ -168,4 +169,3 @@ jobs:
           else
             echo "✓ NTLS symbols detected in Tongsuo libssl"
           fi
-
