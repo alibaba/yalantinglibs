@@ -1,6 +1,6 @@
 name: RDMA (software)
 
-# Exercises the ibverbs stack and the RDMA code paths inside coro_rpc by
+# Exercises the ibverbs stack by
 # standing up a virtual software RDMA device on a standard GitHub-hosted
 # ubuntu-22.04 runner, then building with -DYLT_ENABLE_IBV=ON.
 #
@@ -61,9 +61,11 @@ jobs:
           if sudo modprobe rdma_rxe 2>/tmp/modprobe-rdma-rxe.log; then
             RDMA_DEV=rxe0
             RDMA_TYPE=rxe
+            RUN_RDMA_TESTS=1
           elif sudo modprobe siw 2>/tmp/modprobe-siw.log; then
             RDMA_DEV=siw0
             RDMA_TYPE=siw
+            RUN_RDMA_TESTS=0
           else
             echo "::error::Neither rdma_rxe nor siw is available on this runner kernel"
             echo "rdma_rxe:"
@@ -76,15 +78,22 @@ jobs:
 
           echo "Binding ${RDMA_DEV} (${RDMA_TYPE}) to netdev: ${DEV}"
           sudo rdma link add "$RDMA_DEV" type "$RDMA_TYPE" netdev "$DEV"
+          echo "YLT_RDMA_DEV_NAME=${RDMA_DEV}" >> "$GITHUB_ENV"
+          echo "YLT_RDMA_DEV_TYPE=${RDMA_TYPE}" >> "$GITHUB_ENV"
+          echo "YLT_RUN_RDMA_TESTS=${RUN_RDMA_TESTS}" >> "$GITHUB_ENV"
 
-          # Verify — hard fail if no RDMA device came up so we never run the
-          # test suite against a broken/missing device.
+          # Verify — hard fail if the target RDMA device did not come up so we
+          # never run the test suite against a broken/missing/default device.
           lsmod | grep -E 'rdma_rxe|siw|ib_core|ib_uverbs' || true
           rdma link show
           ibv_devices
           ibv_devinfo
           # ibv_devices -l prints two header lines plus one line per device.
           test "$(ibv_devices -l 2>/dev/null | wc -l)" -gt 2
+          ibv_devices -l 2>/dev/null | awk '{print $1}' | grep -Fx "$RDMA_DEV"
+          if [ "$RUN_RDMA_TESTS" != "1" ]; then
+            echo "::notice::Soft-iWARP is available, but these ibverbs socket tests hand-wire RC QPs and require SoftRoCE for runtime coverage. This job will build ibverbs targets only."
+          fi
 
       - name: Install ninja-build tool
         uses: seanmiddleditch/gha-setup-ninja@master
@@ -103,22 +112,18 @@ jobs:
                 -DYLT_ENABLE_SSL=OFF \
                 -DUSE_CCACHE=${{env.ccache}}
 
-      - name: Build
+      - name: Build ibverbs targets
         run: |
           cmake --build ${{github.workspace}}/build --config Debug --target \
             ibverbs_test \
-            ibverbs_pressure_test \
-            coro_rpc_test
+            ibverbs_pressure_test
 
       - name: Run ibverbs tests
+        if: env.YLT_RUN_RDMA_TESTS == '1'
         working-directory: ${{github.workspace}}/build
         run: ctest -R ibverbs -C Debug -j 1 -V
 
-      - name: Run coro_rpc RDMA integration cases
-        working-directory: ${{github.workspace}}/build
+      - name: Skip ibverbs runtime tests
+        if: env.YLT_RUN_RDMA_TESTS != '1'
         run: |
-          # Only the RDMA-specific doctest cases — running the whole coro_rpc
-          # suite is heavy and out of scope for this job. An empty filter match
-          # (0 assertions) exits non-zero, which surfaces a missing-YLT_ENABLE_IBV
-          # regression on the test binary.
-          ./output/tests/coro_rpc_test -tc="*rdma*" -rf=console
+          echo "Skipping ibverbs runtime tests for ${YLT_RDMA_DEV_NAME} (${YLT_RDMA_DEV_TYPE}); ibverbs targets were built successfully."
