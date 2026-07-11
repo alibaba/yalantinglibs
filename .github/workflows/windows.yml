@@ -8,9 +8,16 @@ on:
     branches: [ main, develop ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   windows_msvc:
-    runs-on: windows-latest
+    runs-on: windows-2022
 
     strategy:
       matrix:
@@ -22,25 +29,64 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Enable Developer Command Prompt
-        uses: ilammy/msvc-dev-cmd@v1.12.0
+        uses: step-security/msvc-dev-cmd@v1
         with:
           arch: ${{ matrix.arch }}
-      - name: Install ninja-build tool
-        uses: seanmiddleditch/gha-setup-ninja@master
-        with:
-          version: 1.11.1
-      - name: latest ccache
-        run: choco install ccache
+      - name: Install build tools
+        run: choco install ninja ccache -y
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2
+        uses: hendrikmuhs/ccache-action@v1.2.23
         with:
           key: ${{ github.job }}-${{ matrix.mode}}-ssl( ${{ matrix.ssl}} )-arch-${{ matrix.arch}}
       - name: Configure CMake
         run: cmake -B ${{github.workspace}}\build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -DYLT_ENABLE_SSL=${{matrix.ssl}} -DUSE_CCACHE=ON
       - name: Build
         run: cmake --build ${{github.workspace}}\build
-      - name: Test
+      - name: Diagnose coro_http_test
         working-directory: ${{github.workspace}}\build
-        run: ctest -E coro_http_test -C ${{matrix.mode}} -j 1 -V
+        shell: pwsh
+        run: |
+          $exe = Join-Path $PWD "output/tests/coro_http_test.exe"
+          $testDir = Join-Path $PWD "src/coro_http/tests"
+          if (!(Test-Path $exe)) {
+            Write-Error "missing test executable: $exe"
+            exit 1
+          }
+          if (Test-Path $testDir) {
+            Set-Location $testDir
+          }
+
+          $cases = & $exe --list-test-cases --no-colors --no-version |
+            Where-Object {
+              $_ -and
+              ($_ -notmatch '^\[doctest\]') -and
+              ($_ -notmatch '^=+$')
+            } |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { $_ -ne "" }
+
+          foreach ($case in $cases) {
+            Write-Host "===== BEGIN coro_http_test case: $case ====="
+            $psi = [System.Diagnostics.ProcessStartInfo]::new()
+            $psi.FileName = $exe
+            $psi.UseShellExecute = $false
+            $psi.ArgumentList.Add("--test-case=$case")
+            $psi.ArgumentList.Add("--duration")
+            $psi.ArgumentList.Add("--no-colors")
+            $psi.ArgumentList.Add("--no-version")
+            $process = [System.Diagnostics.Process]::Start($psi)
+
+            if (!$process.WaitForExit(120000)) {
+              Write-Error "coro_http_test timed out in case: $case"
+              Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+              exit 1
+            }
+
+            if ($process.ExitCode -ne 0) {
+              Write-Error "coro_http_test failed in case: $case, exit code: $($process.ExitCode)"
+              exit $process.ExitCode
+            }
+            Write-Host "===== END coro_http_test case: $case ====="
+          }

@@ -82,7 +82,6 @@ class client_pool : public std::enable_shared_from_this<
       self = nullptr;
       auto is_canceled = co_await coro_io::sleep_for(sleep_time);
       if (!is_canceled) {
-        ELOG_TRACE << "coroutine destroyed, stop collect timeout client";
         break;
       }
       if ((self = self_weak.lock()) == nullptr) {
@@ -336,8 +335,10 @@ class client_pool : public std::enable_shared_from_this<
             (std::max)(collect_time, std::chrono::milliseconds{50}),
             pool_config_.idle_queue_per_max_clear_count)
             .setLazyLocal(async_simple::coro::LazyLocalBase{signal_.get()})
-            .start([](auto&&) {
-            });
+            .directlyStart(
+                [](auto&&) {
+                },
+                coro_io::get_global_executor());
       }
     }
   }

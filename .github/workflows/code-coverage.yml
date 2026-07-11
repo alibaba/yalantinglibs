@@ -1,15 +1,27 @@
 name: Upload CodeCov Report
 
-on: [ push, pull_request ]
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: code-coverage-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
   
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
     - name: Checkout Code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v6
       with:
         fetch-depth: 2
     
@@ -24,17 +36,17 @@ jobs:
     - name: Configure
       run: |
         cmake -B ${{github.workspace}}/build \
-              -DCMAKE_BUILD_TYPE=${{matrix.mode}} -DBUILD_WITH_LIBCXX=OFF -DYLT_ENABLE_SSL=ON \
-              -DUSE_CCACHE=${{env.ccache}} -DCMAKE_C_COMPILER=clang-17 -DCMAKE_CXX_COMPILER=clang++-17
+              -DCMAKE_BUILD_TYPE=Debug -DBUILD_WITH_LIBCXX=OFF -DYLT_ENABLE_SSL=ON \
+              -DUSE_CCACHE=OFF -DCMAKE_C_COMPILER=clang-17 -DCMAKE_CXX_COMPILER=clang++-17
 
-    - name: Build with ${{ matrix.compiler }}
+    - name: Build
       run:  cmake --build ${{github.workspace}}/build --config Debug -- -j$(($(nproc)/2 + 1))
       
     - name: Test
       working-directory: ${{github.workspace}}/build
       env:
         CTEST_OUTPUT_ON_FAILURE: 1
-      run: ctest -E coro_http_test -C ${{ matrix.configuration }} -j 1 -V
+      run: ctest -C Debug -j 1 -V
     
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v1
+      uses: codecov/codecov-action@v6

@@ -33,7 +33,7 @@ runs:
   using: composite
   steps:
     - name: 'Checkout source code'
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         fetch-depth: 100
 
@@ -101,11 +101,11 @@ runs:
       shell: bash
 
     - name: 'Upload coverage results'
-      uses: actions/upload-artifact@v4.3.6
+      uses: actions/upload-artifact@v6
       with:
         name: ${{ steps.get-cov-report.outputs.report }}
         path: ${{ steps.get-cov-report.outputs.path }}
 
     - name: 'Checkout source code'
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       if: ${{ inputs.reset-commit-id }} != ""
