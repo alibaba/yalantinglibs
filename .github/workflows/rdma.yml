@@ -1,14 +1,14 @@
-name: RDMA (SoftRoCE)
+name: RDMA (software)
 
 # Exercises the ibverbs stack and the RDMA code paths inside coro_rpc by
-# standing up a virtual SoftRoCE (rdma_rxe) device on a standard GitHub-hosted
+# standing up a virtual software RDMA device on a standard GitHub-hosted
 # ubuntu-22.04 runner, then building with -DYLT_ENABLE_IBV=ON.
 #
-# NOTE: GitHub-hosted runners do not ship the rdma_rxe kernel module. We pull it
-# in via linux-modules-extra-$(uname -r) and modprobe it. If a runner-image
-# update ever breaks modprobe rdma_rxe, the setup step below fails fast and the
-# obvious fallback is to switch `runs-on` to a self-hosted runner that already
-# has SoftRoCE configured — the rest of the workflow is unchanged.
+# GitHub-hosted runners currently use Azure kernels where rdma_rxe is not
+# always packaged, even after installing linux-modules-extra-$(uname -r). The
+# same extra package does include siw (Soft-iWARP), so the setup below tries
+# SoftRoCE first and falls back to Soft-iWARP while still requiring a real
+# ibverbs-visible RDMA device before tests run.
 
 on:
   push:
@@ -24,7 +24,7 @@ env:
   ccache: ON
 
 jobs:
-  rdma_softroce:
+  rdma_software:
     runs-on: ubuntu-22.04
 
     steps:
@@ -36,31 +36,49 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             openssl libssl-dev \
-            libibverbs-dev librdmacm-dev rdma-core \
+            libibverbs-dev ibverbs-utils librdmacm-dev rdma-core \
             iproute2 ninja-build
 
-      - name: Set up SoftRoCE (rdma_rxe) virtual RDMA device
+      - name: Set up software RDMA device
         run: |
-          # The ubuntu-22.04 runner kernel exposes rdma_rxe only via the
-          # linux-modules-extra package. Install it, load the modules, then
-          # create an rxe device bound to the primary non-loopback interface.
           sudo apt-get install -y "linux-modules-extra-$(uname -r)"
           sudo modprobe ib_core
-          sudo modprobe rdma_rxe
 
-          DEV=$(ip -o link show | awk -F': ' '$2 != "lo" {print $2; exit}')
+          DEV=$(ip route show default 2>/dev/null | awk '{print $5; exit}')
           if [ -z "$DEV" ]; then
-            echo "::error::No usable netdev found for SoftRoCE"
+            DEV=$(ip -o link show up | awk -F': ' '$2 != "lo" {sub(/@.*/, "", $2); print $2; exit}')
+          fi
+          if [ -z "$DEV" ]; then
+            echo "::error::No usable netdev found for software RDMA"
             exit 1
           fi
-          echo "Binding rxe0 to netdev: $DEV"
-          sudo rdma link add rxe0 type rxe netdev "$DEV"
+
+          if sudo modprobe rdma_rxe 2>/tmp/modprobe-rdma-rxe.log; then
+            RDMA_DEV=rxe0
+            RDMA_TYPE=rxe
+          elif sudo modprobe siw 2>/tmp/modprobe-siw.log; then
+            RDMA_DEV=siw0
+            RDMA_TYPE=siw
+          else
+            echo "::error::Neither rdma_rxe nor siw is available on this runner kernel"
+            echo "rdma_rxe:"
+            cat /tmp/modprobe-rdma-rxe.log || true
+            echo "siw:"
+            cat /tmp/modprobe-siw.log || true
+            find "/lib/modules/$(uname -r)/kernel/drivers/infiniband" -type f | sort || true
+            exit 1
+          fi
+
+          echo "Binding ${RDMA_DEV} (${RDMA_TYPE}) to netdev: ${DEV}"
+          sudo rdma link add "$RDMA_DEV" type "$RDMA_TYPE" netdev "$DEV"
 
           # Verify — hard fail if no RDMA device came up so we never run the
           # test suite against a broken/missing device.
+          lsmod | grep -E 'rdma_rxe|siw|ib_core|ib_uverbs' || true
           rdma link show
           ibv_devices
-          # ibv_devices -l prints a header line plus one line per device.
+          ibv_devinfo
+          # ibv_devices -l prints two header lines plus one line per device.
           test "$(ibv_devices -l 2>/dev/null | wc -l)" -gt 2
 
       - name: Install ninja-build tool
