@@ -60,3 +60,5 @@ website/docs/zh/*/images/
 
 # AI
 .claude
+.qoder
+.qwen

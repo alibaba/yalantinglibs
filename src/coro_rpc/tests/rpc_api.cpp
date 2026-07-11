@@ -59,6 +59,23 @@ void echo_with_attachment(coro_rpc::context<void> conn) {
   conn.get_context_info()->set_response_attachment(std::move(str));
   conn.response_msg();
 }
+
+std::string to_string(coro_io::data_view attachment) {
+  if (attachment.is_cpu_memory()) {
+    return std::string(attachment.begin(), attachment.end());
+  }
+  else {
+    std::string s;
+#ifdef YLT_ENABLE_CUDA
+    s.resize(attachment.size());
+    std::cout << "start copying!" << std::endl;
+    coro_io::cuda_copy(s.data(), -1, attachment.data(), attachment.gpu_id(),
+                       attachment.size());
+#endif
+    return s;
+  }
+}
+
 template <typename T>
 void test_ctx_impl(T *ctx, std::string_view name) {
   if (ctx->has_closed()) {
@@ -72,12 +89,14 @@ void test_ctx_impl(T *ctx, std::string_view name) {
     throw std::runtime_error("get error rpc function name!");
   }
   ELOGI << "rpc function name:" << ctx->get_rpc_function_name();
-  std::string sv{ctx->get_request_attachment()};
-  auto str = ctx->release_request_attachment();
-  if (sv != str) {
-    throw std::runtime_error("coro_rpc::errc::rpc_throw_exception");
+  auto sv = ctx->get_request_attachment2();
+  auto str = ctx->release_request_attachment2();
+  if (sv.data() != str.data() || sv.size() != str.size() ||
+      sv.gpu_id() != str.gpu_id()) {
+    exit(-1);
   }
-  ctx->set_response_attachment(std::move(str));
+  ELOG_INFO << "attachment: " << to_string(sv);
+  ctx->set_response_attachment2(std::move(str));
 }
 void test_context() {
   auto *ctx = coro_rpc::get_context();

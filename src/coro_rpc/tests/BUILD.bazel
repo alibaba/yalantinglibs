@@ -30,3 +30,30 @@ cc_test(
         "//:ylt"
     ],
 )
+
+cc_test(
+    name = "test_networkdirect_rpc",
+    srcs =
+        [
+            "main.cpp",
+            "rpc_api.hpp",
+            "rpc_api.cpp",
+            "test_networkdirect_rpc.cpp",
+        ],
+    copts = [
+        "-std=c++20",
+        "-Isrc/coro_rpc/tests",
+    ],
+    defines = [
+        "YLT_ENABLE_ND",
+        "STRUCT_PACK_ENABLE_UNPORTABLE_TYPE",
+    ],
+    linkopts = [
+        "ws2_32.lib",
+        "mswsock.lib",
+    ],
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [
+        "//:ylt"
+    ],
+)

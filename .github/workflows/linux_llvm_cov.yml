@@ -43,7 +43,7 @@ jobs:
         run: |
           sudo apt install -y jq
           base_commit_id=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }} | jq -r .base.sha)
-          echo "::set-output name=id::$base_commit_id"
+          echo "id=$base_commit_id" >> "$GITHUB_OUTPUT"
         shell: bash
       - name: 'Store Message'
         run: |
@@ -52,7 +52,7 @@ jobs:
           echo "pr_id=${{github.event.pull_request.number}}" >> ./msg/action_msg
         shell: bash
       - name: 'Upload Action Message'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: action_msg
           path: msg/
@@ -64,7 +64,7 @@ jobs:
       data: ${{ steps.base-cov.outputs.data }}
     steps:
       - name: 'Checkout source code'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: 'Base coverage test'
         id: base-cov
         uses: ./.github/actions/coverage
@@ -78,7 +78,7 @@ jobs:
       data: ${{ steps.cov.outputs.data }}
     steps:
       - name: 'Checkout source code'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: 'Coverage test'
         id: cov
         uses: ./.github/actions/coverage

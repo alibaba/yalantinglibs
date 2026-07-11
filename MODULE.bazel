@@ -5,4 +5,5 @@
 # For more details, please check https://github.com/bazelbuild/bazel/issues/18958
 ###############################################################################
 
-bazel_dep(name = "rules_cc", version = "0.0.16")
+bazel_dep(name = "platforms", version = "1.0.0")
+bazel_dep(name = "rules_cc", version = "0.2.17")

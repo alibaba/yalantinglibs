@@ -8,6 +8,10 @@ on:
   workflow_call:
   workflow_dispatch:
 
+concurrency:
+  group: ubuntu-gcc-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 env:
   ccache: ON
 
@@ -21,16 +25,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Dependencies
-        run: sudo apt-get install openssl libssl-dev
-
-      - name: Install ninja-build tool
-        uses: seanmiddleditch/gha-setup-ninja@master
+        run: sudo apt-get update && sudo apt-get install -y openssl libssl-dev ninja-build
 
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2
+        uses: hendrikmuhs/ccache-action@v1.2.23
         with:
           key: ${{ github.job }}-${{ matrix.mode}}-ssl( ${{ matrix.ssl}} )
 
@@ -57,16 +58,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Dependencies
-        run: sudo apt-get install openssl libssl-dev
-
-      - name: Install ninja-build tool
-        uses: seanmiddleditch/gha-setup-ninja@master
+        run: sudo apt-get update && sudo apt-get install -y openssl libssl-dev ninja-build
 
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2
+        uses: hendrikmuhs/ccache-action@v1.2.23
         with:
           key: ${{ github.job }}-${{ matrix.mode}}-ssl( ${{ matrix.ssl}} )
 
@@ -93,16 +91,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install liburing
-        run: sudo apt-get install liburing-dev
-
-      - name: Install ninja-build tool
-        uses: seanmiddleditch/gha-setup-ninja@master
+        run: sudo apt-get update && sudo apt-get install -y liburing-dev ninja-build
 
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2
+        uses: hendrikmuhs/ccache-action@v1.2.23
         with:
           key: ${{ github.job }}-${{ matrix.mode}}-ssl( ${{ matrix.ssl}} )
 
@@ -130,13 +125,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install ninja-build tool
-        uses: seanmiddleditch/gha-setup-ninja@master
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
 
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2
+        uses: hendrikmuhs/ccache-action@v1.2.23
         with:
           key: ${{ github.job }}-${{ matrix.mode}}
 
