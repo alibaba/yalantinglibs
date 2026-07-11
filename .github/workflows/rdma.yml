@@ -20,12 +20,17 @@ on:
   workflow_dispatch:
   workflow_call:
 
+concurrency:
+  group: rdma-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 env:
   ccache: ON
 
 jobs:
   rdma_software:
     runs-on: ubuntu-22.04
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -99,7 +104,11 @@ jobs:
                 -DUSE_CCACHE=${{env.ccache}}
 
       - name: Build
-        run: cmake --build ${{github.workspace}}/build --config Debug
+        run: |
+          cmake --build ${{github.workspace}}/build --config Debug --target \
+            ibverbs_test \
+            ibverbs_pressure_test \
+            coro_rpc_test
 
       - name: Run ibverbs tests
         working-directory: ${{github.workspace}}/build
