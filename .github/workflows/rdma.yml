@@ -63,7 +63,7 @@ jobs:
 
           RDMA_DEV=rxe0
           echo "Binding ${RDMA_DEV} (rxe) to netdev: ${DEV}"
-          if ! rdma link show "$RDMA_DEV" >/dev/null 2>&1; then
+          if ! rdma link show | awk -v dev="$RDMA_DEV" '$2 ~ "^" dev "/" { found = 1 } END { exit !found }'; then
             sudo rdma link add "$RDMA_DEV" type rxe netdev "$DEV"
           fi
           echo "YLT_RDMA_DEV_NAME=${RDMA_DEV}" >> "$GITHUB_ENV"
