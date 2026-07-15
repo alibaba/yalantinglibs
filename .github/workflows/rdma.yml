@@ -1,0 +1,115 @@
+name: RDMA (software)
+
+# Exercises the ibverbs stack on a self-hosted Linux runner that has the
+# rdma_rxe kernel module available. GitHub-hosted runners do not currently
+# provide a usable SoftRoCE kernel module for these runtime tests.
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+    types: [opened, synchronize, reopened, labeled]
+  schedule:
+    - cron: '17 17 * * *'   # daily ~01:15 CST, off-the-hour
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rdma-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  ccache: ON
+
+jobs:
+  rdma_software:
+    # Self-hosted RDMA capacity is opt-in on PRs so missing runners do not
+    # block unrelated changes for 24h while the job waits in queue.
+    if: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'run-rdma-ci') }}
+    runs-on: [self-hosted, linux, x64, rdma-rxe]
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            openssl libssl-dev \
+            libibverbs-dev ibverbs-utils librdmacm-dev rdma-core \
+            iproute2 ninja-build
+
+      - name: Set up software RDMA device
+        run: |
+          if ! modinfo rdma_rxe >/dev/null 2>&1; then
+            sudo apt-get install -y "linux-modules-extra-$(uname -r)"
+          fi
+          sudo modprobe ib_core
+
+          DEV=$(ip route show default 2>/dev/null | awk '{print $5; exit}')
+          if [ -z "$DEV" ]; then
+            DEV=$(ip -o link show up | awk -F': ' '$2 != "lo" {sub(/@.*/, "", $2); print $2; exit}')
+          fi
+          if [ -z "$DEV" ]; then
+            echo "::error::No usable netdev found for software RDMA"
+            exit 1
+          fi
+
+          if ! sudo modprobe rdma_rxe 2>/tmp/modprobe-rdma-rxe.log; then
+            echo "::error::rdma_rxe is required for RDMA runtime tests"
+            cat /tmp/modprobe-rdma-rxe.log || true
+            find "/lib/modules/$(uname -r)/kernel/drivers/infiniband" -type f | sort || true
+            exit 1
+          fi
+
+          RDMA_DEV=rxe0
+          echo "Binding ${RDMA_DEV} (rxe) to netdev: ${DEV}"
+          if ! rdma link show | awk -v dev="$RDMA_DEV" '$2 ~ "^" dev "/" { found = 1 } END { exit !found }'; then
+            sudo rdma link add "$RDMA_DEV" type rxe netdev "$DEV"
+          fi
+          echo "YLT_RDMA_DEV_NAME=${RDMA_DEV}" >> "$GITHUB_ENV"
+          echo "YLT_RDMA_DEV_TYPE=rxe" >> "$GITHUB_ENV"
+
+          # Verify — hard fail if the target RDMA device did not come up so we
+          # never run the test suite against a broken/missing/default device.
+          lsmod | grep -E 'rdma_rxe|ib_core|ib_uverbs' || true
+          rdma link show
+          ibv_devices
+          ibv_devinfo
+          # ibv_devices -l prints two header lines plus one line per device.
+          test "$(ibv_devices -l 2>/dev/null | wc -l)" -gt 2
+          ibv_devices -l 2>/dev/null | awk '{print $1}' | grep -Fx "$RDMA_DEV"
+
+      - name: Install ninja-build tool
+        uses: seanmiddleditch/gha-setup-ninja@master
+
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ github.job }}
+
+      - name: Configure
+        run: |
+          CXX=g++ CC=gcc
+          cmake -B ${{github.workspace}}/build -G Ninja \
+                -DCMAKE_BUILD_TYPE=Debug \
+                -DYLT_ENABLE_IBV=ON \
+                -DYLT_ENABLE_SSL=OFF \
+                -DUSE_CCACHE=${{env.ccache}}
+
+      - name: Build ibverbs targets
+        run: |
+          cmake --build ${{github.workspace}}/build --config Debug --target \
+            ibverbs_test \
+            ibverbs_pressure_test \
+            --parallel 1
+
+      - name: Run ibverbs tests
+        working-directory: ${{github.workspace}}/build
+        run: ctest -R ibverbs -C Debug -j 1 -V

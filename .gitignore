@@ -58,7 +58,7 @@ cdb.json
 # website
 website/docs/zh/*/images/
 
-#AI
+# AI
 .claude
 .qoder
 .qwen
