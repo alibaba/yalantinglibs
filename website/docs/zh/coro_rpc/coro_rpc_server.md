@@ -455,7 +455,9 @@ struct config_t {
   uint16_t port = 9001; /*监听端口*/
   unsigned thread_num = std::thread::hardware_concurrency(); /*rpc server内部使用的连接数，默认为逻辑核数*/
   std::chrono::steady_clock::duration conn_timeout_duration = 
-      std::chrono::seconds{0};  /*rpc请求的超时时间，0秒代表rpc请求不会自动超时*/
+      std::chrono::seconds{30};  /*连接空闲超时时间，如果在此时间内未收到请求头，连接将被关闭。0秒代表不超时，默认30秒。*/
+  std::chrono::steady_clock::duration body_read_timeout_duration =
+      std::chrono::seconds{0};  /*请求体读取超时时间，如果数据传输停滞超过此时间，连接将被关闭。0秒代表不超时。*/
   std::string address="0.0.0.0"; /*监听地址*/
   /* RPC 服务器的 acceptor 列表，默认为空。
   允许用户自定义从 coro_io::server_acceptor_base 派生的 acceptor，支持多个 acceptor。

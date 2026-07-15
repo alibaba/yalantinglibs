@@ -64,12 +64,14 @@ std::vector<std::unique_ptr<coro_io::server_acceptor_base>> get_barex_acceptor(
 struct CoroServerTester : ServerTester {
   CoroServerTester(TesterConfig config)
       : ServerTester(config),
-        server(coro_rpc::config_t{.port = config.port,
-                                  .thread_num = 2,
-                                  .conn_timeout_duration =
-                                      config.conn_timeout_duration,
-                                  .address = config.address},
-               get_barex_acceptor(use_barex, config.port)) {
+        server(
+            coro_rpc::config_t{
+                .port = config.port,
+                .thread_num = 2,
+                .conn_timeout_duration = config.conn_timeout_duration,
+                .body_read_timeout_duration = config.body_read_timeout_duration,
+                .address = config.address},
+            get_barex_acceptor(use_barex, config.port)) {
 #ifdef YLT_ENABLE_SSL
     if (use_ssl) {
       server.init_ssl(
@@ -753,6 +755,59 @@ TEST_CASE("testing coro rpc subserver with rdma") {
                 result.status);
   CHECK_MESSAGE(result.resp_body == http_body, result.resp_body);
 }
+#endif
+#endif
+
+TEST_CASE("test connection idle timeout") {
+  ELOGV(INFO, "run test connection idle timeout");
+  using namespace std::chrono_literals;
+  coro_rpc::config_t config;
+  config.port = 8814;
+  config.thread_num = 1;
+  config.conn_timeout_duration = 300ms;
+  config.body_read_timeout_duration = 0ms;
+  coro_rpc_server server(config);
+  server.register_handler<hi>();
+  server.register_handler<large_arg_fun>();
+  auto res = server.async_start();
+  CHECK_MESSAGE(!res.hasResult(), "server start failed");
+
+  coro_rpc_client client(coro_io::get_global_executor());
+  auto ec = syncAwait(client.connect("127.0.0.1", "8814"));
+  REQUIRE_MESSAGE(!ec, ec.message());
+
+  auto ret = syncAwait(client.call<hi>());
+  CHECK_MESSAGE(ret.has_value(), ret.error().msg);
+
+  std::this_thread::sleep_for(800ms);
+
+  ret = syncAwait(client.call<hi>());
+  CHECK_FALSE(ret.has_value());
+}
+
+TEST_CASE("test body read no timeout by default") {
+  ELOGV(INFO, "run test body read no timeout by default");
+  using namespace std::chrono_literals;
+  coro_rpc::config_t config;
+  config.port = 8815;
+  config.thread_num = 1;
+  config.conn_timeout_duration = 30s;
+  config.body_read_timeout_duration = 0ms;
+  coro_rpc_server server(config);
+  server.register_handler<large_arg_fun>();
+  auto res = server.async_start();
+  CHECK_MESSAGE(!res.hasResult(), "server start failed");
+
+  coro_rpc_client client(coro_io::get_global_executor());
+  auto ec = syncAwait(client.connect("127.0.0.1", "8815"));
+  REQUIRE_MESSAGE(!ec, ec.message());
+
+  std::string large_data(65536, 'x');
+  auto ret = syncAwait(client.call<large_arg_fun>(large_data));
+  CHECK_MESSAGE(ret.has_value(), ret.error().msg);
+  CHECK(ret.value() == large_data);
+}
+
 #ifdef YLT_ENABLE_SSL
 
 // TODO: open it when whe support rdma client with ssl-encrypt connection
@@ -825,6 +880,4 @@ TEST_CASE("testing coro rpc subserver with rdma") {
 //                 result.status);
 //   CHECK_MESSAGE(result.resp_body == http_body, result.resp_body);
 // }
-#endif
-#endif
 #endif

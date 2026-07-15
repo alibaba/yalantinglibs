@@ -242,6 +242,9 @@ struct ib_socket_t::config_t {
     .buffer_pool_config = {
       // ...
     },
+    .use_srq = false, // 是否启用 SRQ 共享接收队列，默认关闭
+    .max_srq_buffer_memory = 256 * 1024 * 1024, // SRQ 缓冲内存上限（字节），默认 256MB
+    .srq_max_wr = 4096, // SRQ 队列深度上限，默认 4096
   });
   coro_rpc_client cli;
   cli.init_ibv({

@@ -65,6 +65,7 @@ struct TesterConfig {
     use_outer_io_context = c.use_outer_io_context;
     port = c.port;
     conn_timeout_duration = c.conn_timeout_duration;
+    body_read_timeout_duration = c.body_read_timeout_duration;
   }
   bool enable_heartbeat;
   bool use_ssl;
@@ -76,6 +77,8 @@ struct TesterConfig {
   unsigned short port;
   std::string address = "0.0.0.0";
   std::chrono::steady_clock::duration conn_timeout_duration =
+      std::chrono::seconds(30);
+  std::chrono::steady_clock::duration body_read_timeout_duration =
       std::chrono::seconds(0);
 
   friend std::ostream &operator<<(std::ostream &os,
@@ -94,6 +97,12 @@ struct TesterConfig {
                    config.conn_timeout_duration)
                    .count();
     os << val << "ms"
+       << ";";
+    os << " body_read_timeout_duration: ";
+    auto bval = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    config.body_read_timeout_duration)
+                    .count();
+    os << bval << "ms"
        << ";";
     return os;
   }

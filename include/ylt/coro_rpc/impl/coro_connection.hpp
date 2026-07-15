@@ -157,16 +157,18 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
    */
   using executor_t = coro_io::ExecutorWrapper<>;
   coro_connection(coro_io::socket_wrapper_t socket,
-                  std::chrono::steady_clock::duration timeout_duration =
-                      std::chrono::seconds(0))
+                  std::chrono::steady_clock::duration idle_timeout_duration =
+                      std::chrono::seconds(30),
+                  std::chrono::steady_clock::duration
+                      body_read_timeout_duration = std::chrono::seconds(0))
       : socket_wrapper_(std::move(socket)),
-        timer_(socket_wrapper_.get_executor()->get_asio_executor()) {
-    if (timeout_duration == std::chrono::seconds(0)) {
-      return;
+        timer_(socket_wrapper_.get_executor()->get_asio_executor()),
+        idle_timeout_duration_(idle_timeout_duration),
+        body_read_timeout_duration_(body_read_timeout_duration) {
+    if (idle_timeout_duration != std::chrono::seconds(0) ||
+        body_read_timeout_duration != std::chrono::seconds(0)) {
+      enable_check_timeout_ = true;
     }
-
-    enable_check_timeout_ = true;
-    keep_alive_timeout_duration_ = timeout_duration;
   }
 
   ~coro_connection() {
@@ -293,6 +295,8 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       std::string_view payload;
       // rpc_protocol::buffer_type maybe from user, default from framework.
 
+      cancel_timer(req_id, "head read complete");
+      reset_timer(req_id, "read body", body_read_timeout_duration_);
       ec = co_await rpc_protocol::read_payload(socket, req_head, body,
                                                req_attachment);
       cancel_timer(req_id, "recv client data");
@@ -683,14 +687,23 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       quit_callback_(conn_id_);
     }
   }
-  void reset_timer(uint64_t id, std::string_view info = "") {
+  void reset_timer(
+      uint64_t id, std::string_view info = "",
+      std::chrono::steady_clock::duration duration = std::chrono::seconds(0)) {
     ELOG_TRACE << "start timer by operation " << info << ", conn_id "
                << conn_id_ << ", request ID:" << id;
     if (!enable_check_timeout_ || rpc_processing_cnt_ != 0) {
       return;
     }
 
-    timer_.expires_from_now(keep_alive_timeout_duration_);
+    auto actual_duration = (duration != std::chrono::seconds(0))
+                               ? duration
+                               : idle_timeout_duration_;
+    if (actual_duration == std::chrono::seconds(0)) {
+      return;
+    }
+
+    timer_.expires_from_now(actual_duration);
     timer_.async_wait(
         [this, self = shared_from_this(), id](asio::error_code const &ec) {
           if (!ec) {
@@ -724,9 +737,11 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       write_queue_;
   bool is_rpc_return_by_callback_{false};
 
-  // if don't get any message in keep_alive_timeout_duration_, the connection
-  // will be closed when enable_check_timeout_ is true.
-  std::chrono::steady_clock::duration keep_alive_timeout_duration_;
+  // idle_timeout_duration_: time to wait for next request header before
+  // closing. body_read_timeout_duration_: time to wait for request body during
+  // transfer. 0 means no timeout for that phase.
+  std::chrono::steady_clock::duration idle_timeout_duration_;
+  std::chrono::steady_clock::duration body_read_timeout_duration_;
   bool enable_check_timeout_{false};
   asio::steady_timer timer_;
   std::atomic<bool> has_closed_{false};

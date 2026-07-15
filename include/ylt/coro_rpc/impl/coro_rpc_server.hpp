@@ -76,44 +76,54 @@ class coro_rpc_server_base {
    * @param thread_num the number of io_context.
    * @param port the server port to listen.
    * @param listen address of server
-   * @param conn_timeout_duration client connection timeout. 0 for no timeout.
-   *                              default no timeout.
+   * @param conn_timeout_duration connection idle timeout. 0 for no timeout.
+   *                              default 30 seconds.
+   * @param body_read_timeout_duration timeout for reading request body.
+   *                                   0 for no timeout. default no timeout.
    * @param is_enable_tcp_no_delay is tcp socket allow
    */
-  coro_rpc_server_base(size_t thread_num = std::thread::hardware_concurrency(),
-                       unsigned short port = 9001,
-                       std::string address = "0.0.0.0",
-                       std::chrono::steady_clock::duration
-                           conn_timeout_duration = std::chrono::seconds(0),
-                       bool is_enable_tcp_no_delay = true)
+  coro_rpc_server_base(
+      size_t thread_num = std::thread::hardware_concurrency(),
+      unsigned short port = 9001, std::string address = "0.0.0.0",
+      std::chrono::steady_clock::duration conn_timeout_duration =
+          std::chrono::seconds(30),
+      std::chrono::steady_clock::duration body_read_timeout_duration =
+          std::chrono::seconds(0),
+      bool is_enable_tcp_no_delay = true)
       : pool_(thread_num),
         flag_{stat::init},
         is_enable_tcp_no_delay_(is_enable_tcp_no_delay),
-        conn_timeout_duration_(conn_timeout_duration) {
+        conn_timeout_duration_(conn_timeout_duration),
+        body_read_timeout_duration_(body_read_timeout_duration) {
     acceptors_.push_back(
         std::make_unique<coro_io::tcp_server_acceptor>(address, port));
   }
 
-  coro_rpc_server_base(size_t thread_num, std::string address,
-                       std::chrono::steady_clock::duration
-                           conn_timeout_duration = std::chrono::seconds(0),
-                       bool is_enable_tcp_no_delay = true)
+  coro_rpc_server_base(
+      size_t thread_num, std::string address,
+      std::chrono::steady_clock::duration conn_timeout_duration =
+          std::chrono::seconds(30),
+      std::chrono::steady_clock::duration body_read_timeout_duration =
+          std::chrono::seconds(0),
+      bool is_enable_tcp_no_delay = true)
       : pool_(thread_num),
         flag_{stat::init},
         is_enable_tcp_no_delay_(is_enable_tcp_no_delay),
-        conn_timeout_duration_(conn_timeout_duration) {
+        conn_timeout_duration_(conn_timeout_duration),
+        body_read_timeout_duration_(body_read_timeout_duration) {
     acceptors_.push_back(
         std::make_unique<coro_io::tcp_server_acceptor>(address));
   }
 
   coro_rpc_server_base(
-      const server_config& config,
+      const server_config &config,
       std::vector<std::unique_ptr<coro_io::server_acceptor_base>> acceptors =
           {})
       : pool_(config.thread_num),
         flag_{stat::init},
         is_enable_tcp_no_delay_(config.is_enable_tcp_no_delay),
-        conn_timeout_duration_(config.conn_timeout_duration) {
+        conn_timeout_duration_(config.conn_timeout_duration),
+        body_read_timeout_duration_(config.body_read_timeout_duration) {
 #ifdef YLT_ENABLE_SSL
     if (config.ssl_config) {
       use_ssl_ = init_ssl_context_helper(context_, config.ssl_config.value());
@@ -525,8 +535,9 @@ class coro_rpc_server_base {
         }
 #endif
       }
-      auto conn = std::make_shared<coro_connection>(std::move(wrapper),
-                                                    conn_timeout_duration_);
+      auto conn = std::make_shared<coro_connection>(
+          std::move(wrapper), conn_timeout_duration_,
+          body_read_timeout_duration_);
       conn->set_quit_callback(
           [this](const uint64_t &id) {
             std::unique_lock lock(conns_mtx_);
@@ -631,6 +642,7 @@ class coro_rpc_server_base {
   bool is_enable_tcp_no_delay_;
   coro_rpc::err_code errc_ = {};
   std::chrono::steady_clock::duration conn_timeout_duration_;
+  std::chrono::steady_clock::duration body_read_timeout_duration_;
 
   async_simple::util::move_only_function<void(coro_io::socket_wrapper_t &&soc,
                                               std::string_view magic_number)>

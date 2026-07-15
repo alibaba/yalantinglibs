@@ -32,7 +32,8 @@ async_simple::coro::Lazy<std::error_code> echo_accept(
     std::vector<std::function<
         async_simple::coro::Lazy<std::error_code>(coro_io::ib_socket_t&)>>
         functions,
-    coro_io::ExecutorWrapper<>* executor = coro_io::get_global_executor()) {
+    coro_io::ExecutorWrapper<>* executor = coro_io::get_global_executor(),
+    std::shared_ptr<coro_io::ib_device_t> device = nullptr) {
   asio::ip::tcp::acceptor acceptor(executor->get_asio_executor());
   std::error_code ec;
   auto address = asio::ip::address_v4::from_string("0.0.0.0", ec);
@@ -60,7 +61,11 @@ async_simple::coro::Lazy<std::error_code> echo_accept(
   }
 
   ELOG_INFO << "tcp listening port:" << port;
-  coro_io::ib_socket_t soc;
+  coro_io::ib_socket_t::config_t sock_conf;
+  if (device) {
+    sock_conf.device = device;
+  }
+  coro_io::ib_socket_t soc(executor, sock_conf);
   ec = co_await coro_io::async_accept(acceptor, soc);
 
   if (ec) [[unlikely]] {
@@ -84,9 +89,14 @@ async_simple::coro::Lazy<std::error_code> echo_connect(
     std::vector<std::function<
         async_simple::coro::Lazy<std::error_code>(coro_io::ib_socket_t&)>>
         functions,
-    coro_io::ExecutorWrapper<>* executor = coro_io::get_global_executor()) {
-  coro_io::ib_socket_t soc{executor, coro_io::ib_socket_t::config_t{
-                                         .send_buffer_cnt = g_send_buffer_cnt}};
+    coro_io::ExecutorWrapper<>* executor = coro_io::get_global_executor(),
+    std::shared_ptr<coro_io::ib_device_t> device = nullptr) {
+  coro_io::ib_socket_t::config_t sock_conf;
+  sock_conf.send_buffer_cnt = g_send_buffer_cnt;
+  if (device) {
+    sock_conf.device = device;
+  }
+  coro_io::ib_socket_t soc{executor, sock_conf};
   ELOG_INFO << "tcp connecting port:" << port;
   auto ec =
       co_await coro_io::async_connect(soc, "127.0.0.1", std::to_string(port));
@@ -628,4 +638,81 @@ TEST_CASE("test small package combine write") {
     CHECK_MESSAGE(!ec1.value(), ec1.value().message());
     CHECK_MESSAGE(!ec2.value(), ec2.value().message());
   }
+}
+
+TEST_CASE("test socket io with srq") {
+  ELOG_WARN << "start test socket io with srq";
+  auto srq_dev = coro_io::ib_device_t::create(
+      {.use_srq = true,
+       .max_srq_buffer_memory = 256 * 1024 * 64,
+       .srq_max_wr = 64});
+  {
+    ELOG_WARN << "srq: test read/write fix size";
+    auto result = async_simple::coro::syncAwait(collectAll(
+        echo_accept({test(test_read, 16)}, coro_io::get_global_executor(),
+                    srq_dev),
+        echo_connect({test(test_write, 16)}, coro_io::get_global_executor(),
+                     srq_dev)));
+    auto& ec1 = std::get<0>(result);
+    auto& ec2 = std::get<1>(result);
+    CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+    CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+  }
+  {
+    ELOG_WARN << "srq: test read/write bigger than buffer";
+    auto result = async_simple::coro::syncAwait(collectAll(
+        echo_accept({test(test_read, 35 * 1024)}, coro_io::get_global_executor(),
+                    srq_dev),
+        echo_connect({test(test_write, 35 * 1024)},
+                     coro_io::get_global_executor(), srq_dev)));
+    auto& ec1 = std::get<0>(result);
+    auto& ec2 = std::get<1>(result);
+    CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+    CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+  }
+  {
+    ELOG_WARN << "srq: test read_some & read/write";
+    auto result = async_simple::coro::syncAwait(collectAll(
+        echo_accept({test(test_read_some, 3 * 1024), test(test_read, 9 * 1024)},
+                    coro_io::get_global_executor(), srq_dev),
+        echo_connect({test(test_write, 12 * 1024)},
+                     coro_io::get_global_executor(), srq_dev)));
+    auto& ec1 = std::get<0>(result);
+    auto& ec2 = std::get<1>(result);
+    CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+    CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+  }
+  {
+    ELOG_WARN << "srq: test rpc-like io";
+    auto result = async_simple::coro::syncAwait(collectAll(
+        echo_accept({rpc_like_recv}, coro_io::get_global_executor(), srq_dev),
+        echo_connect({test(rpc_like_send, 50 * 1024)},
+                     coro_io::get_global_executor(), srq_dev)));
+    auto& ec1 = std::get<0>(result);
+    auto& ec2 = std::get<1>(result);
+    CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+    CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+  }
+  ELOG_WARN << "memory size:" << coro_io::ib_buffer_pool_t::global_memory_usage();
+}
+
+TEST_CASE("test multi-qp with srq") {
+  ELOG_WARN << "start test multi-qp with srq";
+  auto srq_dev = coro_io::ib_device_t::create(
+      {.use_srq = true,
+       .max_srq_buffer_memory = 256 * 1024 * 64,
+       .srq_max_wr = 64});
+  for (int i = 0; i < 5; ++i) {
+    ELOG_WARN << "multi-qp srq: iteration " << i;
+    auto result = async_simple::coro::syncAwait(collectAll(
+        echo_accept({test(test_read, 7 * 1024)}, coro_io::get_global_executor(),
+                    srq_dev),
+        echo_connect({test(test_write, 7 * 1024)},
+                     coro_io::get_global_executor(), srq_dev)));
+    auto& ec1 = std::get<0>(result);
+    auto& ec2 = std::get<1>(result);
+    CHECK_MESSAGE(!ec1.value(), ec1.value().message());
+    CHECK_MESSAGE(!ec2.value(), ec2.value().message());
+  }
+  ELOG_WARN << "memory size:" << coro_io::ib_buffer_pool_t::global_memory_usage();
 }

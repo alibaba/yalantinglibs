@@ -229,6 +229,11 @@ class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
     bool use_best_gid_index = true;  // automatically find best gid index. If
                                      // failed, it will use gid_index.
     ib_buffer_pool_t::config_t buffer_pool_config;
+
+    bool use_srq = true;  // auto-detect: falls back to per-QP mode if SRQ creation fails
+    uint64_t max_srq_buffer_memory = 256 * 1024 * 1024;  // 256MB
+    uint32_t srq_max_wr = 4096;
+    uint32_t srq_buffer_block = 32;  // initial/minimum SRQ buffer count
   };
   static std::shared_ptr<ib_device_t> create(const config_t& conf,
                                              ibv_device* dev = nullptr) {
@@ -327,6 +332,25 @@ class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
           << "query device info failed! We dont know the max_mr_size of device";
     }
     buffer_pool_ = ib_buffer_pool_t::create(*this, pool_config);
+
+    if (conf.use_srq) {
+      ib_srq_buffer_manager_t::config_t srq_conf{
+          .max_buffer_memory = conf.max_srq_buffer_memory,
+          .srq_max_wr = conf.srq_max_wr,
+          .srq_max_sge = 1,
+          .buffer_size = pool_config.buffer_size,
+          .buffer_block = conf.srq_buffer_block,
+      };
+      try {
+        srq_manager_ =
+            std::make_shared<ib_srq_buffer_manager_t>(*this, srq_conf);
+        srq_manager_->init();
+      } catch (const std::system_error& e) {
+        ELOG_WARN << "SRQ creation failed, falling back to per-QP mode: "
+                  << e.what();
+        srq_manager_.reset();
+      }
+    }
   }
 
   std::string_view name() const noexcept { return name_; }
@@ -355,6 +379,11 @@ class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
   std::shared_ptr<ib_buffer_pool_t> get_buffer_pool() const noexcept {
     return buffer_pool_;
   }
+
+  std::shared_ptr<ib_srq_buffer_manager_t> get_srq_manager() const noexcept {
+    return srq_manager_;
+  }
+  bool use_srq() const noexcept { return srq_manager_ != nullptr; }
 
   struct async_event_watcher_manager_t
       : public std::unordered_map<ib_device_t*, std::weak_ptr<ib_device_t>> {
@@ -582,6 +611,7 @@ class ib_device_t : public std::enable_shared_from_this<ib_device_t> {
   std::unique_ptr<ibv_pd, ib_deleter> pd_;
   std::unique_ptr<asio::posix::stream_descriptor> async_event_watcher_fd_;
   std::shared_ptr<ib_buffer_pool_t> buffer_pool_;
+  std::shared_ptr<ib_srq_buffer_manager_t> srq_manager_;
   std::atomic<bool> support_inline_data_ = true;
   std::atomic<bool> support_relaxed_ordering_ = true;
   ibv_port_attr attr_;
@@ -627,6 +657,186 @@ inline ib_buffer_t ib_buffer_t::regist(ib_buffer_pool_t& pool,
     return ib_buffer_t{};
   }
 };
+
+inline ib_srq_buffer_manager_t::ib_srq_buffer_manager_t(ib_device_t& device,
+                                                         const config_t& conf)
+    : device_(device), config_(conf) {
+  watermark_ = std::min(
+      static_cast<uint32_t>(conf.max_buffer_memory / conf.buffer_size),
+      conf.srq_max_wr);
+  if (watermark_ == 0) {
+    watermark_ = 1;
+  }
+  buffer_block_ = (conf.buffer_block == 0) ? watermark_ : conf.buffer_block;
+  if (buffer_block_ > watermark_) {
+    buffer_block_ = watermark_;
+  }
+  ibv_srq_init_attr srq_init_attr{};
+  srq_init_attr.attr.max_wr = conf.srq_max_wr;
+  srq_init_attr.attr.max_sge = conf.srq_max_sge;
+  srq_init_attr.srq_context = nullptr;
+  srq_.reset(ibv_create_srq(device_.pd(), &srq_init_attr));
+  if (!srq_) {
+    auto err_code = std::make_error_code(std::errc{errno});
+    ELOG_ERROR << "ibv_create_srq failed: " << err_code.message();
+    throw std::system_error(err_code);
+  }
+  ELOG_INFO << "SRQ created: watermark=" << watermark_
+            << ", buffer_block=" << buffer_block_
+            << ", max_wr=" << conf.srq_max_wr
+            << ", max_buffer_memory=" << conf.max_buffer_memory;
+}
+
+inline void ib_srq_buffer_manager_t::init() {
+  bool expected = false;
+  if (!initialized_.compare_exchange_strong(expected, true,
+                                             std::memory_order_acq_rel)) {
+    return;
+  }
+  int gpu_id = device_.get_buffer_pool()->get_config().gpu_id;
+  uint32_t slot_capacity = watermark_ * 2;
+  slots_.reserve(slot_capacity);
+  for (uint32_t i = 0; i < slot_capacity; ++i) {
+    slots_.push_back(std::make_unique<ib_srq_recv_entry_t>());
+  }
+  for (uint32_t i = 0; i < buffer_block_; ++i) {
+    auto buffer = device_.get_buffer_pool()->get_buffer(gpu_id);
+    if (!buffer) {
+      ELOG_WARN << "SRQ init: pool exhausted at " << i << "/" << buffer_block_;
+      break;
+    }
+    auto* entry = slots_[i].get();
+    entry->buffer = std::move(buffer);
+    entry->active.store(true, std::memory_order_release);
+    if (!post_entry(entry)) {
+      ELOG_WARN << "SRQ init: post_entry failed at " << i << "/"
+                << buffer_block_;
+      entry->active.store(false, std::memory_order_release);
+      entry->buffer = {};
+      break;
+    }
+    posted_count_.fetch_add(1, std::memory_order_release);
+    total_count_.fetch_add(1, std::memory_order_release);
+  }
+  scan_pos_.store(buffer_block_, std::memory_order_release);
+  ELOG_INFO << "SRQ init done: posted=" << posted_count_.load()
+            << ", total=" << total_count_.load()
+            << ", memory_usage=" << memory_usage();
+}
+
+inline bool ib_srq_buffer_manager_t::post_entry(ib_srq_recv_entry_t* entry) {
+  ibv_sge sge = entry->buffer.subview();
+  ibv_recv_wr wr{};
+  wr.wr_id = reinterpret_cast<uintptr_t>(entry);
+  wr.sg_list = &sge;
+  wr.num_sge = 1;
+  wr.next = nullptr;
+  ibv_recv_wr* bad_wr = nullptr;
+  if (ibv_post_srq_recv(srq_.get(), &wr, &bad_wr)) {
+    auto err_code = std::make_error_code(std::errc{errno});
+    ELOG_ERROR << "ibv_post_srq_recv failed: " << err_code.message();
+    return false;
+  }
+  return true;
+}
+
+inline ib_srq_recv_entry_t* ib_srq_buffer_manager_t::find_free_slot() {
+  uint32_t pos = scan_pos_.load(std::memory_order_acquire);
+  uint32_t start = pos;
+  do {
+    auto& slot = slots_[pos];
+    bool expected = false;
+    if (slot->active.compare_exchange_strong(expected, true,
+                                              std::memory_order_acq_rel)) {
+      scan_pos_.store((pos + 1) % slots_.size(), std::memory_order_release);
+      return slot.get();
+    }
+    pos = (pos + 1) % slots_.size();
+  } while (pos != start);
+  return nullptr;
+}
+
+inline void ib_srq_buffer_manager_t::expand(uint32_t count) {
+  int gpu_id = device_.get_buffer_pool()->get_config().gpu_id;
+  for (uint32_t i = 0; i < count; ++i) {
+    uint32_t expected = total_count_.load(std::memory_order_acquire);
+    while (expected < watermark_) {
+      if (total_count_.compare_exchange_weak(expected, expected + 1,
+                                             std::memory_order_acq_rel)) {
+        break;
+      }
+    }
+    if (expected >= watermark_) {
+      break;
+    }
+    auto* entry = find_free_slot();
+    if (!entry) {
+      total_count_.fetch_sub(1, std::memory_order_acq_rel);
+      break;
+    }
+    auto buffer = device_.get_buffer_pool()->get_buffer(gpu_id);
+    if (!buffer) {
+      entry->active.store(false, std::memory_order_release);
+      total_count_.fetch_sub(1, std::memory_order_acq_rel);
+      break;
+    }
+    entry->buffer = std::move(buffer);
+    if (post_entry(entry)) {
+      posted_count_.fetch_add(1, std::memory_order_acq_rel);
+    }
+    else {
+      entry->active.store(false, std::memory_order_release);
+      entry->buffer = {};
+      total_count_.fetch_sub(1, std::memory_order_acq_rel);
+      break;
+    }
+  }
+}
+
+inline void ib_srq_buffer_manager_t::replenish(
+    ib_srq_recv_entry_t* entry, ib_buffer_t consumed_buffer) {
+  uint32_t posted = posted_count_.load(std::memory_order_acquire);
+  uint32_t total = total_count_.load(std::memory_order_acquire);
+
+  if (posted > total * 2 / 3) {
+    uint32_t expected = total;
+    while (expected > buffer_block_) {
+      if (total_count_.compare_exchange_weak(expected, expected - 1,
+                                             std::memory_order_acq_rel)) {
+        entry->active.store(false, std::memory_order_release);
+        return;
+      }
+    }
+  }
+
+  entry->buffer = std::move(consumed_buffer);
+  while (posted < watermark_) {
+    if (posted_count_.compare_exchange_weak(posted, posted + 1,
+                                            std::memory_order_acq_rel)) {
+      if (post_entry(entry)) {
+        break;
+      }
+      posted_count_.fetch_sub(1, std::memory_order_release);
+      break;
+    }
+  }
+
+  posted = posted_count_.load(std::memory_order_acquire);
+  total = total_count_.load(std::memory_order_acquire);
+  if (posted < total / 3 && total < watermark_) {
+    uint32_t expand_count = std::min(total / 3, watermark_ - total);
+    if (expand_count > 0) {
+      expand(expand_count);
+    }
+  }
+}
+
+inline void ib_srq_buffer_manager_t::repost(ib_srq_recv_entry_t* entry) {
+  if (post_entry(entry)) {
+    posted_count_.fetch_add(1, std::memory_order_release);
+  }
+}
+
 class ib_device_manager_t {
   ib_device_manager_t(const ib_device_manager_t&) = delete;
   ib_device_manager_t& operator=(const ib_device_manager_t&) = delete;

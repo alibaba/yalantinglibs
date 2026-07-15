@@ -98,6 +98,23 @@ struct ib_buffer_queue : public circle_buffer<ib_buffer_t> {
   std::error_code push_recv(ib_buffer_t buf, ib_socket_shared_state_t* state);
 };
 
+struct recv_result_entry_t {
+  std::error_code ec;
+  std::size_t len = 0;
+  ib_buffer_t buffer;
+  ib_srq_recv_entry_t* srq_entry = nullptr;
+
+  recv_result_entry_t() = default;
+  recv_result_entry_t(std::error_code e, std::size_t l, ib_buffer_t b = {},
+                      ib_srq_recv_entry_t* se = nullptr)
+      : ec(e), len(l), buffer(std::move(b)), srq_entry(se) {}
+  recv_result_entry_t(recv_result_entry_t&&) = default;
+  recv_result_entry_t& operator=(recv_result_entry_t&&) = default;
+  operator std::pair<std::error_code, std::size_t>() const {
+    return {ec, len};
+  }
+};
+
 struct ib_socket_shared_state_t
     : public std::enable_shared_from_this<ib_socket_shared_state_t> {
   using callback_t = async_simple::util::move_only_function<void(
@@ -113,10 +130,11 @@ struct ib_socket_shared_state_t
   std::shared_ptr<ib_device_t> device_;
   ib_buffer_queue recv_queue_, send_queue_;
   std::size_t recv_buffer_cnt_;
-  circle_buffer<std::pair<std::error_code, std::size_t>> recv_result_;
+  circle_buffer<recv_result_entry_t> recv_result_;
   circle_buffer<callback_t> send_cb_;
   callback_t recv_cb_;
   ib_buffer_t recv_buf_;
+  ib_srq_recv_entry_t* srq_entry_ = nullptr;
   std::unique_ptr<asio::posix::stream_descriptor> fd_;
   std::unique_ptr<ibv_comp_channel, ib_deleter> channel_;
   std::unique_ptr<ibv_cq, ib_deleter> cq_;
@@ -127,6 +145,7 @@ struct ib_socket_shared_state_t
   asio::ip::tcp::socket soc_;
   std::atomic<bool> has_close_ = false;
   bool peer_close_ = false;
+  bool use_srq_ = false;
 #ifdef YLT_ENABLE_CUDA
   std::unique_ptr<cuda_stream_handler_t> handler_;
 #else
@@ -147,7 +166,8 @@ struct ib_socket_shared_state_t
         send_queue_(send_buffer_cnt + 1),
         recv_result_(max_recv_buffer_cnt),
         send_cb_(send_buffer_cnt + 2),
-        max_inline_send_limit_(max_inline_data) {}
+        max_inline_send_limit_(max_inline_data),
+        use_srq_(device->use_srq()) {}
 
   ib_socket_shared_state_t(ib_socket_shared_state_t&&) = delete;
   ib_socket_shared_state_t& operator=(ib_socket_shared_state_t&&) = delete;
@@ -325,10 +345,17 @@ struct ib_socket_shared_state_t
   void post_recv_impl(callback_t&& handler) {
     if (!recv_result_.empty()) {
       auto result = recv_result_.pop();
-      ELOG_TRACE << "recv result: " << result.first.message()
-                 << ", len:" << result.second << ", QP:" << qp_->qp_num;
-      recv_buf_ = std::move(recv_queue_.pop());
-      ib_socket_shared_state_t::resume(std::move(result), std::move(handler));
+      ELOG_TRACE << "recv result: " << result.ec.message()
+                 << ", len:" << result.len << ", QP:" << qp_->qp_num;
+      if (use_srq_) {
+        srq_entry_ = result.srq_entry;
+        recv_buf_ = std::move(result.buffer);
+      }
+      else {
+        recv_buf_ = std::move(recv_queue_.pop());
+      }
+      ib_socket_shared_state_t::resume(
+          std::pair{result.ec, result.len}, std::move(handler));
       return;
     }
     else if (has_close_) [[unlikely]] {
@@ -381,28 +408,58 @@ struct ib_socket_shared_state_t
       if (wc.status != IBV_WC_SUCCESS) {
         ELOG_WARN << "rdma failed with error: " << ec.message()
                   << ", QP:" << qp_->qp_num;
+        if (use_srq_ && wc.wr_id != 1 && wc.wr_id != 0) {
+          auto* entry = reinterpret_cast<ib_srq_recv_entry_t*>(wc.wr_id);
+          device_->get_srq_manager()->dec_posted_count();
+          device_->get_srq_manager()->repost(entry);
+        }
       }
       else {
         ELOG_TRACE << "rdma op success, id:" << (callback_t*)wc.wr_id
                    << ",len:" << wc.byte_len << ", QP:" << qp_->qp_num;
-        if (wc.wr_id == 0) {  // recv
+        if (wc.wr_id != 1) {  // recv (wr_id=1 is send; wr_id=0 is non-SRQ recv; >1 is SRQ entry ptr)
           if (wc.byte_len == 0) {
             ELOG_DEBUG << "close by peer"
                        << ", QP:" << qp_->qp_num;
+            if (use_srq_ && wc.wr_id != 0) {
+              auto* entry = reinterpret_cast<ib_srq_recv_entry_t*>(wc.wr_id);
+              device_->get_srq_manager()->dec_posted_count();
+              device_->get_srq_manager()->repost(entry);
+            }
             peer_close_ = true;
             close();
             continue;
           }
+          ib_buffer_t recv_buffer;
+          if (use_srq_) {
+            device_->get_srq_manager()->dec_posted_count();
+            srq_entry_ = reinterpret_cast<ib_srq_recv_entry_t*>(wc.wr_id);
+            recv_buffer = std::move(srq_entry_->buffer);
+          }
           if (recv_cb_) {
             assert(recv_result_.empty());
-            recv_buf_ = recv_queue_.pop();
-            add_recv_buffer({}, recv_buffer_cnt_);
+            if (use_srq_) {
+              recv_buf_ = std::move(recv_buffer);
+            }
+            else {
+              recv_buf_ = recv_queue_.pop();
+            }
+            if (!use_srq_) {
+              add_recv_buffer({}, recv_buffer_cnt_);
+            }
             tmp_recv_callback = std::move(recv_cb_);
             vec.push_back({ec, wc.byte_len, 0});
           }
           else {
-            recv_result_.push(std::pair{ec, (std::size_t)wc.byte_len});
-            add_recv_buffer({}, recv_buffer_cnt_);
+            if (use_srq_) {
+              recv_result_.push({ec, (std::size_t)wc.byte_len,
+                                 std::move(recv_buffer), srq_entry_});
+              srq_entry_ = nullptr;
+            }
+            else {
+              recv_result_.push({ec, (std::size_t)wc.byte_len, {}});
+              add_recv_buffer({}, recv_buffer_cnt_);
+            }
           }
         }
         else {
@@ -567,8 +624,15 @@ class ib_socket_t {
           co_await state_->handler_->record(executor_);
         }
 #endif
-        state_->add_recv_buffer(std::move(state_->recv_buf_),
-                                state_->recv_buffer_cnt_ + 1);
+        if (state_->use_srq_) {
+          state_->device_->get_srq_manager()->replenish(
+              state_->srq_entry_, std::move(state_->recv_buf_));
+          state_->srq_entry_ = nullptr;
+        }
+        else {
+          state_->add_recv_buffer(std::move(state_->recv_buf_),
+                                  state_->recv_buffer_cnt_ + 1);
+        }
       }
     }
     co_return len;
@@ -579,8 +643,15 @@ class ib_socket_t {
     remain_data_ = std::string_view{
         (char*)state_->recv_buf_->addr + has_read_size, remain_size};
     if (remain_size == 0) {
-      state_->add_recv_buffer(std::move(state_->recv_buf_),
-                              state_->recv_buffer_cnt_ + 1);
+      if (state_->use_srq_) {
+        state_->device_->get_srq_manager()->replenish(
+            state_->srq_entry_, std::move(state_->recv_buf_));
+        state_->srq_entry_ = nullptr;
+      }
+      else {
+        state_->add_recv_buffer(std::move(state_->recv_buf_),
+                                state_->recv_buffer_cnt_ + 1);
+      }
     }
   }
 
@@ -663,21 +734,23 @@ class ib_socket_t {
     ELOG_DEBUG << "Local QP number = " << state_->qp_->qp_num;
     ELOG_DEBUG << "Local address = " << state_->device_->gid_address();
 
-    for (int i = 0; i < conf_.recv_buffer_cnt; ++i) {
-      auto buffer = state_->device_->get_buffer_pool()->get_buffer(gpu_id_);
-      if (!buffer) {
-        ELOG_WARN << "buffer out of limit, get send buffer failed";
+    if (!state_->use_srq_) {
+      for (int i = 0; i < conf_.recv_buffer_cnt; ++i) {
+        auto buffer = state_->device_->get_buffer_pool()->get_buffer(gpu_id_);
+        if (!buffer) {
+          ELOG_WARN << "buffer out of limit, get send buffer failed";
+          co_return std::make_error_code(std::errc::no_buffer_space);
+        }
+        if (auto ec =
+                state_->recv_queue_.push_recv(std::move(buffer), state_.get());
+            ec) {
+          co_return ec;
+        }
+      }
+      if (state_->recv_queue_.empty()) {
+        ELOG_WARN << "buffer out of limit, init ib_socket failed";
         co_return std::make_error_code(std::errc::no_buffer_space);
       }
-      if (auto ec =
-              state_->recv_queue_.push_recv(std::move(buffer), state_.get());
-          ec) {
-        co_return ec;
-      }
-    }
-    if (state_->recv_queue_.empty()) {
-      ELOG_WARN << "buffer out of limit, init ib_socket failed";
-      co_return std::make_error_code(std::errc::no_buffer_space);
     }
 
     peer_info.qp_num = state_->qp_->qp_num;
@@ -736,23 +809,25 @@ class ib_socket_t {
     try {
       init_qp();
       modify_qp_to_init();
-      for (int i = 0; i < conf_.recv_buffer_cnt; ++i) {
-        auto buffer = state_->device_->get_buffer_pool()->get_buffer(gpu_id_);
-        if (!buffer) {
-          ELOG_WARN << "buffer out of limit, get send buffer failed"
+      if (!state_->use_srq_) {
+        for (int i = 0; i < conf_.recv_buffer_cnt; ++i) {
+          auto buffer = state_->device_->get_buffer_pool()->get_buffer(gpu_id_);
+          if (!buffer) {
+            ELOG_WARN << "buffer out of limit, get send buffer failed"
+                      << ", QP:" << state_->qp_->qp_num;
+            co_return std::make_error_code(std::errc::no_buffer_space);
+          }
+          if (auto ec =
+                  state_->recv_queue_.push_recv(std::move(buffer), state_.get());
+              ec) {
+            co_return ec;
+          }
+        }
+        if (state_->recv_queue_.empty()) {
+          ELOG_WARN << "buffer out of limit, init ib_socket failed"
                     << ", QP:" << state_->qp_->qp_num;
           co_return std::make_error_code(std::errc::no_buffer_space);
         }
-        if (auto ec =
-                state_->recv_queue_.push_recv(std::move(buffer), state_.get());
-            ec) {
-          co_return ec;
-        }
-      }
-      if (state_->recv_queue_.empty()) {
-        ELOG_WARN << "buffer out of limit, init ib_socket failed"
-                  << ", QP:" << state_->qp_->qp_num;
-        co_return std::make_error_code(std::errc::no_buffer_space);
       }
       ib_socket_t::ib_socket_info peer_info{};
       peer_info.qp_num = state_->qp_->qp_num;
@@ -917,14 +992,24 @@ class ib_socket_t {
     ELOG_INFO << "device name: " << conf_.device->name();
     conf_.recv_buffer_cnt = std::max<uint32_t>(conf_.recv_buffer_cnt, 1);
     conf_.send_buffer_cnt = std::max<uint32_t>(conf_.send_buffer_cnt, 1);
-    conf_.cap.max_recv_sge = std::max<uint32_t>(conf_.cap.max_recv_sge, 1);
     conf_.cap.max_send_sge = std::max<uint32_t>(conf_.cap.max_send_sge, 1);
     conf_.cap.max_send_wr =
         std::max<uint32_t>(conf_.cap.max_send_wr, conf_.send_buffer_cnt + 2);
-    conf_.cap.max_recv_wr =
-        std::max<uint32_t>(conf_.cap.max_recv_wr, conf_.recv_buffer_cnt);
-    conf_.cq_size =
-        std::max(conf_.cap.max_send_wr + conf_.cap.max_recv_wr, conf_.cq_size);
+    if (conf_.device->use_srq()) {
+      conf_.cap.max_recv_wr = 0;
+      conf_.cap.max_recv_sge = 0;
+      uint32_t srq_watermark = conf_.device->get_srq_manager()->watermark();
+      conf_.cq_size =
+          std::max(conf_.cap.max_send_wr + srq_watermark, conf_.cq_size);
+    }
+    else {
+      conf_.cap.max_recv_sge = std::max<uint32_t>(conf_.cap.max_recv_sge, 1);
+      conf_.cap.max_recv_wr =
+          std::max<uint32_t>(conf_.cap.max_recv_wr, conf_.recv_buffer_cnt);
+      conf_.cq_size =
+          std::max(conf_.cap.max_send_wr + conf_.cap.max_recv_wr,
+                   conf_.cq_size);
+    }
     if (gpu_id_ >= 0 || !conf_.device->is_support_inline_data()) {
       conf_.cap.max_inline_data = 0;
     }
@@ -935,9 +1020,11 @@ class ib_socket_t {
               << ",recv buffer cnt:" << conf_.recv_buffer_cnt
               << ",inline data limit:" << conf_.cap.max_inline_data;
 
+    uint32_t max_recv_buf_cnt =
+        std::max<uint32_t>(conf_.cap.max_recv_wr, conf_.recv_buffer_cnt);
     state_ = std::make_shared<detail::ib_socket_shared_state_t>(
         conf_.device, executor_, conf_.recv_buffer_cnt, conf_.send_buffer_cnt,
-        conf_.cap.max_recv_wr, conf_.cap.max_inline_data);
+        max_recv_buf_cnt, conf_.cap.max_inline_data);
     state_->channel_.reset(ibv_create_comp_channel(state_->device_->context()));
 #ifdef YLT_ENABLE_CUDA
     state_->handler_ = std::make_unique<cuda_stream_handler_t>(gpu_id_);
@@ -964,6 +1051,11 @@ class ib_socket_t {
     qp_init_attr.send_cq = state_->cq_.get();
     qp_init_attr.recv_cq = state_->cq_.get();
     qp_init_attr.cap = conf_.cap;
+    if (state_->use_srq_) {
+      qp_init_attr.srq = state_->device_->get_srq_manager()->srq();
+      qp_init_attr.cap.max_recv_wr = 0;
+      qp_init_attr.cap.max_recv_sge = 0;
+    }
     ibv_qp* qp;
 #ifdef YLT_ENABLE_CUDA
     if (gpu_id_ >= 0 &&
@@ -977,6 +1069,12 @@ class ib_socket_t {
       qp_init_attr_ex.cap = conf_.cap;
       qp_init_attr_ex.pd = state_->device_->pd();
       qp_init_attr_ex.comp_mask = IBV_QP_INIT_ATTR_PD;
+      if (state_->use_srq_) {
+        qp_init_attr_ex.srq = state_->device_->get_srq_manager()->srq();
+        qp_init_attr_ex.cap.max_recv_wr = 0;
+        qp_init_attr_ex.cap.max_recv_sge = 0;
+        qp_init_attr_ex.comp_mask |= IBV_QP_INIT_ATTR_SRQ;
+      }
 
       struct mlx5dv_qp_init_attr mlx5_qp_attr;
       memset(&mlx5_qp_attr, 0, sizeof(mlx5_qp_attr));

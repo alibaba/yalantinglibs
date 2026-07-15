@@ -18,6 +18,7 @@
 #include <infiniband/verbs.h>
 #include <sys/types.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cerrno>
 #include <cmath>
@@ -83,6 +84,15 @@ struct ib_deleter {
       auto ret = ibv_destroy_comp_channel(channel);
       if (ret != 0) {
         ELOG_ERROR << "ibv_destroy_comp_channel failed "
+                   << std::make_error_code(std::errc{ret}).message();
+      }
+    }
+  }
+  void operator()(ibv_srq* srq) const noexcept {
+    if (srq) {
+      auto ret = ibv_destroy_srq(srq);
+      if (ret != 0) {
+        ELOG_ERROR << "ibv_destroy_srq failed: "
                    << std::make_error_code(std::errc{ret}).message();
       }
     }
@@ -378,5 +388,72 @@ inline void ib_buffer_t::release_resource() {
     }
   }
 }
+
+struct ib_srq_recv_entry_t {
+  ib_buffer_t buffer;
+  std::atomic<bool> active{false};
+  ib_srq_recv_entry_t() = default;
+  explicit ib_srq_recv_entry_t(ib_buffer_t b) : buffer(std::move(b)) {}
+};
+
+class ib_srq_buffer_manager_t {
+ public:
+  struct config_t {
+    uint64_t max_buffer_memory;
+    uint32_t srq_max_wr;
+    uint32_t srq_max_sge;
+    size_t buffer_size;
+    uint32_t buffer_block = 0;
+  };
+
+  ib_srq_buffer_manager_t(ib_device_t& device, const config_t& conf);
+
+  void init();
+
+  void replenish(ib_srq_recv_entry_t* entry, ib_buffer_t consumed_buffer);
+
+  void repost(ib_srq_recv_entry_t* entry);
+
+  void dec_posted_count() noexcept {
+    uint32_t posted =
+        posted_count_.fetch_sub(1, std::memory_order_acq_rel) - 1;
+    uint32_t total = total_count_.load(std::memory_order_acquire);
+    if (posted < total / 3 && total < watermark_) {
+      uint32_t expand_count = std::min(total / 3, watermark_ - total);
+      if (expand_count > 0) {
+        expand(expand_count);
+      }
+    }
+  }
+
+  ibv_srq* srq() const noexcept { return srq_.get(); }
+  uint32_t posted_count() const noexcept {
+    return posted_count_.load(std::memory_order_acquire);
+  }
+  uint32_t total_count() const noexcept {
+    return total_count_.load(std::memory_order_acquire);
+  }
+  uint32_t watermark() const noexcept { return watermark_; }
+  uint64_t memory_usage() const noexcept {
+    return static_cast<uint64_t>(posted_count_.load(std::memory_order_acquire)) *
+           config_.buffer_size;
+  }
+
+ private:
+  bool post_entry(ib_srq_recv_entry_t* entry);
+  ib_srq_recv_entry_t* find_free_slot();
+  void expand(uint32_t count);
+
+  ib_device_t& device_;
+  std::vector<std::unique_ptr<ib_srq_recv_entry_t>> slots_;
+  std::unique_ptr<ibv_srq, ib_deleter> srq_;
+  config_t config_;
+  uint32_t watermark_;
+  uint32_t buffer_block_ = 0;
+  alignas(64) std::atomic<uint32_t> posted_count_{0};
+  alignas(64) std::atomic<uint32_t> total_count_{0};
+  std::atomic<uint32_t> scan_pos_{0};
+  std::atomic<bool> initialized_{false};
+};
 
 }  // namespace coro_io

@@ -37,6 +37,8 @@ struct config_t {
   uint16_t port = 9001;
   unsigned thread_num = std::thread::hardware_concurrency();
   std::chrono::steady_clock::duration conn_timeout_duration =
+      std::chrono::seconds{30};
+  std::chrono::steady_clock::duration body_read_timeout_duration =
       std::chrono::seconds{0};
   std::string address = "0.0.0.0";
 #ifdef YLT_ENABLE_SSL

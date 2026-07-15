@@ -49,10 +49,15 @@ struct config_t {
   int test_time = 10;
   int gpu_id = -1;
   std::string device_name = "";
+  bool use_srq = true;
+  uint64_t max_srq_buffer_memory = 256 * 1024 * 1024;
+  uint32_t srq_max_wr = 4096;
+  uint32_t srq_buffer_block = 32;
 };
 YLT_REFL(config_t, buffer_size, request_size, recv_buffer_cnt, send_buffer_cnt,
          concurrency, test_type, enable_log, enable_server, enable_client, port,
-         test_time, gpu_id, device_name);
+         test_time, gpu_id, device_name, use_srq, max_srq_buffer_memory,
+         srq_max_wr, srq_buffer_block);
 
 config_t config;
 std::shared_ptr<coro_io::ib_device_t> g_dev;
@@ -366,7 +371,11 @@ TEST_CASE("ib socket pressure test") {
   g_dev = coro_io::ib_device_t::create(
       {.dev_name = config.device_name,
        .buffer_pool_config = {.buffer_size = config.buffer_size,
-                              .gpu_id = config.gpu_id}});
+                              .gpu_id = config.gpu_id},
+       .use_srq = config.use_srq,
+       .max_srq_buffer_memory = config.max_srq_buffer_memory,
+       .srq_max_wr = config.srq_max_wr,
+       .srq_buffer_block = config.srq_buffer_block});
   easylog::Severity s;
   if (config.enable_log) {
     s = easylog::Severity::TRACE;

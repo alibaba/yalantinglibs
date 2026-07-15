@@ -238,6 +238,51 @@ RDMA operates directly on remote memory. If the remote memory is not ready, it t
 
 coro_rpc uses the following strategy to address the RNR issue: For each connection, we prepare a receive buffer queue. This queue contains several memory blocks (e.g., 8 blocks of 256KB by default). Whenever a notification of a completed data transfer is received, a new memory block is immediately added to the buffer queue, and this new block is posted to RDMA's receive queue.
 
+### SRQ (Shared Receive Queue)
+
+By default, each RDMA connection (QP) maintains its own independent receive buffer queue. When there are many connections on the same device, each QP requires its own receive buffers, and memory usage grows linearly with the number of connections.
+
+SRQ allows all QPs on the same `ib_device` to share a single pool of receive buffers. Buffers are managed by a device-level manager that dynamically expands and shrinks the pool based on traffic. When a QP receives data, it uses a buffer from the shared pool; after consumption, the buffer is either reposted or returned to the underlying memory pool.
+
+**Enabling** (enabled by default, auto-detected):
+
+SRQ is enabled by default. The device constructor probes SRQ hardware support during construction. If the hardware does not support SRQ, it automatically falls back to per-QP mode (each QP maintains its own receive queue). To explicitly disable:
+
+```cpp
+auto dev = coro_io::ib_device_t::create({
+    .use_srq = false,                                       // Explicitly disable SRQ
+    .max_srq_buffer_memory = 256 * 1024 * 1024,             // SRQ buffer memory limit (default 256MB)
+    .srq_max_wr = 4096,                                    // SRQ max WR count
+    .buffer_pool_config = {
+      // ...
+    },
+});
+coro_rpc_client cli;
+cli.init_ibv({.device = dev});
+```
+
+**Configuration**:
+
+| Field | Description |
+|-------|-------------|
+| `use_srq` | Enable SRQ, default `true`. Auto-detected during device construction; falls back to per-QP mode if hardware does not support SRQ |
+| `max_srq_buffer_memory` | Total memory limit for SRQ-managed buffers (bytes), default 256MB |
+| `srq_max_wr` | SRQ queue depth limit, default 4096 |
+| `srq_buffer_block` | Initial number of buffers posted to SRQ, also the shrink floor. Default `32` |
+| `srq_idle_timeout_ms` | Delay before destroying SRQ resources after the last QP is destroyed (milliseconds), default 3000 |
+
+**Dynamic Expansion and Shrinking**:
+
+The watermark = `min(max_srq_buffer_memory / buffer_size, srq_max_wr)`, which is the upper limit on the total number of active SRQ buffers.
+
+- **Initialization**: Only `srq_buffer_block` buffers are posted to the SRQ (default 32).
+- **Expansion**: When the free buffer count (`posted`) < 1/3 of the total active count (`total`), new buffers are automatically added. This is checked on every receive completion and every buffer replenish.
+- **Shrinking**: When `posted` > 2/3 of `total` and `total` > `srq_buffer_block`, the consumed buffer is not reposted but returned to the underlying memory pool, reducing the active count. This is checked on every buffer replenish.
+- **Shrink floor**: The active buffer count never goes below `srq_buffer_block`.
+- **Idle reclamation**: After all QPs are destroyed, SRQ resources are cleaned up after a `srq_idle_timeout_ms` delay, avoiding repeated creation/destruction during brief connection gaps.
+
+With a smaller `srq_buffer_block`, low-traffic memory usage is minimal. The default of 32 buffers × 256KB = 8MB, instead of the full 256MB watermark. The pool expands automatically under high traffic and shrinks when traffic subsides.
+
 ### Send Buffer Queue
 
 In the send path, the most straightforward approach is to first copy data to an RDMA buffer, then post it to the RDMA send queue. After the data is written to the peer, repeat the process for the next block.

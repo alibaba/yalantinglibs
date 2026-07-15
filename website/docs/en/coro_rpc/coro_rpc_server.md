@@ -450,7 +450,9 @@ struct config_t {
   uint16_t port = 9001; /* Listening port */
   unsigned thread_num = std::thread::hardware_concurrency(); /* Number of connections used internally by rpc server, default is the number of logical cores */
   std::chrono::steady_clock::duration conn_timeout_duration =
-      std::chrono::seconds{0}; /* Timeout duration for rpc requests, 0 seconds means rpc requests will not automatically timeout */
+      std::chrono::seconds{30}; /* Connection idle timeout duration. If no request header is received within this duration, the connection will be closed. 0 means no timeout. */
+  std::chrono::steady_clock::duration body_read_timeout_duration =
+      std::chrono::seconds{0}; /* Timeout duration for reading request body. If the body transfer stalls beyond this duration, the connection will be closed. 0 means no timeout. */
   std::string address="0.0.0.0"; /* Listening address */
   std::vector<std::unique_ptr<coro_io::server_acceptor_base>> acceptors; /* acceptor list for rpc server, default is empty, allow user defined acceptors which derived from coro_io::server_acceptor_base, support multiple acceptors. If acceptors is not empty,config_t::port, config_t::address which be ignored. */
   /* The following settings are only applicable if SSL is enabled */

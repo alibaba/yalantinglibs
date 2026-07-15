@@ -50,15 +50,18 @@ class coro_rpc_server {
    * 构造coro_rpc_server，需要传入线程数、端口和连接超时时间。服务端会根据线程数启动
    * io_context以充分利用多核的能力。
    * 服务端在启动的时候会监听该端口
-   * 如果conn_timeout_seconds大于0的时候，服务端会启动心跳检查，默认不开启。
+   * 如果conn_timeout_seconds大于0的时候，服务端会启动心跳检查，默认30秒。
    * 当超过conn_timeout_seconds时间内没有收到来自客户端的消息时，服务端会主动关闭客户端连接。
+   * body_read_timeout_seconds控制请求体读取阶段的超时，0代表不超时。
    *
    * @param thread_num
    * @param port
    * @param conn_timeout_seconds
+   * @param body_read_timeout_seconds
    */
   coro_rpc_server(size_t thread_num, unsigned short port,
-                  size_t conn_timeout_seconds = 0);
+                  size_t conn_timeout_seconds = 30,
+                  size_t body_read_timeout_seconds = 0);
   /*!
    * 启动server(协程)，server启动后会监听端口等待连接到来，如果端口被占用会返回错误码；
    * 如果accept失败也会返回错误码；客户端连接到来之后启动会话。

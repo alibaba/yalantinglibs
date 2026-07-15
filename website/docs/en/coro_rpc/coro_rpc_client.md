@@ -232,7 +232,10 @@ By modifying the configuration of `ib_device_t`, users can assign different netw
       .gid_index = 0,   // Manually specify the GID index; takes effect when automatic lookup is disabled or fails.
            .buffer_pool_config = {
                // ...
-      }
+      },
+      .use_srq = false, // Enable SRQ (Shared Receive Queue), default false
+      .max_srq_buffer_memory = 256 * 1024 * 1024, // SRQ buffer memory limit (bytes), default 256MB
+      .srq_max_wr = 4096, // SRQ queue depth limit, default 4096
   });
 ```
 
