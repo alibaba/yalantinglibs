@@ -9,6 +9,7 @@ on:
     branches: [ main, develop ]
   pull_request:
     branches: [ main, develop ]
+    types: [opened, synchronize, reopened, labeled]
   schedule:
     - cron: '17 17 * * *'   # daily ~01:15 CST, off-the-hour
   workflow_dispatch:
@@ -26,6 +27,9 @@ env:
 
 jobs:
   rdma_software:
+    # Self-hosted RDMA capacity is opt-in on PRs so missing runners do not
+    # block unrelated changes for 24h while the job waits in queue.
+    if: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'run-rdma-ci') }}
     runs-on: [self-hosted, linux, x64, rdma-rxe]
     timeout-minutes: 30
 
