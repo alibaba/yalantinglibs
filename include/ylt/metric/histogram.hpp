@@ -230,13 +230,16 @@ class basic_dynamic_histogram : public dynamic_metric {
 
   void serialize(std::string &str) override {
     auto value_map = sum_->copy();
-    if (value_map.empty()) {
+    auto has_non_zero_value =
+        std::any_of(value_map.begin(), value_map.end(), [](const auto &e) {
+          return e->value != 0;
+        });
+    if (!has_non_zero_value) {
       return;
     }
 
     serialize_head(str);
 
-    std::string value_str;
     auto bucket_counts = get_bucket_counts();
     for (auto &e : value_map) {
       auto &labels_value = e->label;
@@ -246,6 +249,7 @@ class basic_dynamic_histogram : public dynamic_metric {
       }
 
       value_type count = 0;
+      std::string value_str;
       for (size_t i = 0; i < bucket_counts.size(); i++) {
         auto counter = bucket_counts[i];
         value_str.append(name_).append("_bucket{");
@@ -287,9 +291,6 @@ class basic_dynamic_histogram : public dynamic_metric {
       str.append("} ");
       str.append(std::to_string(count));
       str.append("\n");
-    }
-    if (value_str.empty()) {
-      str.clear();
     }
   }
 
