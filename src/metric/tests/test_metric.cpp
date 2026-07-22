@@ -1908,6 +1908,11 @@ TEST_CASE("test serialize with emptry metrics") {
   h1->observe({"GET"}, 0);
   h1->serialize(s1);
   CHECK(s1.empty());
+
+  std::string existing = "previous_metric 1\n";
+  h1->serialize(existing);
+  CHECK(existing == "previous_metric 1\n");
+
 #ifdef CINATRA_ENABLE_METRIC_JSON
   h1->serialize_to_json(s1);
   CHECK(s1.empty());
