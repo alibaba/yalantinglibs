@@ -24,6 +24,29 @@ inline char* to_chars_float(T value, char* buffer) {
 #endif
 
 namespace ylt::metric {
+
+// Escapes a label value for the Prometheus text exposition format. Inside a
+// label value exactly three characters must be escaped: backslash, double
+// quote, and line feed.
+inline void append_escaped_label_value(std::string& str,
+                                       std::string_view value) {
+  for (char ch : value) {
+    switch (ch) {
+      case '\\':
+        str.append("\\\\");
+        break;
+      case '"':
+        str.append("\\\"");
+        break;
+      case '\n':
+        str.append("\\n");
+        break;
+      default:
+        str.push_back(ch);
+    }
+  }
+}
+
 enum class MetricType {
   Counter,
   Gauge,
@@ -159,11 +182,9 @@ class metric_t {
                           const std::vector<std::string>& label_name,
                           const auto& label_value) {
     for (size_t i = 0; i < label_name.size(); i++) {
-      str.append(label_name[i])
-          .append("=\"")
-          .append(label_value[i])
-          .append("\"")
-          .append(",");
+      str.append(label_name[i]).append("=\"");
+      append_escaped_label_value(str, label_value[i]);
+      str.append("\"").append(",");
     }
     str.pop_back();
   }
@@ -171,7 +192,9 @@ class metric_t {
   void build_label_string(std::string& str,
                           const std::map<std::string, std::string>& labels) {
     for (auto& [k, v] : labels) {
-      str.append(k).append("=\"").append(v).append("\",");
+      str.append(k).append("=\"");
+      append_escaped_label_value(str, v);
+      str.append("\",");
     }
     str.pop_back();
   }

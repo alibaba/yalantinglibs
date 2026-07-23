@@ -13,6 +13,26 @@ using namespace ylt::metric;
 struct metrc_tag {};
 
 struct test_tag {};
+
+TEST_CASE("test label value escaping in text serialization") {
+  // A label value can contain characters that are special in the Prometheus
+  // text format. They must be escaped: backslash, double quote, and line feed.
+  dynamic_counter_1t c("http_requests_total", "Total requests",
+                       std::array<std::string, 1>{"path"});
+  c.inc({std::string("/has") + '"' + "quote"}, 1);
+  c.inc({std::string("/has") + '\\' + "backslash"}, 2);
+  c.inc({std::string("/has") + '\n' + "newline"}, 3);
+
+  std::string str;
+  c.serialize(str);
+
+  CHECK(str.find("path=\"/has\\\"quote\"") != std::string::npos);
+  CHECK(str.find("path=\"/has\\\\backslash\"") != std::string::npos);
+  CHECK(str.find("path=\"/has\\nnewline\"") != std::string::npos);
+  // the escaped newline must not split the sample across two lines
+  CHECK(str.find("/has\nnewline") == std::string::npos);
+}
+
 TEST_CASE("test serialize with dynamic labels only") {
   auto verify_serialize = [](const std::string& str) {
     CHECK(str.find("method=\"GET\"") != std::string::npos);

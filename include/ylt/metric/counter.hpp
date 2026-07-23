@@ -119,7 +119,9 @@ class basic_static_counter : public static_metric {
   void build_string(std::string &str, const std::vector<std::string> &v1,
                     const std::vector<std::string> &v2) {
     for (size_t i = 0; i < v1.size(); i++) {
-      str.append(v1[i]).append("=\"").append(v2[i]).append("\",");
+      str.append(v1[i]).append("=\"");
+      append_escaped_label_value(str, v2[i]);
+      str.append("\",");
     }
     str.pop_back();
   }
@@ -340,7 +342,9 @@ class basic_dynamic_counter
       str.append(",");
     }
     for (size_t i = 0; i < v1.size(); i++) {
-      str.append(v1[i]).append("=\"").append(v2[i]).append("\",");
+      str.append(v1[i]).append("=\"");
+      append_escaped_label_value(str, v2[i]);
+      str.append("\",");
     }
     str.pop_back();
   }
