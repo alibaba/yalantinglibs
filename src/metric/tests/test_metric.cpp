@@ -1927,16 +1927,27 @@ TEST_CASE("test serialize with emptry metrics") {
 
   h1->observe({"GET"}, 0);
   h1->serialize(s1);
-  CHECK(s1.empty());
+  CHECK(!s1.empty());
+  CHECK(s1.find("get_count2_count") != std::string::npos);
+  CHECK(s1.find("get_count2_sum") != std::string::npos);
 
+  // #1206 regression still holds: a pre-existing buffer is preserved (not
+  // wiped), and the histogram is now appended to it rather than dropped.
   std::string existing = "previous_metric 1\n";
   h1->serialize(existing);
-  CHECK(existing == "previous_metric 1\n");
+  CHECK(existing.find("previous_metric 1\n") == 0);
+  CHECK(existing.find("get_count2") != std::string::npos);
 
 #ifdef CINATRA_ENABLE_METRIC_JSON
+  s1.clear();
   h1->serialize_to_json(s1);
-  CHECK(s1.empty());
+  CHECK(!s1.empty());
+  CHECK(s1.find("get_count2") != std::string::npos);
 #endif
+
+  // Earlier observed-h1 checks left content in s1; clear it so the
+  // unobserved-metric checks below start from a clean buffer.
+  s1.clear();
 
   auto h2 = std::make_shared<histogram_t>(
       "get_count2", "help",
@@ -2052,6 +2063,73 @@ TEST_CASE("test serialize with emptry metrics") {
 #ifdef CINATRA_ENABLE_METRIC_JSON
     c3->serialize_to_json(str);
     CHECK(!str.empty());
+#endif
+  }
+}
+
+TEST_CASE("histogram with zero-valued observations is emitted") {
+  // Regression for self-drop bug: a histogram whose observations are all
+  // zero-valued (sum==0, count>0) must still be emitted in both Prometheus
+  // and JSON output. Previously gated on sum!=0, which dropped real signal
+  // (e.g. sub-microsecond latencies truncated to int64_t 0). Sibling of
+  // the cross-metric wipe fixed in #1206.
+  std::vector<double> buckets{5.23, 10.54, 20.0, 50.0, 100.0};
+
+  // --- static histogram ---
+  {
+    histogram_t h("latency_us", "help", buckets);
+    h.observe(0);
+    h.observe(0);
+
+    std::string str;
+    h.serialize(str);
+    CHECK(!str.empty());
+    CHECK(str.find("# HELP latency_us") != std::string::npos);
+    CHECK(str.find("# TYPE latency_us histogram") != std::string::npos);
+    CHECK(str.find("latency_us_sum 0") != std::string::npos);
+    CHECK(str.find("latency_us_count 2") != std::string::npos);
+    // value 0 falls in the first bucket; cumulative +Inf bucket == count
+    CHECK(str.find("le=\"+Inf\"} 2") != std::string::npos);
+
+    // Pre-existing buffer is preserved (no cross-wipe), histogram appended.
+    std::string existing = "previous_metric 1\n";
+    h.serialize(existing);
+    CHECK(existing.find("previous_metric 1\n") == 0);
+    CHECK(existing.find("latency_us_count 2") != std::string::npos);
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+    std::string json;
+    h.serialize_to_json(json);
+    CHECK(!json.empty());
+    CHECK(json.find("latency_us") != std::string::npos);
+#endif
+  }
+
+  // --- dynamic histogram ---
+  {
+    dynamic_histogram_1t h("stage_latency_us", "help", buckets,
+                           std::array<std::string, 1>{"method"});
+    h.observe({"GET"}, 0);
+
+    std::string str;
+    h.serialize(str);
+    CHECK(!str.empty());
+    CHECK(str.find("stage_latency_us_sum") != std::string::npos);
+    CHECK(str.find("stage_latency_us_count") != std::string::npos);
+    CHECK(str.find("le=\"+Inf\"} 1") != std::string::npos);
+
+    // A second label combo with non-zero sum is unaffected.
+    h.observe({"POST"}, 10);
+    str.clear();
+    h.serialize(str);
+    CHECK(str.find("method=\"GET\"") != std::string::npos);
+    CHECK(str.find("method=\"POST\"") != std::string::npos);
+
+#ifdef CINATRA_ENABLE_METRIC_JSON
+    std::string json;
+    h.serialize_to_json(json);
+    CHECK(!json.empty());
+    CHECK(json.find("stage_latency_us") != std::string::npos);
 #endif
   }
 }
