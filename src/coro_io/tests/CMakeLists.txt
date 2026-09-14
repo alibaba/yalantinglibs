@@ -36,3 +36,10 @@ endif()
 
 add_subdirectory(ibverbs)
 add_subdirectory(networkdirect)
+
+if(YLT_HAS_OWN_RING)
+    add_executable(own_ring_test test_own_ring.cpp)
+    target_compile_definitions(own_ring_test PRIVATE OWN_RING_FAULT_INJECT)
+    add_test(NAME own_ring_test COMMAND own_ring_test)
+    set_tests_properties(own_ring_test PROPERTIES TIMEOUT 90)
+endif()
