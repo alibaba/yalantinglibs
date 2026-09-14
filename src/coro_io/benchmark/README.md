@@ -173,6 +173,11 @@ written. Successful runs delete their generated data unless `--keep-data` is set
 
 - `own-checked` compares every returned buffer with its expected contents.
 - `own-raw` only skips this benchmark comparison, not API error/length checks.
+- `asio-raw` and `asio-checked` select the explicit native Asio backend, with
+  the same error/length/content-check policy as their own-ring counterparts.
+- `own-post-raw` additionally posts coroutine resumption to the Asio executor;
+  compare it with `own-raw` to expose scheduling costs rather than treating
+  the default inline-resume path as universally appropriate for applications.
 - `fio-batch` uses io_uring, ordinary fd/buffers, non-vectored reads, batched
   submission/completion, and no SQPOLL/IOPOLL.
 - `fio-files` adds registered files; optional `fio-registered` also registers
@@ -190,3 +195,61 @@ A throughput ratio against fio is not a physical-device utilization percentage.
 Shared load, CPU/NUMA placement, working-set size, device caches, and configured
 versus actual queue depth matter. See `RESULTS.md` for the public-upstream test
 configuration, results, and explicitly limited interpretation.
+
+### Three-way latency comparison
+
+```sh
+python3 src/coro_io/benchmark/compare_fio.py \
+  --bench build-own-ring/output/benchmark/coro_file_bench \
+  --output build-own-ring/results/latency-shared \
+  --cpus 0 --own-rings 1 --fio-jobs 1 --pin --extra-jobs 1 \
+  --depths 1,2,8,32,128 \
+  --profiles asio-raw,own-raw,own-post-raw,fio-batch
+
+python3 src/coro_io/benchmark/compare_fio.py \
+  --bench build-own-ring/output/benchmark/coro_file_bench \
+  --output build-own-ring/results/latency-independent \
+  --cpus 0 --own-rings 1 --fio-jobs 1 --pin --extra-jobs 1 \
+  --files 128 --depths 32,128 --profiles asio-raw,own-raw,fio-batch
+
+python3 -m unittest discover -s src/coro_io/benchmark -p 'test_*.py'
+```
+
+Use an allowed CPU on the target machine. All participating threads share this
+one-CPU budget, including the own-ring owner and the C++ executor thread. CPU
+affinity is not CPU reservation; other tasks and SMT siblings may interfere.
+Asio profiles require one own ring and one fio job because the native benchmark
+has one executor. `--files` controls the number of independent C++ file objects
+opened on the same data file; only `min(files, QD)` objects are actively used.
+fio still uses one file per job, so the second command is an application-object
+serialization control, not an identical file-descriptor layout.
+
+The comparison records mean, P50, P99, P99.9, maximum latency, IOPS and CPU cost.
+All summary metrics are medians of per-run values, including the maximum;
+the additional P99 range retains the smallest and largest per-run P99. These
+are not pooled percentiles or confidence intervals. Raw per-run values and
+sample counts remain in `measurements.json`; a small sample count makes P99.9
+and maximum particularly unstable. `summarize.py` also retains P99.9 when
+processing the standalone benchmark CSV, including older result files.
+
+Timing boundaries:
+
+- Both C++ backends measure from immediately before `async_read_at` until
+  the awaiting worker resumes. This includes backend queueing and coroutine
+  resumption, but excludes offset generation and the content comparison after
+  the read. Content comparison still affects throughput and other workers.
+- fio uses total `lat_ns` (submission plus completion latency), not `clat_ns`
+  alone. Its instrumentation boundary and histogram quantiles differ from
+  the C++ per-operation clock samples. This is an application-API versus fio
+  reference comparison, not an isolated device-service-time comparison.
+- Workloads are closed-loop: at most QD requests are outstanding, and each
+  worker submits again after completion. Equal QD does not mean equal offered
+  IOPS or equal device depth. This does not measure latency at a fixed arrival
+  rate, open-loop overload, coordinated-omission-corrected latency, or a
+  production SLO. In particular, same-object Asio queueing at high QD must
+  not be used to claim a universal per-I/O latency improvement.
+
+Start with QD1/2 to assess low-concurrency regressions, then inspect the
+independent-object control and P99/P99.9 variability. `fio-default` can replace
+`fio-batch` to disable batching beyond one request when investigating batching
+tradeoffs; keep the chosen profile explicit in reports.

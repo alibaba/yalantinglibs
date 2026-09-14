@@ -25,8 +25,8 @@ def summarize(path):
                 row.get("file_bytes", "unknown"), row.get("pin_owners", "0"))
         groups[key].append(row)
     print(f"## {path.name}\n")
-    print("| QD | Backend | Runs | Median IOPS | Speedup | P50 us | P99 us | CPU us/IO |")
-    print("|---:|---|---:|---:|---:|---:|---:|---:|")
+    print("| QD | Backend | Runs | Median IOPS | Speedup | P50 us | P99 us | P99.9 us | CPU us/IO |")
+    print("|---:|---|---:|---:|---:|---:|---:|---:|---:|")
     for key, group in groups.items():
         backends = defaultdict(list)
         for row in group:
@@ -35,11 +35,11 @@ def summarize(path):
         baseline_iops = statistics.median(float(row["iops"]) for row in baseline) if baseline else None
         for backend, measurements in backends.items():
             medians = {column: statistics.median(float(row[column]) for row in measurements)
-                       for column in ("iops", "p50_us", "p99_us", "cpu_us_per_io")}
+                       for column in ("iops", "p50_us", "p99_us", "p999_us", "cpu_us_per_io")}
             speedup = f"{medians['iops'] / baseline_iops:.2f}x" if baseline_iops else "-"
             print(f"| {key[5]} | {backend} | {len(measurements)} | {medians['iops']:,.0f} | "
                   f"{speedup} | {medians['p50_us']:.1f} | {medians['p99_us']:.1f} | "
-                  f"{medians['cpu_us_per_io']:.2f} |")
+                  f"{medians['p999_us']:.1f} | {medians['cpu_us_per_io']:.2f} |")
     print()
 
 

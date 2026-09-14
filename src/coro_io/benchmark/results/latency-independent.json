@@ -1,0 +1,56 @@
+{
+  "configuration": {
+    "benchmark_sha256": "7428ba8598da37c20bac52ebef8ff490516f0939793cf3ad9e18cf4ad77a9285",
+    "comparison_sha256": "67a4e9f57c0f3c46e90fd8e94df6c06d069bfeb6ed28edaaa640f1a02b680cd0",
+    "affinity": "326",
+    "fio_version": "fio-3.34",
+    "seconds": 5,
+    "ramp_seconds": 1,
+    "file_mib": 1024,
+    "read_size": 4096,
+    "profiles": [
+      "asio-raw",
+      "own-raw",
+      "fio-batch"
+    ],
+    "depths": [
+      32,
+      128
+    ],
+    "own_rings": 1,
+    "fio_jobs": 1,
+    "pin": true,
+    "files": 128,
+    "load_model": "closed-loop fixed maximum outstanding requests",
+    "loadavg": [
+      301.9150390625,
+      290.314453125,
+      294.3388671875
+    ],
+    "date": "2026-09-14",
+    "repetitions": 3,
+    "asio_version": 102400,
+    "cpp_latency_scope": "async_read_at call through coroutine resume; before content check",
+    "fio_latency_scope": "fio total lat (slat + clat), not clat alone"
+  },
+  "measurements": [
+    {"iops":311360.4,"mean_us":102.724,"p50_us":98.865,"p99_us":157.225,"p999_us":280.03,"max_us":4083.201,"cpu_us_per_io":2.317,"operations":1556833,"runtime_ms":5000.099999999999,"verify_data":0,"backend":"native","files":128,"asio_version":102400,"post_resume":0,"profile":"asio-raw","depth":32,"repeat":0,"jobs":1,"errors":0,"short_reads":0,"corrupt":0},
+    {"iops":348549.2,"mean_us":91.764,"p50_us":87.489,"p99_us":150.595,"p999_us":338.032,"max_us":4138.601,"cpu_us_per_io":1.999,"operations":1742782,"runtime_ms":5000.104,"verify_data":0,"backend":"defer","files":128,"asio_version":102400,"post_resume":0,"profile":"own-raw","depth":32,"repeat":0,"jobs":1,"errors":0,"short_reads":0,"corrupt":0},
+    {"iops":380792.841432,"mean_us":81.752170451,"max_us":4083.816,"p50_us":79.36,"p99_us":132.096,"p999_us":236.544,"cpu_us_per_io":1.8820119253601635,"operations":1904345,"runtime_ms":5001,"verify_data":0,"iodepth_level":{"1":0.1,"2":0.0,"4":0.1,"8":0.297425,"16":78.471495,"32":21.223045,">=64":0.0},"profile":"fio-batch","depth":32,"repeat":0,"jobs":1,"errors":0},
+    {"iops":344151.0,"mean_us":92.937,"p50_us":88.225,"p99_us":147.858,"p999_us":342.95,"max_us":4122.062,"cpu_us_per_io":2.016,"operations":1720783,"runtime_ms":5000.081,"verify_data":0,"backend":"defer","files":128,"asio_version":102400,"post_resume":0,"profile":"own-raw","depth":32,"repeat":1,"jobs":1,"errors":0,"short_reads":0,"corrupt":0},
+    {"iops":271263.347331,"mean_us":115.456492012,"max_us":45026.184,"p50_us":79.36,"p99_us":978.944,"p999_us":2007.04,"cpu_us_per_io":1.875293014533521,"operations":1356588,"runtime_ms":5001,"verify_data":0,"iodepth_level":{"1":0.1,"2":0.0,"4":0.120302,"8":0.986003,"16":76.835119,"32":22.050615,">=64":0.0},"profile":"fio-batch","depth":32,"repeat":1,"jobs":1,"errors":0},
+    {"iops":226019.7,"mean_us":141.53,"p50_us":97.426,"p99_us":1020.167,"p999_us":3991.126,"max_us":10804.307,"cpu_us_per_io":2.338,"operations":1130122,"runtime_ms":5000.105,"verify_data":0,"backend":"native","files":128,"asio_version":102400,"post_resume":0,"profile":"asio-raw","depth":32,"repeat":1,"jobs":1,"errors":0,"short_reads":0,"corrupt":0},
+    {"iops":262351.929614,"mean_us":119.46300379499999,"max_us":27973.521,"p50_us":80.384,"p99_us":987.136,"p999_us":3817.472,"cpu_us_per_io":1.8803038363685975,"operations":1312022,"runtime_ms":5001,"verify_data":0,"iodepth_level":{"1":0.1,"2":0.1,"4":0.1,"8":0.978032,"16":76.757249,"32":22.12158,">=64":0.0},"profile":"fio-batch","depth":32,"repeat":2,"jobs":1,"errors":0},
+    {"iops":243935.8,"mean_us":131.131,"p50_us":98.252,"p99_us":1004.602,"p999_us":3099.66,"max_us":13489.971,"cpu_us_per_io":2.332,"operations":1219703,"runtime_ms":5000.098,"verify_data":0,"backend":"native","files":128,"asio_version":102400,"post_resume":0,"profile":"asio-raw","depth":32,"repeat":2,"jobs":1,"errors":0,"short_reads":0,"corrupt":0},
+    {"iops":354456.9,"mean_us":90.235,"p50_us":86.699,"p99_us":138.454,"p999_us":218.962,"max_us":8398.112,"cpu_us_per_io":1.983,"operations":1772326,"runtime_ms":5000.1179999999995,"verify_data":0,"backend":"defer","files":128,"asio_version":102400,"post_resume":0,"profile":"own-raw","depth":32,"repeat":2,"jobs":1,"errors":0,"short_reads":0,"corrupt":0},
+    {"iops":457282.1,"mean_us":279.872,"p50_us":277.695,"p99_us":340.068,"p999_us":410.911,"max_us":2760.766,"cpu_us_per_io":1.789,"operations":2286518,"runtime_ms":5000.235,"verify_data":0,"backend":"native","files":128,"asio_version":102400,"post_resume":0,"profile":"asio-raw","depth":128,"repeat":0,"jobs":1,"errors":0,"short_reads":0,"corrupt":0},
+    {"iops":478749.2,"mean_us":267.322,"p50_us":264.724,"p99_us":312.709,"p999_us":378.506,"max_us":848.274,"cpu_us_per_io":1.639,"operations":2393857,"runtime_ms":5000.231000000001,"verify_data":0,"backend":"defer","files":128,"asio_version":102400,"post_resume":0,"profile":"own-raw","depth":128,"repeat":0,"jobs":1,"errors":0,"short_reads":0,"corrupt":0},
+    {"iops":474694.261148,"mean_us":205.34139269899998,"max_us":1262.155,"p50_us":195.584,"p99_us":321.536,"p999_us":460.8,"cpu_us_per_io":1.5842820350589273,"operations":2373946,"runtime_ms":5001,"verify_data":0,"iodepth_level":{"1":0.0,"2":0.0,"4":0.0,"8":0.0,"16":0.1,"32":11.011539,">=64":88.97119},"profile":"fio-batch","depth":128,"repeat":0,"jobs":1,"errors":0},
+    {"iops":479503.5,"mean_us":266.901,"p50_us":264.53,"p99_us":316.14,"p999_us":377.84,"max_us":891.578,"cpu_us_per_io":1.642,"operations":2397592,"runtime_ms":5000.155000000001,"verify_data":0,"backend":"defer","files":128,"asio_version":102400,"post_resume":0,"profile":"own-raw","depth":128,"repeat":1,"jobs":1,"errors":0,"short_reads":0,"corrupt":0},
+    {"iops":470728.054389,"mean_us":206.963036317,"max_us":1530.709,"p50_us":197.632,"p99_us":329.728,"p999_us":528.384,"cpu_us_per_io":1.6057016852646289,"operations":2354111,"runtime_ms":5001,"verify_data":0,"iodepth_level":{"1":0.0,"2":0.0,"4":0.0,"8":0.0,"16":0.1,"32":10.90178,">=64":89.077873},"profile":"fio-batch","depth":128,"repeat":1,"jobs":1,"errors":0},
+    {"iops":454340.8,"mean_us":281.672,"p50_us":279.086,"p99_us":344.535,"p999_us":733.475,"max_us":1710.655,"cpu_us_per_io":1.805,"operations":2271968,"runtime_ms":5000.581,"verify_data":0,"backend":"native","files":128,"asio_version":102400,"post_resume":0,"profile":"asio-raw","depth":128,"repeat":1,"jobs":1,"errors":0,"short_reads":0,"corrupt":0},
+    {"iops":474893.821236,"mean_us":205.70250722199998,"max_us":1940.998,"p50_us":193.536,"p99_us":333.824,"p999_us":651.264,"cpu_us_per_io":1.5886690380910031,"operations":2374944,"runtime_ms":5001,"verify_data":0,"iodepth_level":{"1":0.0,"2":0.0,"4":0.0,"8":0.1,"16":0.1,"32":10.779202,">=64":89.208672},"profile":"fio-batch","depth":128,"repeat":2,"jobs":1,"errors":0},
+    {"iops":449892.3,"mean_us":284.464,"p50_us":280.214,"p99_us":363.607,"p999_us":839.466,"max_us":4575.646,"cpu_us_per_io":1.811,"operations":2249592,"runtime_ms":5000.29,"verify_data":0,"backend":"native","files":128,"asio_version":102400,"post_resume":0,"profile":"asio-raw","depth":128,"repeat":2,"jobs":1,"errors":0,"short_reads":0,"corrupt":0},
+    {"iops":478855.5,"mean_us":267.262,"p50_us":261.914,"p99_us":403.751,"p999_us":698.393,"max_us":1925.106,"cpu_us_per_io":1.658,"operations":2394367,"runtime_ms":5000.187000000001,"verify_data":0,"backend":"defer","files":128,"asio_version":102400,"post_resume":0,"profile":"own-raw","depth":128,"repeat":2,"jobs":1,"errors":0,"short_reads":0,"corrupt":0}
+  ]
+}

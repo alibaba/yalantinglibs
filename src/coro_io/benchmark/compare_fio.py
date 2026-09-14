@@ -3,6 +3,7 @@ import csv
 import hashlib
 import io
 import json
+import math
 import os
 import platform
 import statistics
@@ -21,17 +22,22 @@ def run(command, directory, output, timeout):
     return result.stdout
 
 
-def own_result(text):
+def bench_result(text):
     rows = list(csv.DictReader(io.StringIO(text)))
     if len(rows) != 1:
-        raise ValueError("expected exactly one own-ring result")
+        raise ValueError("expected exactly one benchmark result")
     row = rows[0]
     if any(int(row[key]) for key in ("errors", "short_reads", "corrupt")):
-        raise ValueError(f"own-ring IO verification failed: {row}")
-    return {"iops": float(row["iops"]), "p50_us": float(row["p50_us"]),
-            "p99_us": float(row["p99_us"]), "cpu_us_per_io": float(row["cpu_us_per_io"]),
-            "operations": int(row["operations"]), "runtime_ms": float(row["seconds"]) * 1000,
-            "verify_data": int(row["verify_data"])}
+        raise ValueError(f"benchmark IO verification failed: {row}")
+    measured = {key: float(row[key]) for key in
+                ("iops", "mean_us", "p50_us", "p99_us", "p999_us", "max_us", "cpu_us_per_io")}
+    measured.update(operations=int(row["operations"]), runtime_ms=float(row["seconds"]) * 1000,
+                    verify_data=int(row["verify_data"]), backend=row["backend"],
+                    files=int(row["files"]), asio_version=int(row["asio_version"]),
+                    post_resume=int(row["post_resume"]),
+                    latency_scope="async_read_at call through coroutine resume; before content check")
+    validate_result(measured)
+    return measured
 
 
 def fio_result(text):
@@ -44,11 +50,42 @@ def fio_result(text):
         raise ValueError("fio did not perform a read-only workload")
     percentiles = read["lat_ns"]["percentile"]
     iops = read["iops"]
-    return {"iops": iops, "p50_us": percentiles["50.000000"] / 1000,
+    measured = {"iops": iops, "mean_us": read["lat_ns"]["mean"] / 1000,
+            "max_us": read["lat_ns"]["max"] / 1000,
+            "p50_us": percentiles["50.000000"] / 1000,
             "p99_us": percentiles["99.000000"] / 1000,
+            "p999_us": percentiles["99.900000"] / 1000,
             "cpu_us_per_io": (job["usr_cpu"] + job["sys_cpu"]) * 10 * job["job_runtime"] / read["total_ios"],
             "operations": read["total_ios"], "runtime_ms": read["runtime"],
-            "verify_data": 0, "iodepth_level": job["iodepth_level"]}
+            "verify_data": 0, "iodepth_level": job["iodepth_level"],
+            "latency_scope": "fio total lat (slat + clat), not clat alone"}
+    validate_result(measured)
+    return measured
+
+
+def validate_result(measured):
+    for key in ("iops", "mean_us", "p50_us", "p99_us", "p999_us", "max_us",
+                "cpu_us_per_io", "operations", "runtime_ms"):
+        if not math.isfinite(measured[key]) or measured[key] < 0:
+            raise ValueError(f"invalid {key}: {measured[key]}")
+    if not measured["operations"] or not measured["runtime_ms"] or not measured["iops"]:
+        raise ValueError("empty measurement")
+
+
+def summarize_results(results):
+    summary = ["| QD total | Profile | Jobs | Runs | Median IOPS | Mean us | P50 us | P99 us | P99.9 us | Median max us | P99 run range us | CPU us/IO |",
+               "|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|"]
+    keys = dict.fromkeys((row["depth"], row["profile"], row["jobs"]) for row in results)
+    for depth, profile, jobs in keys:
+        samples = [row for row in results if (row["depth"], row["profile"], row["jobs"]) == (depth, profile, jobs)]
+        medians = {key: statistics.median(row[key] for row in samples) for key in
+                   ("iops", "mean_us", "p50_us", "p99_us", "p999_us", "max_us", "cpu_us_per_io")}
+        tails = [row["p99_us"] for row in samples]
+        summary.append(f"| {depth} | {profile} | {jobs} | {len(samples)} | {medians['iops']:,.0f} | "
+                       f"{medians['mean_us']:.1f} | {medians['p50_us']:.1f} | {medians['p99_us']:.1f} | "
+                       f"{medians['p999_us']:.1f} | {medians['max_us']:.1f} | "
+                       f"{min(tails):.1f}–{max(tails):.1f} | {medians['cpu_us_per_io']:.2f} |")
+    return "\n".join(summary) + "\n"
 
 
 def main():
@@ -66,12 +103,16 @@ def main():
     parser.add_argument("--extra-jobs", type=int, default=2)
     parser.add_argument("--own-rings", type=int, default=1)
     parser.add_argument("--fio-jobs", type=int, default=1)
+    parser.add_argument("--files", type=int, help="file objects for each C++ backend; defaults to own-rings")
     parser.add_argument("--pin", action="store_true")
     parser.add_argument("--keep-data", action="store_true")
     args = parser.parse_args()
+    if args.files is None:
+        args.files = args.own_rings
     depths = [int(value) for value in args.depths.split(",")]
     profiles = args.profiles.split(",")
-    allowed = {"own-checked", "own-raw", "fio-default", "fio-batch", "fio-files", "fio-registered"}
+    allowed = {"own-checked", "own-raw", "own-post-raw", "asio-checked", "asio-raw",
+               "fio-default", "fio-batch", "fio-files", "fio-registered"}
     if (not set(profiles) <= allowed or len(set(profiles)) != len(profiles)
             or len(set(depths)) != len(depths) or not depths or min(depths) < 1 or max(depths) > 16384
             or args.seconds < 1 or args.seconds > 30 or args.ramp_seconds < 0
@@ -79,11 +120,14 @@ def main():
             or args.file_mib < 1 or args.file_mib > 1024 or args.extra_jobs < 1
             or args.own_rings < 1 or args.own_rings > 64 or min(depths) < args.own_rings
             or args.fio_jobs < 1 or args.fio_jobs > 64
+            or args.files < args.own_rings or args.files > 256
             or any(depth % args.fio_jobs for depth in depths)
             or (args.extra_jobs > 1 and max(depths) % args.extra_jobs)
             or args.extra_jobs > 64 or args.read_size <= 0 or args.read_size % 4096
             or args.read_size > args.file_mib * 1024 * 1024):
         parser.error("invalid comparison parameters")
+    if any(profile.startswith("asio-") for profile in profiles) and (args.own_rings != 1 or args.fio_jobs != 1):
+        parser.error("Asio comparison requires one own ring and one fio job: native uses one executor")
     bench = args.bench.resolve(strict=True)
     directory = args.output.resolve()
     directory.mkdir(parents=True, exist_ok=False)
@@ -98,7 +142,8 @@ def main():
                 "seconds": args.seconds, "ramp_seconds": args.ramp_seconds,
                 "file_mib": args.file_mib, "read_size": args.read_size,
                 "loadavg": os.getloadavg(), "profiles": profiles, "depths": depths,
-                "own_rings": args.own_rings, "fio_jobs": args.fio_jobs, "pin": args.pin}
+                "own_rings": args.own_rings, "fio_jobs": args.fio_jobs, "pin": args.pin,
+                "files": args.files, "load_model": "closed-loop fixed maximum outstanding requests"}
     command = [str(bench), "--prepare-file", str(data), "--file-mib", str(args.file_mib)]
     commands.append(command)
     run(command, directory, directory / "prepare.log", 180)
@@ -111,19 +156,21 @@ def main():
         stem = f"{profile}-qd{depth}-jobs{jobs}-r{repeat}"
         print(stem, flush=True)
         prefix = ["taskset", "-c", args.cpus]
-        if profile.startswith("own-"):
+        if profile.startswith(("own-", "asio-")):
             command = prefix + [str(bench), "--data-file", str(data),
-                                "--backends", "defer", "--depths", str(depth),
+                                "--backends", "native" if profile.startswith("asio-") else "defer", "--depths", str(depth),
                                 "--repeats", "1", "--seconds", str(args.seconds),
                                 "--ramp-seconds", str(args.ramp_seconds),
-                                "--rings", str(args.own_rings), "--files", str(args.own_rings),
+                                "--rings", str(args.own_rings), "--files", str(args.files),
                                 "--read-size", str(args.read_size)]
-            if profile == "own-raw":
+            if profile.endswith("-raw"):
                 command.append("--no-verify")
+            if profile == "own-post-raw":
+                command.append("--post-resume")
             if args.pin:
                 command.append("--pin-owners")
             output = directory / (stem + ".csv")
-            parse = own_result
+            parse = bench_result
         else:
             per_job = depth // jobs
             if per_job * jobs != depth:
@@ -168,23 +215,9 @@ def main():
         reference = "fio-registered" if "fio-registered" in profiles else "fio-files" if "fio-files" in profiles else "fio-batch"
         for repeat in range(args.repeats):
             measure(reference, max(depths), repeat, args.extra_jobs)
-    summary = ["| QD total | Profile | Jobs | Median IOPS | P99 us | Own checked / reference | Own raw / reference |",
-               "|---:|---|---:|---:|---:|---:|---:|"]
-    for depth in depths:
-        checked = [row["iops"] for row in results if row["depth"] == depth and row["profile"] == "own-checked"]
-        checked_iops = statistics.median(checked) if checked else None
-        raw = [row["iops"] for row in results if row["depth"] == depth and row["profile"] == "own-raw"]
-        raw_iops = statistics.median(raw) if raw else None
-        keys = dict.fromkeys((row["profile"], row["jobs"]) for row in results if row["depth"] == depth)
-        for profile, jobs in keys:
-            samples = [row for row in results if row["depth"] == depth and row["profile"] == profile and row["jobs"] == jobs]
-            iops = statistics.median(row["iops"] for row in samples)
-            latency = statistics.median(row["p99_us"] for row in samples)
-            ratio = f"{checked_iops / iops:.1%}" if checked_iops and profile.startswith("fio-") else "-"
-            raw_ratio = f"{raw_iops / iops:.1%}" if raw_iops and profile.startswith("fio-") else "-"
-            summary.append(f"| {depth} | {profile} | {jobs} | {iops:,.0f} | {latency:.1f} | {ratio} | {raw_ratio} |")
-    (directory / "summary.md").write_text("\n".join(summary) + "\n")
-    print("\n".join(summary))
+    summary = summarize_results(results)
+    (directory / "summary.md").write_text(summary)
+    print(summary)
     if not args.keep_data:
         data.unlink()
 

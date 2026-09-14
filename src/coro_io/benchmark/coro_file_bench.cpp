@@ -297,6 +297,8 @@ bool benchmark(const Configuration &config, const DataSet &data,
     return latencies[static_cast<size_t>(quantile * (latencies.size() - 1))];
   };
   size_t operations = latencies.size();
+  double mean_us =
+      std::accumulate(latencies.begin(), latencies.end(), 0.0) / operations;
   double cpu_us =
       (cpu_seconds(cpu_after) - cpu_seconds(cpu_before)) * 1e6 / operations;
   const char *reactor =
@@ -307,7 +309,7 @@ bool benchmark(const Configuration &config, const DataSet &data,
 #endif
   std::printf(
       "%s,%s,%s,%u,%zu,%u,%d,%zu,%zu,%.6f,%.1f,%.3f,%.3f,%.3f,%.3f,%zu,%zu,%zu,"
-      "%llu,%.4f,%.4f,%u,%d,%d,%d,%.3f,%zu,%zu,%d,%u,%d\n",
+      "%llu,%.4f,%.4f,%u,%d,%d,%d,%.3f,%zu,%zu,%d,%u,%d,%.3f,%.3f\n",
       reactor, backend.c_str(), config.sync_driver ? "sync" : "coroutine",
       depth, config.files, repeat, config.direct, config.read_size, operations,
       seconds, operations / seconds, percentile(0.5), percentile(0.99),
@@ -320,7 +322,8 @@ bool benchmark(const Configuration &config, const DataSet &data,
       rings.empty() ? size_t{1} : rings.size(), config.pin_owners,
       unsigned(ASIO_VERSION),
       coro_io::default_random_file_execution ==
-          coro_io::execution_type::own_ring);
+          coro_io::execution_type::own_ring,
+      mean_us, latencies.back());
   std::fflush(stdout);
   for (const auto &ring : rings) {
     ring->stop();
@@ -466,7 +469,7 @@ int main(int argc, char **argv) {
         "seconds,iops,p50_us,p99_us,p999_us,cpu_us_per_io,errors,short_reads,"
         "corrupt,max_read_sqes,enter_calls_per_io,wakes_per_io,setup_flags,"
         "post_resume,poll,verify_data,seconds_requested,file_bytes,rings,pin_"
-        "owners,asio_version,default_own_ring");
+        "owners,asio_version,default_own_ring,mean_us,max_us");
     bool passed = true;
     for (auto depth : config.depths) {
       for (unsigned repeat = 0; repeat < config.repeats; ++repeat) {
