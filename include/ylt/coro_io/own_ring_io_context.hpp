@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cassert>
 #include <cerrno>
 #include <charconv>
 #include <chrono>
@@ -31,7 +32,7 @@
 
 namespace coro_io {
 
-class OwnRingIoContext {
+class OwnRingIoState {
  public:
   enum class Mode { plain, single_issuer, defer_taskrun };
 
@@ -44,11 +45,31 @@ class OwnRingIoContext {
     bool poll = false;
     unsigned spin_us = 0;
     int cpu_id = -1;
-    bool post_resume = false;
+    bool post_resume = true;
     bool measure_queue_time = false;
   };
 
   struct ReadRequest {
+    ReadRequest() = default;
+    ReadRequest(const ReadRequest &) = delete;
+    ReadRequest &operator=(const ReadRequest &) = delete;
+    ReadRequest(ReadRequest &&other) noexcept { *this = std::move(other); }
+    ReadRequest &operator=(ReadRequest &&other) noexcept {
+      assert(!active_.load(std::memory_order_relaxed));
+      assert(!other.active_.load(std::memory_order_relaxed));
+      fd = other.fd;
+      buf = other.buf;
+      len = other.len;
+      iov = other.iov;
+      iovcnt = other.iovcnt;
+      offset = other.offset;
+      on_done = std::move(other.on_done);
+      cancellation = std::move(other.cancellation);
+      buffers_ = std::move(other.buffers_);
+      return *this;
+    }
+    ~ReadRequest() { assert(!active_.load(std::memory_order_relaxed)); }
+
     int fd = -1;
     void *buf = nullptr;
     unsigned len = 0;
@@ -59,7 +80,8 @@ class OwnRingIoContext {
     std::shared_ptr<std::atomic<bool>> cancellation;
 
    private:
-    friend class OwnRingIoContext;
+    friend class OwnRingIoState;
+    std::atomic<bool> active_{false};
     ReadRequest *next_ = nullptr;
     bool owned_ = false;
     unsigned retries_ = 0;
@@ -85,7 +107,7 @@ class OwnRingIoContext {
 #ifdef OWN_RING_FAULT_INJECT
   struct FaultHooks {
     std::function<int(int, const ReadRequest &)> map_res;
-    std::function<int(int)> map_submit_rc;
+    std::function<int(io_uring *, bool)> submit;
     std::function<void()> before_submit;
     bool force_init_fail = false;
     bool reject_optimized_setup = false;
@@ -97,10 +119,10 @@ class OwnRingIoContext {
   }
 #endif
 
-  explicit OwnRingIoContext(unsigned entries = 4096)
-      : OwnRingIoContext(environment_options(entries)) {}
+  explicit OwnRingIoState(unsigned entries = 4096)
+      : OwnRingIoState(environment_options(entries)) {}
 
-  explicit OwnRingIoContext(Options options) : options_(options) {
+  explicit OwnRingIoState(Options options) : options_(options) {
     options_.submit_batch = std::max(1u, options_.submit_batch);
     if (options_.entries < 2 || options_.max_requests == 0) {
       init_error_ = -EINVAL;
@@ -126,10 +148,10 @@ class OwnRingIoContext {
     });
   }
 
-  OwnRingIoContext(const OwnRingIoContext &) = delete;
-  OwnRingIoContext &operator=(const OwnRingIoContext &) = delete;
+  OwnRingIoState(const OwnRingIoState &) = delete;
+  OwnRingIoState &operator=(const OwnRingIoState &) = delete;
 
-  ~OwnRingIoContext() {
+  ~OwnRingIoState() {
     if (thread_.joinable() && thread_.get_id() == std::this_thread::get_id()) {
       std::terminate();
     }
@@ -146,6 +168,16 @@ class OwnRingIoContext {
     return (setup_flags_ & IORING_SETUP_DEFER_TASKRUN) != 0;
   }
   bool post_resume() const noexcept { return options_.post_resume; }
+  bool on_owner_thread() const noexcept { return current_context_ == this; }
+  int error() const noexcept {
+    if (init_error_ != 0) {
+      return init_error_;
+    }
+    if (int failure = failure_error_.load(std::memory_order_acquire)) {
+      return failure;
+    }
+    return stopping_.load(std::memory_order_acquire) ? -ECANCELED : 0;
+  }
 
   Statistics statistics() const noexcept {
     return {accepted_.load(),     completed_.load(),   rejected_.load(),
@@ -186,9 +218,8 @@ class OwnRingIoContext {
     enqueue(*owned);
   }
 
-  void submit_borrowed_read(ReadRequest &request) noexcept {
-    request.owned_ = false;
-    enqueue(request);
+  bool submit_borrowed_read(ReadRequest &request) noexcept {
+    return enqueue(request);
   }
 
  private:
@@ -278,7 +309,11 @@ class OwnRingIoContext {
     return 0;
   }
 
-  void enqueue(ReadRequest &request) noexcept {
+  bool enqueue(ReadRequest &request) noexcept {
+    if (request.active_.exchange(true, std::memory_order_acq_rel)) {
+      rejected_.fetch_add(1, std::memory_order_relaxed);
+      return false;
+    }
     int error = 0;
     try {
       error = validate(request);
@@ -288,14 +323,14 @@ class OwnRingIoContext {
     if (error) {
       rejected_.fetch_add(1, std::memory_order_relaxed);
       release(request, error);
-      return;
+      return true;
     }
     if (options_.measure_queue_time) {
       request.queued_at_ = std::chrono::steady_clock::now();
     }
     if (current_context_ == this) {
-      if (stopping_.load(std::memory_order_acquire)) {
-        error = -ECANCELED;
+      if (int terminal = this->error()) {
+        error = terminal;
       }
       else if (!reserve_request()) {
         error = -EAGAIN;
@@ -303,20 +338,17 @@ class OwnRingIoContext {
       else {
         accepted_.fetch_add(1, std::memory_order_relaxed);
         append(pending_head_, pending_tail_, &request);
-        return;
+        return true;
       }
       rejected_.fetch_add(1, std::memory_order_relaxed);
       release(request, error);
-      return;
+      return true;
     }
     bool notify = false;
     {
       std::lock_guard lock(mutex_);
-      if (!ok() || failed_.load(std::memory_order_relaxed)) {
-        error = -EIO;
-      }
-      else if (stopping_.load(std::memory_order_relaxed)) {
-        error = -ECANCELED;
+      if (int terminal = this->error()) {
+        error = terminal;
       }
       else if (!reserve_request()) {
         error = -EAGAIN;
@@ -334,6 +366,7 @@ class OwnRingIoContext {
     else if (notify) {
       wake();
     }
+    return true;
   }
 
   bool reserve_request() noexcept {
@@ -370,7 +403,9 @@ class OwnRingIoContext {
 
   static void release(ReadRequest &request, int result) noexcept {
     auto callback = std::move(request.on_done);
-    if (request.owned_) {
+    bool owned = request.owned_;
+    request.active_.store(false, std::memory_order_release);
+    if (owned) {
       delete &request;
     }
     invoke(std::move(callback), result);
@@ -411,9 +446,9 @@ class OwnRingIoContext {
     unsigned processed = 0;
     while (pending_head_ && processed++ < options_.submit_batch) {
       auto *request = pending_head_;
-      if (stopping_.load(std::memory_order_acquire) || canceled(*request)) {
+      if (error() || canceled(*request)) {
         pop(pending_head_, pending_tail_);
-        finish(*request, -ECANCELED);
+        finish(*request, error() ? error() : -ECANCELED);
         continue;
       }
       if (request->total_ == 0) {
@@ -447,18 +482,16 @@ class OwnRingIoContext {
                              request->offset + request->done_);
       }
       ::io_uring_sqe_set_data(sqe, request);
-      ++inflight_;
+      prepared_slots_[(ring_.sq.sqe_tail - 1) & ring_.sq.ring_mask] = request;
+      ++prepared_;
       ++prepared;
     }
     read_sqes_.fetch_add(prepared, std::memory_order_relaxed);
-    if (inflight_ > max_inflight_.load(std::memory_order_relaxed)) {
-      max_inflight_.store(inflight_, std::memory_order_relaxed);
-    }
   }
 
   void complete_read(ReadRequest &request, int result) noexcept {
-    if (canceled(request) || stopping_.load(std::memory_order_acquire)) {
-      finish(request, -ECANCELED);
+    if (canceled(request) || error()) {
+      finish(request, error() ? error() : -ECANCELED);
       return;
     }
     if (result == -EAGAIN || result == -EINTR) {
@@ -466,7 +499,7 @@ class OwnRingIoContext {
         append(pending_head_, pending_tail_, &request);
       }
       else {
-        finish(request, -EIO);
+        finish(request, result);
       }
       return;
     }
@@ -542,6 +575,8 @@ class OwnRingIoContext {
     if (auto *sqe = ::io_uring_get_sqe(&ring_)) {
       ::io_uring_prep_poll_add(sqe, wake_fd_, POLLIN);
       ::io_uring_sqe_set_data(sqe, &wake_tag_);
+      prepared_slots_[(ring_.sq.sqe_tail - 1) & ring_.sq.ring_mask] =
+          &wake_tag_;
       wake_armed_ = true;
     }
   }
@@ -581,12 +616,53 @@ class OwnRingIoContext {
 #endif
     if (init_error_ == 0) {
       setup_flags_ = params.flags;
+      try {
+        prepared_slots_.resize(ring_.sq.ring_entries);
+        submitted_head_ = *ring_.sq.khead;
+      } catch (...) {
+        ::io_uring_queue_exit(&ring_);
+        init_error_ = -ENOMEM;
+      }
     }
     {
       std::lock_guard lock(mutex_);
       initialized_ = true;
     }
     ready_.notify_one();
+  }
+
+  void track_submitted() noexcept {
+    unsigned head = io_uring_smp_load_acquire(ring_.sq.khead);
+    while (submitted_head_ != head) {
+      auto &slot = prepared_slots_[submitted_head_++ & ring_.sq.ring_mask];
+      if (slot && slot != &wake_tag_) {
+        --prepared_;
+        ++inflight_;
+      }
+      slot = nullptr;
+    }
+    if (inflight_ > max_inflight_.load(std::memory_order_relaxed)) {
+      max_inflight_.store(inflight_, std::memory_order_relaxed);
+    }
+  }
+
+  void fail_prepared(int result) noexcept {
+    failure_error_.store(result, std::memory_order_release);
+    request_stop();
+    unsigned tail = ring_.sq.sqe_tail;
+    ring_.sq.sqe_head = ring_.sq.sqe_tail = submitted_head_;
+    io_uring_smp_store_release(ring_.sq.ktail, submitted_head_);
+    for (unsigned index = submitted_head_; index != tail; ++index) {
+      auto data =
+          std::exchange(prepared_slots_[index & ring_.sq.ring_mask], nullptr);
+      if (data == &wake_tag_) {
+        wake_armed_ = false;
+      }
+      else if (data) {
+        --prepared_;
+        finish(*static_cast<ReadRequest *>(data), result);
+      }
+    }
   }
 
   void run() noexcept {
@@ -614,6 +690,15 @@ class OwnRingIoContext {
           outstanding_.load(std::memory_order_acquire) == 0) {
         break;
       }
+      if (failure_error_.load(std::memory_order_relaxed)) {
+        if (inflight_ != 0) {
+          io_uring_cqe *completion = nullptr;
+          if (::io_uring_wait_cqe(&ring_, &completion) < 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+          }
+        }
+        continue;
+      }
       arm_wake();
       bool park = !options_.poll && !pending_head_ && wake_armed_ &&
                   (options_.spin_us == 0 || inflight_ == 0 ||
@@ -630,25 +715,28 @@ class OwnRingIoContext {
       }
 #endif
       enter_calls_.fetch_add(1, std::memory_order_relaxed);
-      int result = park ? ::io_uring_submit_and_wait(&ring_, 1)
-                        : ::io_uring_submit_and_get_events(&ring_);
+      int result;
 #ifdef OWN_RING_FAULT_INJECT
-      if (fault().map_submit_rc) {
-        result = fault().map_submit_rc(result);
+      if (fault().submit) {
+        result = fault().submit(&ring_, park);
       }
+      else
 #endif
+      {
+        result = park ? ::io_uring_submit_and_wait(&ring_, 1)
+                      : ::io_uring_submit_and_get_events(&ring_);
+      }
+      track_submitted();
       if (result < 0 && result != -EINTR && result != -EAGAIN &&
           result != -EBUSY) {
-        failed_.store(true, std::memory_order_release);
-        request_stop();
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        fail_prepared(result);
       }
     }
     ::io_uring_queue_exit(&ring_);
     current_context_ = nullptr;
   }
 
-  inline static thread_local OwnRingIoContext *current_context_ = nullptr;
+  inline static thread_local OwnRingIoState *current_context_ = nullptr;
   Options options_;
   io_uring ring_{};
   int init_error_ = -EIO;
@@ -659,6 +747,9 @@ class OwnRingIoContext {
   bool initialized_ = false;
   bool sleeping_ = false;
   size_t inflight_ = 0;
+  size_t prepared_ = 0;
+  unsigned submitted_head_ = 0;
+  std::vector<void *> prepared_slots_;
   ReadRequest *incoming_head_ = nullptr;
   ReadRequest *incoming_tail_ = nullptr;
   ReadRequest *pending_head_ = nullptr;
@@ -666,7 +757,7 @@ class OwnRingIoContext {
   std::mutex mutex_;
   std::condition_variable ready_;
   std::atomic<bool> stopping_{false};
-  std::atomic<bool> failed_{false};
+  std::atomic<int> failure_error_{0};
   std::atomic<uint64_t> accepted_{0};
   std::atomic<uint64_t> completed_{0};
   std::atomic<uint64_t> rejected_{0};
@@ -677,6 +768,55 @@ class OwnRingIoContext {
   std::atomic<uint64_t> queue_ns_{0};
   std::atomic<uint64_t> outstanding_{0};
   std::thread thread_;
+};
+
+class OwnRingIoContext {
+ public:
+  using Mode = OwnRingIoState::Mode;
+  using Options = OwnRingIoState::Options;
+  using ReadRequest = OwnRingIoState::ReadRequest;
+  using Statistics = OwnRingIoState::Statistics;
+#ifdef OWN_RING_FAULT_INJECT
+  using FaultHooks = OwnRingIoState::FaultHooks;
+  static FaultHooks &fault() { return OwnRingIoState::fault(); }
+#endif
+
+  explicit OwnRingIoContext(unsigned entries = 4096)
+      : state_(std::make_shared<OwnRingIoState>(entries)) {}
+  explicit OwnRingIoContext(Options options)
+      : state_(std::make_shared<OwnRingIoState>(options)) {}
+  OwnRingIoContext(const OwnRingIoContext &) = delete;
+  OwnRingIoContext &operator=(const OwnRingIoContext &) = delete;
+  ~OwnRingIoContext() {
+    if (state_->on_owner_thread()) {
+      std::terminate();
+    }
+    state_->stop();
+  }
+
+  auto share_state() const noexcept { return state_; }
+  bool ok() const noexcept { return state_->ok(); }
+  int init_error() const noexcept { return state_->init_error(); }
+  unsigned setup_flags() const noexcept { return state_->setup_flags(); }
+  bool defer_enabled() const noexcept { return state_->defer_enabled(); }
+  bool post_resume() const noexcept { return state_->post_resume(); }
+  Statistics statistics() const noexcept { return state_->statistics(); }
+  uint64_t enter_count() const noexcept { return state_->enter_count(); }
+  uint64_t completed_count() const noexcept {
+    return state_->completed_count();
+  }
+  size_t inflight_size() const noexcept { return state_->inflight_size(); }
+  void request_stop() noexcept { state_->request_stop(); }
+  void stop() noexcept { state_->stop(); }
+  void submit_read(ReadRequest request) noexcept {
+    state_->submit_read(std::move(request));
+  }
+  bool submit_borrowed_read(ReadRequest &request) noexcept {
+    return state_->submit_borrowed_read(request);
+  }
+
+ private:
+  std::shared_ptr<OwnRingIoState> state_;
 };
 
 inline OwnRingIoContext &global_own_ring_context() {

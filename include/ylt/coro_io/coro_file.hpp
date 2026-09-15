@@ -455,7 +455,7 @@ class basic_random_coro_file {
 #endif
     std::atomic<bool> eof{false};
 #if defined(YLT_CORO_IO_HAS_OWN_RING)
-    OwnRingIoContext *ring = nullptr;
+    std::shared_ptr<OwnRingIoState> ring;
 #endif
   };
 
@@ -479,7 +479,7 @@ class basic_random_coro_file {
                              coro_io::get_global_block_executor())
     requires(execute_type == execution_type::own_ring)
       : executor_wrapper_(executor->get_asio_executor()),
-        own_ring_context_(&context) {}
+        own_ring_state_(context.share_state()) {}
 #endif
 
   basic_random_coro_file(std::string_view filepath,
@@ -527,6 +527,7 @@ class basic_random_coro_file {
             bool use_direct_io = false) {
     file_path_ = std::string{filepath};
     if (load_state()) {
+      open_error_.clear();
       return true;
     }
 
@@ -548,17 +549,21 @@ class basic_random_coro_file {
 
     auto [ec, handle] = shared_file_handle::open(filepath, native_flags);
     if (ec) {
+      open_error_ = ec;
       return false;
     }
 
 #if defined(__APPLE__) || defined(__MACH__)
     if (use_direct_io && fcntl(handle.native_handle(), F_NOCACHE, 1) != 0) {
+      open_error_ = std::error_code(errno, std::system_category());
       return false;
     }
 #endif
 
     return initialize_state(std::move(handle));
   }
+
+  std::error_code open_error() const noexcept { return open_error_; }
 
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read_at(
       uint64_t offset, char *buf, size_t size) {
@@ -729,7 +734,9 @@ class basic_random_coro_file {
 
  private:
   bool initialize_state(shared_file_handle handle) {
+    open_error_.clear();
     if (!handle.valid()) {
+      open_error_ = std::make_error_code(std::errc::bad_file_descriptor);
       return false;
     }
 
@@ -738,16 +745,19 @@ class basic_random_coro_file {
           std::move(handle), executor_wrapper_.get_asio_executor());
 #if defined(YLT_CORO_IO_HAS_OWN_RING)
       if constexpr (execute_type == execution_type::own_ring) {
-        state->ring =
-            own_ring_context_ ? own_ring_context_ : &global_own_ring_context();
-        if (!state->ring->ok())
+        state->ring = own_ring_state_ ? own_ring_state_
+                                      : global_own_ring_context().share_state();
+        if (int error = state->ring->error()) {
+          open_error_ = std::error_code(-error, std::system_category());
           return false;
+        }
       }
 #endif
 #if defined(ASIO_HAS_FILE)
       if constexpr (execute_type == execution_type::native_async ||
                     execute_type == execution_type::own_ring) {
 #if defined(ASIO_WINDOWS)
+        open_error_ = std::make_error_code(std::errc::operation_not_supported);
         return false;
 #else
         state->async_random_file =
@@ -755,6 +765,7 @@ class basic_random_coro_file {
         std::error_code ec;
         state->async_random_file->assign(state->handle.native_handle(), ec);
         if (ec) {
+          open_error_ = ec;
           return false;
         }
 #endif
@@ -762,7 +773,17 @@ class basic_random_coro_file {
 #endif
       store_state(std::move(state));
       return true;
+    } catch (const std::system_error &error) {
+      open_error_ = error.code();
+      return false;
+    } catch (const std::invalid_argument &) {
+      open_error_ = std::make_error_code(std::errc::invalid_argument);
+      return false;
+    } catch (const std::bad_alloc &) {
+      open_error_ = std::make_error_code(std::errc::not_enough_memory);
+      return false;
     } catch (...) {
+      open_error_ = std::make_error_code(std::errc::io_error);
       return false;
     }
   }
@@ -835,17 +856,23 @@ class basic_random_coro_file {
 #if defined(ASIO_WINDOWS) && defined(ASIO_HAS_FILE)
   bool initialize_native_async_state(std::string_view filepath,
                                      flags open_flags, bool use_direct_io) {
+    open_error_.clear();
     try {
       auto state =
           std::make_shared<file_state>(executor_wrapper_.get_asio_executor());
       if (!open_native_async_file<false>(state->async_random_file,
                                          executor_wrapper_, filepath,
                                          open_flags, use_direct_io)) {
+        open_error_ = std::make_error_code(std::errc::io_error);
         return false;
       }
       store_state(std::move(state));
       return true;
+    } catch (const std::system_error &error) {
+      open_error_ = error.code();
+      return false;
     } catch (...) {
+      open_error_ = std::make_error_code(std::errc::io_error);
       return false;
     }
   }
@@ -1017,8 +1044,9 @@ class basic_random_coro_file {
 #endif
   std::string file_path_;
 #if defined(YLT_CORO_IO_HAS_OWN_RING)
-  OwnRingIoContext *own_ring_context_ = nullptr;
+  std::shared_ptr<OwnRingIoState> own_ring_state_;
 #endif
+  std::error_code open_error_;
 };
 
 using random_coro_file = basic_random_coro_file<>;

@@ -32,6 +32,21 @@ static_assert(std::is_same_v<coro_io::random_coro_file,
 
 namespace {
 
+struct ExecutorThread {
+  asio::io_context context;
+  coro_io::ExecutorWrapper<> executor{context.get_executor()};
+  asio::executor_work_guard<asio::io_context::executor_type> guard{
+      context.get_executor()};
+  std::thread thread{[this] {
+    context.run();
+  }};
+  ~ExecutorThread() {
+    guard.reset();
+    context.stop();
+    thread.join();
+  }
+};
+
 struct Hooks {
   Hooks() { OwnRingIoContext::fault() = {}; }
   ~Hooks() { OwnRingIoContext::fault() = {}; }
@@ -257,11 +272,16 @@ TEST_CASE("initialization errors invalid input and transient completions") {
   OwnRingIoContext::fault().map_res = [](int, const auto &) {
     return -EINTR;
   };
-  CHECK(read(context, file.fd(), buffer.data()) == -EIO);
+  CHECK(read(context, file.fd(), buffer.data()) == -EINTR);
   context.stop();
   OwnRingIoContext::fault().map_res = {};
-  OwnRingIoContext::fault().map_submit_rc = [](int) {
-    return -EAGAIN;
+  std::atomic<bool> delayed{false};
+  OwnRingIoContext::fault().submit = [&](io_uring *ring, bool park) {
+    if (!delayed.exchange(true)) {
+      return -EAGAIN;
+    }
+    return park ? ::io_uring_submit_and_wait(ring, 1)
+                : ::io_uring_submit_and_get_events(ring);
   };
   OwnRingIoContext transient_context;
   REQUIRE(transient_context.ok());
@@ -365,7 +385,9 @@ TEST_CASE("coro file holds fd until completion and reports EOF consistently") {
   Hooks hooks;
   TemporaryFile data;
   Gate gate;
-  OwnRingIoContext context;
+  OwnRingIoContext::Options options;
+  options.post_resume = false;
+  OwnRingIoContext context(options);
   REQUIRE(context.ok());
   asio::io_context executor_context;
   coro_io::ExecutorWrapper executor(executor_context.get_executor());
@@ -480,7 +502,9 @@ TEST_CASE("coro file cancellation signals skip queued IO") {
   Hooks hooks;
   TemporaryFile data;
   Gate gate;
-  OwnRingIoContext context;
+  OwnRingIoContext::Options options;
+  options.post_resume = false;
+  OwnRingIoContext context(options);
   REQUIRE(context.ok());
   gate.entered.wait();
   asio::io_context executor_context;
@@ -514,10 +538,10 @@ TEST_CASE("coro file cancellation signals skip queued IO") {
   CHECK(result.first == std::errc::operation_canceled);
 }
 
-TEST_CASE("explicit post resume runs the continuation on its executor") {
+TEST_CASE("default post resume runs the continuation on its executor") {
   TemporaryFile data;
   OwnRingIoContext::Options options;
-  options.post_resume = true;
+  CHECK(options.post_resume);
   OwnRingIoContext context(options);
   REQUIRE(context.ok());
   asio::io_context executor_context;
@@ -574,4 +598,200 @@ TEST_CASE("poll and spin modes service reads and shut down") {
     context.stop();
     CHECK(context.statistics().outstanding == 0);
   }
+}
+
+TEST_CASE(
+    "permanent submission errors finish unsubmitted requests and drain "
+    "accepted IO") {
+  for (bool partial : {false, true}) {
+    Hooks hooks;
+    TemporaryFile file;
+    struct Pipe {
+      int descriptors[2]{-1, -1};
+      ~Pipe() {
+        for (int descriptor : descriptors) {
+          if (descriptor >= 0) {
+            ::close(descriptor);
+          }
+        }
+      }
+    } pipe;
+    if (partial) {
+      REQUIRE(::pipe(pipe.descriptors) == 0);
+    }
+    Gate gate;
+    std::atomic<int> kernel_submitted{0};
+    OwnRingIoContext::fault().submit = [&](io_uring *ring, bool park) {
+      unsigned head = *ring->sq.khead;
+      if (head != ring->sq.sqe_tail &&
+          ring->sq.sqes[head & ring->sq.ring_mask].opcode == IORING_OP_READ) {
+        if (partial) {
+          ring->sq.sqe_head = ring->sq.sqe_tail;
+          io_uring_smp_store_release(ring->sq.ktail, ring->sq.sqe_tail);
+          kernel_submitted.store(::io_uring_enter(
+              ring->ring_fd, 1, 0, IORING_ENTER_GETEVENTS, nullptr));
+        }
+        return -EIO;
+      }
+      return park ? ::io_uring_submit_and_wait(ring, 1)
+                  : ::io_uring_submit_and_get_events(ring);
+    };
+    OwnRingIoContext::Options options;
+    options.entries = 8;
+    OwnRingIoContext context(options);
+    REQUIRE(context.ok());
+    gate.entered.wait();
+    constexpr size_t count = 32;
+    std::array<OwnRingIoContext::ReadRequest, count> requests;
+    std::vector<std::unique_ptr<AlignedBuffer>> buffers;
+    std::atomic<size_t> completed{0};
+    std::atomic<size_t> unexpected{0};
+    std::promise<bool> promise;
+    auto future = promise.get_future();
+    std::promise<bool> unsubmitted_finished;
+    auto unsubmitted_future = unsubmitted_finished.get_future();
+    for (size_t index = 0; index < count; ++index) {
+      buffers.emplace_back(std::make_unique<AlignedBuffer>());
+      requests[index].fd =
+          partial && index == 0 ? pipe.descriptors[0] : file.fd();
+      requests[index].buf = buffers.back()->data();
+      requests[index].len = block_size;
+      requests[index].on_done = [&](int result) {
+        if (result != -EIO) {
+          unexpected.fetch_add(1);
+        }
+        size_t finished = completed.fetch_add(1) + 1;
+        if (finished == count - 1) {
+          unsubmitted_finished.set_value(true);
+        }
+        if (finished == count) {
+          promise.set_value(true);
+        }
+      };
+      REQUIRE(context.submit_borrowed_read(requests[index]));
+    }
+    gate.open();
+    if (partial) {
+      CHECK(wait(unsubmitted_future));
+      CHECK(future.wait_for(0s) == std::future_status::timeout);
+      AlignedBuffer payload;
+      file_io_test::fill(payload.data(), 0, block_size);
+      REQUIRE(::write(pipe.descriptors[1], payload.data(), block_size) ==
+              block_size);
+    }
+    CHECK(wait(future));
+    context.stop();
+    CHECK(kernel_submitted.load() == int(partial));
+    CHECK(unexpected.load() == 0);
+    CHECK(context.statistics().accepted == count);
+    CHECK(context.statistics().completed == count);
+    CHECK(context.statistics().max_inflight == size_t(partial));
+    CHECK(context.statistics().outstanding == 0);
+    CHECK(file_io_test::verify(buffers.front()->data(), 0, block_size) ==
+          partial);
+    for (size_t index = 1; index < count; ++index) {
+      CHECK(std::all_of(buffers[index]->data(),
+                        buffers[index]->data() + block_size, [](char value) {
+                          return value == 0;
+                        }));
+    }
+    CHECK(read(context, file.fd(), buffers.front()->data()) == -EIO);
+  }
+}
+
+TEST_CASE(
+    "files keep a safe stopped state after explicit context destruction") {
+  TemporaryFile data;
+  ExecutorThread execution;
+  std::unique_ptr<coro_io::own_ring_random_coro_file> opened;
+  std::unique_ptr<coro_io::own_ring_random_coro_file> unopened;
+  AlignedBuffer buffer;
+  {
+    OwnRingIoContext context;
+    REQUIRE(context.ok());
+    opened = std::make_unique<coro_io::own_ring_random_coro_file>(
+        context, &execution.executor);
+    unopened = std::make_unique<coro_io::own_ring_random_coro_file>(
+        context, &execution.executor);
+    REQUIRE(opened->open(data.path(), std::ios::in));
+    auto result = async_simple::coro::syncAwait(
+        opened->async_read_at(0, buffer.data(), block_size));
+    CHECK_FALSE(result.first);
+  }
+  auto result = async_simple::coro::syncAwait(
+      opened->async_read_at(0, buffer.data(), block_size));
+  CHECK(result.first == std::errc::operation_canceled);
+  CHECK_FALSE(unopened->open(data.path(), std::ios::in));
+  CHECK(unopened->open_error() == std::errc::operation_canceled);
+  opened->close();
+  CHECK_FALSE(opened->open(data.path(), std::ios::in));
+  CHECK(opened->open_error() == std::errc::operation_canceled);
+}
+
+TEST_CASE(
+    "explicit context destruction drains queued reads before releasing its "
+    "state") {
+  Hooks hooks;
+  TemporaryFile data;
+  ExecutorThread execution;
+  Gate gate;
+  auto context = std::make_unique<OwnRingIoContext>();
+  REQUIRE(context->ok());
+  gate.entered.wait();
+  coro_io::own_ring_random_coro_file file(*context, &execution.executor);
+  REQUIRE(file.open(data.path(), std::ios::in));
+  AlignedBuffer buffer;
+  std::promise<Result> promise;
+  auto future = promise.get_future();
+  file.async_read_at(0, buffer.data(), block_size)
+      .start([&](async_simple::Try<Result> result) {
+        promise.set_value(result.value());
+      });
+  context->request_stop();
+  gate.open();
+  context.reset();
+  CHECK(wait(future).first == std::errc::operation_canceled);
+}
+
+TEST_CASE(
+    "borrowed requests reject duplicate submission without a second callback") {
+  static_assert(!std::is_copy_constructible_v<OwnRingIoContext::ReadRequest>);
+  static_assert(!std::is_copy_assignable_v<OwnRingIoContext::ReadRequest>);
+  Hooks hooks;
+  TemporaryFile file;
+  Gate gate;
+  OwnRingIoContext context;
+  REQUIRE(context.ok());
+  gate.entered.wait();
+  AlignedBuffer buffer;
+  OwnRingIoContext::ReadRequest request;
+  request.fd = file.fd();
+  request.buf = buffer.data();
+  request.len = block_size;
+  std::promise<int> promise;
+  auto future = promise.get_future();
+  request.on_done = [&](int result) {
+    promise.set_value(result);
+  };
+  CHECK(context.submit_borrowed_read(request));
+  CHECK_FALSE(context.submit_borrowed_read(request));
+  gate.open();
+  CHECK(wait(future) == block_size);
+  context.stop();
+  CHECK(context.statistics().accepted == 1);
+  CHECK(context.statistics().rejected == 1);
+  CHECK(context.statistics().completed == 1);
+}
+
+TEST_CASE("open diagnostics distinguish file errors from ring setup errors") {
+  Hooks hooks;
+  TemporaryFile data;
+  OwnRingIoContext::fault().force_init_fail = true;
+  OwnRingIoContext context;
+  REQUIRE_FALSE(context.ok());
+  coro_io::own_ring_random_coro_file file(context);
+  CHECK_FALSE(file.open(data.path(), std::ios::in));
+  CHECK(file.open_error() == std::errc::io_error);
+  CHECK_FALSE(file.open(data.path() + ".missing", std::ios::in));
+  CHECK(file.open_error() == std::errc::no_such_file_or_directory);
 }
