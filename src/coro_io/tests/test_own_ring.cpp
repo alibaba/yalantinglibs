@@ -621,10 +621,14 @@ TEST_CASE(
     }
     Gate gate;
     std::atomic<int> kernel_submitted{0};
+    std::latch submit_entered{1};
+    std::latch submit_released{1};
     OwnRingIoContext::fault().submit = [&](io_uring *ring, bool park) {
       unsigned head = *ring->sq.khead;
       if (head != ring->sq.sqe_tail &&
           ring->sq.sqes[head & ring->sq.ring_mask].opcode == IORING_OP_READ) {
+        submit_entered.count_down();
+        submit_released.wait();
         if (partial) {
           ring->sq.sqe_head = ring->sq.sqe_tail;
           io_uring_smp_store_release(ring->sq.ktail, ring->sq.sqe_tail);
@@ -638,13 +642,16 @@ TEST_CASE(
     };
     OwnRingIoContext::Options options;
     options.entries = 8;
+    options.submit_batch = 4;
     OwnRingIoContext context(options);
     REQUIRE(context.ok());
     gate.entered.wait();
-    constexpr size_t count = 32;
+    constexpr size_t count = 16;
     std::array<OwnRingIoContext::ReadRequest, count> requests;
+    std::array<std::atomic<unsigned>, count> completion_counts{};
     std::vector<std::unique_ptr<AlignedBuffer>> buffers;
     std::atomic<size_t> completed{0};
+    std::atomic<size_t> unsubmitted_completed{0};
     std::atomic<size_t> unexpected{0};
     std::promise<bool> promise;
     auto future = promise.get_future();
@@ -656,12 +663,13 @@ TEST_CASE(
           partial && index == 0 ? pipe.descriptors[0] : file.fd();
       requests[index].buf = buffers.back()->data();
       requests[index].len = block_size;
-      requests[index].on_done = [&](int result) {
+      requests[index].on_done = [&, index](int result) {
+        completion_counts[index].fetch_add(1);
         if (result != -EIO) {
           unexpected.fetch_add(1);
         }
         size_t finished = completed.fetch_add(1) + 1;
-        if (finished == count - 1) {
+        if (index != 0 && unsubmitted_completed.fetch_add(1) == count - 2) {
           unsubmitted_finished.set_value(true);
         }
         if (finished == count) {
@@ -669,11 +677,19 @@ TEST_CASE(
         }
       };
       REQUIRE(context.submit_borrowed_read(requests[index]));
+      if (index == count / 2 - 1) {
+        gate.open();
+        submit_entered.wait();
+      }
     }
-    gate.open();
+    submit_released.count_down();
     if (partial) {
-      CHECK(wait(unsubmitted_future));
+      CHECK(unsubmitted_future.wait_for(2s) == std::future_status::ready);
       CHECK(future.wait_for(0s) == std::future_status::timeout);
+      CHECK(completion_counts[0].load() == 0);
+      for (size_t index = 1; index < count; ++index) {
+        CHECK(completion_counts[index].load() == 1);
+      }
       AlignedBuffer payload;
       file_io_test::fill(payload.data(), 0, block_size);
       REQUIRE(::write(pipe.descriptors[1], payload.data(), block_size) ==
@@ -687,6 +703,9 @@ TEST_CASE(
     CHECK(context.statistics().completed == count);
     CHECK(context.statistics().max_inflight == size_t(partial));
     CHECK(context.statistics().outstanding == 0);
+    for (const auto &completions : completion_counts) {
+      CHECK(completions.load() == 1);
+    }
     CHECK(file_io_test::verify(buffers.front()->data(), 0, block_size) ==
           partial);
     for (size_t index = 1; index < count; ++index) {

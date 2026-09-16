@@ -22,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y liburing-dev libssl-dev ninja-build
+        run: sudo apt-get update && sudo apt-get install -y liburing-dev libssl-dev ninja-build strace
       - name: Configure
         run: |
           cmake -S . -B build -G Ninja \
@@ -36,9 +36,20 @@ jobs:
         run: cmake --build build --target own_ring_test coro_io_test coro_file_error_test coro_file_bench -j2
       - name: Test backend and file compatibility
         run: |
-          ctest --test-dir build -R '^own_ring_test$|^coro_file_error_test$' --output-on-failure
-          build/output/tests/coro_io_test --test-case='*file*,*shared*'
+          uname -a
+          ulimit -a
+          ctest --test-dir build -R '^coro_file_error_test$' --output-on-failure
+          timeout 90s stdbuf -oL build/output/tests/own_ring_test --duration=true --no-colors=true
+          strace -f -e trace=io_uring_setup,io_uring_register,openat,eventfd2 \
+            -o build/file-compatibility.trace \
+            build/output/tests/coro_io_test --test-case='*file*,*shared*' --duration=true --no-colors=true
           build/output/benchmark/coro_file_bench --operations 512 --repeats 1 --file-mib 8
+      - name: Report file compatibility failures
+        if: failure()
+        run: |
+          if test -f build/file-compatibility.trace; then
+            grep -E '= -1|io_uring_setup' build/file-compatibility.trace | tail -100
+          fi
       - name: Test downstream multi-translation-unit consumer
         run: |
           cmake -S src/coro_io/tests/own_ring_consumer -B build-consumer -G Ninja \
