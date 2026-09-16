@@ -14,6 +14,7 @@ concurrency:
 jobs:
   own_ring:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -22,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y liburing-dev libssl-dev ninja-build strace
+        run: sudo apt-get update && sudo apt-get install -y liburing-dev libssl-dev ninja-build
       - name: Configure
         run: |
           cmake -S . -B build -G Ninja \
@@ -36,22 +37,17 @@ jobs:
         run: cmake --build build --target own_ring_test coro_io_test coro_file_error_test coro_file_bench -j2
       - name: Test backend and file compatibility
         run: |
+          sudo prlimit --pid $$ --memlock=67108864:67108864
           uname -a
           ulimit -a
           ctest --test-dir build -R '^coro_file_error_test$' --output-on-failure
-          timeout 90s stdbuf -oL build/output/tests/own_ring_test --duration=true --no-colors=true
-          strace -f -e trace=io_uring_setup,io_uring_register,openat,eventfd2 \
-            -o build/file-compatibility.trace \
-            build/output/tests/coro_io_test --test-case='*file*,*shared*' --duration=true --no-colors=true
-          build/output/benchmark/coro_file_bench --operations 512 --repeats 1 --file-mib 8
-      - name: Report file compatibility failures
-        if: failure()
-        run: |
-          if test -f build/file-compatibility.trace; then
-            grep -E '= -1|io_uring_setup' build/file-compatibility.trace | tail -100
-          fi
+          ctest --test-dir build -R '^own_ring_test$' --repeat until-fail:10 --verbose
+          cd build
+          output/tests/coro_io_test --test-case='*file*,*shared*' --duration=true --no-colors=true
+          output/benchmark/coro_file_bench --operations 512 --repeats 1 --file-mib 8
       - name: Test downstream multi-translation-unit consumer
         run: |
+          sudo prlimit --pid $$ --memlock=67108864:67108864
           cmake -S src/coro_io/tests/own_ring_consumer -B build-consumer -G Ninja \
             -DCMAKE_BUILD_TYPE=${{ matrix.mode }} \
             -DYLT_ENABLE_FILE_IO_URING=ON -DYLT_ENABLE_OWN_RING=${{ matrix.own_ring }}

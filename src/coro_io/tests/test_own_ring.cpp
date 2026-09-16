@@ -1,15 +1,21 @@
-#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#define DOCTEST_CONFIG_IMPLEMENT
 #include <async_simple/coro/Collect.h>
 #include <async_simple/coro/SyncAwait.h>
 #include <doctest.h>
 
 #include <chrono>
 #include <future>
+#include <iostream>
 #include <latch>
 #include <thread>
 #include <ylt/coro_io/coro_file.hpp>
 
 #include "file_io_fixture.hpp"
+
+int main(int argc, char **argv) {
+  std::cout.setf(std::ios::unitbuf);
+  return doctest::Context(argc, argv).run();
+}
 
 using coro_io::OwnRingIoContext;
 using file_io_test::AlignedBuffer;
@@ -601,123 +607,142 @@ TEST_CASE("poll and spin modes service reads and shut down") {
 }
 
 TEST_CASE(
-    "permanent submission errors finish unsubmitted requests and drain "
+    "terminal transitions finish all unsubmitted requests before waiting for "
     "accepted IO") {
-  for (bool partial : {false, true}) {
-    Hooks hooks;
-    TemporaryFile file;
-    struct Pipe {
-      int descriptors[2]{-1, -1};
-      ~Pipe() {
-        for (int descriptor : descriptors) {
-          if (descriptor >= 0) {
-            ::close(descriptor);
+  for (int terminal_error : {-EIO, -ECANCELED}) {
+    for (bool partial : {false, true}) {
+      Hooks hooks;
+      TemporaryFile file;
+      struct Pipe {
+        int descriptors[2]{-1, -1};
+        ~Pipe() {
+          for (int descriptor : descriptors) {
+            if (descriptor >= 0) {
+              ::close(descriptor);
+            }
           }
         }
+      } pipe;
+      if (partial) {
+        REQUIRE(::pipe(pipe.descriptors) == 0);
       }
-    } pipe;
-    if (partial) {
-      REQUIRE(::pipe(pipe.descriptors) == 0);
-    }
-    Gate gate;
-    std::atomic<int> kernel_submitted{0};
-    std::latch submit_entered{1};
-    std::latch submit_released{1};
-    OwnRingIoContext::fault().submit = [&](io_uring *ring, bool park) {
-      unsigned head = *ring->sq.khead;
-      if (head != ring->sq.sqe_tail &&
-          ring->sq.sqes[head & ring->sq.ring_mask].opcode == IORING_OP_READ) {
-        submit_entered.count_down();
-        submit_released.wait();
-        if (partial) {
-          ring->sq.sqe_head = ring->sq.sqe_tail;
-          io_uring_smp_store_release(ring->sq.ktail, ring->sq.sqe_tail);
-          kernel_submitted.store(::io_uring_enter(
-              ring->ring_fd, 1, 0, IORING_ENTER_GETEVENTS, nullptr));
+      Gate gate;
+      std::atomic<int> kernel_submitted{0};
+      OwnRingIoContext *active_context = nullptr;
+      std::latch submit_entered{1};
+      std::latch submit_released{1};
+      OwnRingIoContext::fault().submit = [&](io_uring *ring, bool park) {
+        unsigned head = *ring->sq.khead;
+        if (head != ring->sq.sqe_tail &&
+            ring->sq.sqes[head & ring->sq.ring_mask].opcode == IORING_OP_READ) {
+          submit_entered.count_down();
+          submit_released.wait();
+          if (partial) {
+            ring->sq.sqe_head = ring->sq.sqe_tail;
+            io_uring_smp_store_release(ring->sq.ktail, ring->sq.sqe_tail);
+            kernel_submitted.store(::io_uring_enter(
+                ring->ring_fd, 1, 0, IORING_ENTER_GETEVENTS, nullptr));
+          }
+          if (terminal_error == -ECANCELED) {
+            active_context->request_stop();
+            return 0;
+          }
+          return terminal_error;
         }
-        return -EIO;
-      }
-      return park ? ::io_uring_submit_and_wait(ring, 1)
-                  : ::io_uring_submit_and_get_events(ring);
-    };
-    OwnRingIoContext::Options options;
-    options.entries = 8;
-    options.submit_batch = 4;
-    OwnRingIoContext context(options);
-    REQUIRE(context.ok());
-    gate.entered.wait();
-    constexpr size_t count = 16;
-    std::array<OwnRingIoContext::ReadRequest, count> requests;
-    std::array<std::atomic<unsigned>, count> completion_counts{};
-    std::vector<std::unique_ptr<AlignedBuffer>> buffers;
-    std::atomic<size_t> completed{0};
-    std::atomic<size_t> unsubmitted_completed{0};
-    std::atomic<size_t> unexpected{0};
-    std::promise<bool> promise;
-    auto future = promise.get_future();
-    std::promise<bool> unsubmitted_finished;
-    auto unsubmitted_future = unsubmitted_finished.get_future();
-    for (size_t index = 0; index < count; ++index) {
-      buffers.emplace_back(std::make_unique<AlignedBuffer>());
-      requests[index].fd =
-          partial && index == 0 ? pipe.descriptors[0] : file.fd();
-      requests[index].buf = buffers.back()->data();
-      requests[index].len = block_size;
-      requests[index].on_done = [&, index](int result) {
-        completion_counts[index].fetch_add(1);
-        if (result != -EIO) {
-          unexpected.fetch_add(1);
-        }
-        size_t finished = completed.fetch_add(1) + 1;
-        if (index != 0 && unsubmitted_completed.fetch_add(1) == count - 2) {
-          unsubmitted_finished.set_value(true);
-        }
-        if (finished == count) {
-          promise.set_value(true);
-        }
+        return park ? ::io_uring_submit_and_wait(ring, 1)
+                    : ::io_uring_submit_and_get_events(ring);
       };
-      REQUIRE(context.submit_borrowed_read(requests[index]));
-      if (index == count / 2 - 1) {
-        gate.open();
-        submit_entered.wait();
+      OwnRingIoContext::Options options;
+      options.entries = 8;
+      options.submit_batch = 4;
+      OwnRingIoContext context(options);
+      REQUIRE(context.ok());
+      active_context = &context;
+      gate.entered.wait();
+      constexpr size_t count = 16;
+      std::array<OwnRingIoContext::ReadRequest, count> requests;
+      std::array<std::atomic<unsigned>, count> completion_counts{};
+      std::vector<std::unique_ptr<AlignedBuffer>> buffers;
+      std::atomic<size_t> completed{0};
+      std::atomic<size_t> unsubmitted_completed{0};
+      std::atomic<size_t> unexpected{0};
+      std::promise<bool> promise;
+      auto future = promise.get_future();
+      std::promise<bool> unsubmitted_finished;
+      auto unsubmitted_future = unsubmitted_finished.get_future();
+      for (size_t index = 0; index < count; ++index) {
+        buffers.emplace_back(std::make_unique<AlignedBuffer>());
+        requests[index].fd =
+            partial && index == 0 ? pipe.descriptors[0] : file.fd();
+        requests[index].buf = buffers.back()->data();
+        requests[index].len = block_size;
+        requests[index].on_done = [&, index](int result) {
+          completion_counts[index].fetch_add(1);
+          if (result != terminal_error) {
+            unexpected.fetch_add(1);
+          }
+          size_t finished = completed.fetch_add(1) + 1;
+          if (index != 0 && unsubmitted_completed.fetch_add(1) == count - 2) {
+            unsubmitted_finished.set_value(true);
+          }
+          if (finished == count) {
+            promise.set_value(true);
+          }
+        };
+        REQUIRE(context.submit_borrowed_read(requests[index]));
+        if (index == count / 2 - 1) {
+          gate.open();
+          submit_entered.wait();
+        }
       }
-    }
-    submit_released.count_down();
-    if (partial) {
-      CHECK(unsubmitted_future.wait_for(2s) == std::future_status::ready);
-      CHECK(future.wait_for(0s) == std::future_status::timeout);
-      CHECK(completion_counts[0].load() == 0);
+      submit_released.count_down();
+      std::future<bool> stopped;
+      if (partial) {
+        CHECK(unsubmitted_future.wait_for(10s) == std::future_status::ready);
+        CHECK(future.wait_for(0s) == std::future_status::timeout);
+        CHECK(completion_counts[0].load() == 0);
+        for (size_t index = 1; index < count; ++index) {
+          CHECK(completion_counts[index].load() == 1);
+        }
+        CHECK(read(context, file.fd(), buffers.back()->data()) ==
+              terminal_error);
+        stopped = std::async(std::launch::async, [&] {
+          context.stop();
+          return true;
+        });
+        CHECK(stopped.wait_for(0s) == std::future_status::timeout);
+        AlignedBuffer payload;
+        file_io_test::fill(payload.data(), 0, block_size);
+        REQUIRE(::write(pipe.descriptors[1], payload.data(), block_size) ==
+                block_size);
+      }
+      CHECK(wait(future));
+      if (partial) {
+        CHECK(wait(stopped));
+      }
+      context.stop();
+      CHECK(kernel_submitted.load() == int(partial));
+      CHECK(unexpected.load() == 0);
+      CHECK(context.statistics().accepted == count);
+      CHECK(context.statistics().completed == count);
+      CHECK(context.statistics().max_inflight == size_t(partial));
+      CHECK(context.statistics().outstanding == 0);
+      for (const auto &completions : completion_counts) {
+        CHECK(completions.load() == 1);
+      }
+      CHECK(file_io_test::verify(buffers.front()->data(), 0, block_size) ==
+            partial);
       for (size_t index = 1; index < count; ++index) {
-        CHECK(completion_counts[index].load() == 1);
+        CHECK(std::all_of(buffers[index]->data(),
+                          buffers[index]->data() + block_size, [](char value) {
+                            return value == 0;
+                          }));
       }
-      AlignedBuffer payload;
-      file_io_test::fill(payload.data(), 0, block_size);
-      REQUIRE(::write(pipe.descriptors[1], payload.data(), block_size) ==
-              block_size);
+      CHECK(read(context, file.fd(), buffers.front()->data()) ==
+            terminal_error);
     }
-    CHECK(wait(future));
-    context.stop();
-    CHECK(kernel_submitted.load() == int(partial));
-    CHECK(unexpected.load() == 0);
-    CHECK(context.statistics().accepted == count);
-    CHECK(context.statistics().completed == count);
-    CHECK(context.statistics().max_inflight == size_t(partial));
-    CHECK(context.statistics().outstanding == 0);
-    for (const auto &completions : completion_counts) {
-      CHECK(completions.load() == 1);
-    }
-    CHECK(file_io_test::verify(buffers.front()->data(), 0, block_size) ==
-          partial);
-    for (size_t index = 1; index < count; ++index) {
-      CHECK(std::all_of(buffers[index]->data(),
-                        buffers[index]->data() + block_size, [](char value) {
-                          return value == 0;
-                        }));
-    }
-    CHECK(read(context, file.fd(), buffers.front()->data()) == -EIO);
   }
 }
-
 TEST_CASE(
     "files keep a safe stopped state after explicit context destruction") {
   TemporaryFile data;

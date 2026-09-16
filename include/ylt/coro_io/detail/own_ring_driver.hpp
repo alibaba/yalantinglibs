@@ -274,9 +274,12 @@ class OwnRingDriver {
     unsigned processed = 0;
     while (requests_.front() && processed++ < options_.submit_batch) {
       auto *request = requests_.front();
-      if (error() || canceled(*request)) {
+      if (error()) {
+        break;
+      }
+      if (canceled(*request)) {
         requests_.pop();
-        finish(*request, error() ? error() : -ECANCELED);
+        finish(*request, -ECANCELED);
         continue;
       }
       if (request->total_ == 0) {
@@ -497,6 +500,7 @@ class OwnRingDriver {
 
   void wait_inflight() noexcept {
     assert(requests_.stopped() && !requests_.front() && prepared_ == 0);
+    assert(requests_.outstanding() == inflight_);
     if (inflight_ != 0) {
       io_uring_cqe *completion = nullptr;
       if (::io_uring_wait_cqe(&ring_, &completion) < 0) {
