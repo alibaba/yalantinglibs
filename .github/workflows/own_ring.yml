@@ -1,0 +1,55 @@
+name: Own-ring file backend
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+concurrency:
+  group: own-ring-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  own_ring:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        own_ring: [ 'ON', 'OFF' ]
+        mode: [ Debug, Release ]
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y liburing-dev libssl-dev ninja-build
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.mode }} \
+            -DYLT_ENABLE_FILE_IO_URING=ON -DYLT_ENABLE_OWN_RING=${{ matrix.own_ring }} \
+            -DBUILD_EXAMPLES=OFF -DBUILD_UNIT_TESTS=ON -DBUILD_BENCHMARK=ON \
+            -DBUILD_CORO_HTTP=OFF -DBUILD_CORO_RPC=OFF -DBUILD_UTIL=OFF \
+            -DBUILD_STRUCT_PACK=OFF -DBUILD_STRUCT_JSON=OFF \
+            -DBUILD_STRUCT_XML=OFF -DBUILD_STRUCT_YAML=OFF
+      - name: Build
+        run: cmake --build build --target own_ring_test coro_io_test coro_file_error_test coro_file_bench -j2
+      - name: Test backend and file compatibility
+        run: |
+          sudo prlimit --pid $$ --memlock=67108864:67108864
+          uname -a
+          ulimit -a
+          ctest --test-dir build -R '^coro_file_error_test$' --output-on-failure
+          ctest --test-dir build -R '^own_ring_test$' --repeat until-fail:10 --verbose
+          cd build
+          output/tests/coro_io_test --test-case='*file*,*shared*' --duration=true --no-colors=true
+          output/benchmark/coro_file_bench --operations 512 --repeats 1 --file-mib 8
+      - name: Test downstream multi-translation-unit consumer
+        run: |
+          sudo prlimit --pid $$ --memlock=67108864:67108864
+          cmake -S src/coro_io/tests/own_ring_consumer -B build-consumer -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.mode }} \
+            -DYLT_ENABLE_FILE_IO_URING=ON -DYLT_ENABLE_OWN_RING=${{ matrix.own_ring }}
+          cmake --build build-consumer -j2
+          ctest --test-dir build-consumer --output-on-failure

@@ -180,6 +180,19 @@ if (YLT_ENABLE_PMR)
     endif ()
 endif ()
 
+option(YLT_ENABLE_OWN_RING "Use own io_uring for random file reads" OFF)
+if(YLT_ENABLE_OWN_RING)
+  if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    message(FATAL_ERROR "YLT_ENABLE_OWN_RING requires Linux")
+  endif()
+  set(YLT_ENABLE_FILE_IO_URING ON)
+  if(CMAKE_PROJECT_NAME STREQUAL "yaLanTingLibs")
+    add_compile_definitions(YLT_ENABLE_OWN_RING=1)
+  else()
+    target_compile_definitions(${ylt_target_name} INTERFACE YLT_ENABLE_OWN_RING=1)
+  endif()
+endif()
+
 option(YLT_ENABLE_IO_URING "Enable io_uring" OFF)
 message(STATUS "YLT_ENABLE_IO_URING: ${YLT_ENABLE_IO_URING}")
 if (YLT_ENABLE_IO_URING)
@@ -207,6 +220,20 @@ if (NOT YLT_ENABLE_IO_URING)
         target_link_libraries(${ylt_target_name} INTERFACE uring)
     endif ()
   endif()
+endif()
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND
+   (YLT_ENABLE_FILE_IO_URING OR YLT_ENABLE_IO_URING))
+  include(CheckCXXSourceCompiles)
+  check_cxx_source_compiles("
+    #include <liburing.h>
+    using submit_type = decltype(&io_uring_submit_and_get_events);
+    int main() {
+      return IORING_SETUP_SINGLE_ISSUER | IORING_SETUP_DEFER_TASKRUN;
+    }" YLT_HAS_OWN_RING)
+endif()
+if(YLT_ENABLE_OWN_RING AND NOT YLT_HAS_OWN_RING)
+  message(FATAL_ERROR "YLT_ENABLE_OWN_RING requires liburing 2.3 or newer")
 endif()
 
 option(YLT_ENABLE_STRUCT_PACK_UNPORTABLE_TYPE "enable struct_pack unportable type(like wchar_t)" OFF)
