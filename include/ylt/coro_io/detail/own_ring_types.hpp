@@ -90,4 +90,4 @@ struct OwnRingStatistics {
   uint64_t outstanding;
 };
 
-}
+}  // namespace coro_io::detail

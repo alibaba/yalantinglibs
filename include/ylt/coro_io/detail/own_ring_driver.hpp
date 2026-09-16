@@ -600,4 +600,4 @@ class OwnRingDriver {
   std::thread thread_;
 };
 
-}
+}  // namespace coro_io::detail

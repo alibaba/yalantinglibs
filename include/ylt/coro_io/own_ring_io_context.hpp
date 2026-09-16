@@ -55,6 +55,6 @@ class OwnRingIoContext {
   std::shared_ptr<OwnRingIoState> state_;
 };
 
-}
+}  // namespace coro_io
 
 #include "detail/own_ring_context_pool.hpp"

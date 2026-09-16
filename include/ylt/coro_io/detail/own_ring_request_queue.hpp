@@ -179,4 +179,4 @@ class OwnRingRequestQueue {
   std::atomic<uint64_t> wake_writes_{0};
 };
 
-}
+}  // namespace coro_io::detail
