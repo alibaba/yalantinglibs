@@ -685,6 +685,36 @@ TEST_CASE("test parse query") {
   }
 }
 
+TEST_CASE("cookie fields are bounded") {
+  std::string cookies;
+  for (size_t i = 0; i < CINATRA_MAX_COOKIE_COUNT; ++i) {
+    if (!cookies.empty()) {
+      cookies.append("; ");
+    }
+    cookies.append("cookie").append(std::to_string(i)).append("=value");
+  }
+
+  bool limit_exceeded = true;
+  auto at_limit = get_cookies_map(cookies, &limit_exceeded);
+  CHECK_FALSE(limit_exceeded);
+  CHECK(at_limit.size() == CINATRA_MAX_COOKIE_COUNT);
+
+  cookies.append("; overflow=value");
+  CHECK(get_cookies_map(cookies, &limit_exceeded).empty());
+  CHECK(limit_exceeded);
+
+  std::string request = "GET / HTTP/1.1\r\nCookie: " + cookies + "\r\n\r\n";
+  http_parser parser;
+  REQUIRE(parser.parse_request(request.data(), request.size(), 0) > 0);
+  coro_http_request http_request(parser, nullptr);
+  CHECK(http_request.get_session() == nullptr);
+
+  auto ordinary = get_cookies_map("first=one; second=two");
+  CHECK(ordinary.size() == 2);
+  CHECK(ordinary.at("first") == "one");
+  CHECK(ordinary.at("second") == "two");
+}
+
 TEST_CASE("test cinatra::string without SSO") {
   std::string s(1000, 'A');
   std::string s2(5000, 'B');
