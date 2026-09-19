@@ -1130,13 +1130,26 @@ class coro_http_server {
     else {
       uri.parse_from(host.data());
     }
-    std::unordered_map<std::string, std::string> req_headers;
-    for (auto& [k, v] : req.get_headers()) {
-      req_headers.emplace(k, v);
+    std::unordered_map<std::string, std::string> req_headers{
+        {"Host", std::string(uri.host)}};
+    std::string forwarded_headers;
+    for (auto& [name, value] : req.get_headers()) {
+      if (iequal0(name, "Host")) {
+        continue;
+      }
+      if (iequal0(name, "Content-Length")) {
+        req_headers["Content-Length"].assign(value);
+        continue;
+      }
+      if (iequal0(name, "Connection")) {
+        req_headers["Connection"].assign(value);
+        continue;
+      }
+      forwarded_headers.append(name).append(": ").append(value).append(CRCF);
     }
-    req_headers["Host"] = uri.host;
 
-    auto ctx = req_context<std::string_view>{.content = req.get_body()};
+    auto ctx = req_context<std::string_view>{
+        .req_header = std::move(forwarded_headers), .content = req.get_body()};
     auto result = co_await client.async_request(
         req.full_url(), method_type(req.get_method()), std::move(ctx),
         std::move(req_headers));
