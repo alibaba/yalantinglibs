@@ -11,12 +11,17 @@
 #include "cinatra_log_wrapper.hpp"
 #include "define.h"
 #include "picohttpparser.h"
+#include "secure_string_hash.hpp"
 #include "url_encode_decode.hpp"
 
 using namespace std::string_view_literals;
 
 #ifndef CINATRA_MAX_HTTP_HEADER_FIELD_SIZE
 #define CINATRA_MAX_HTTP_HEADER_FIELD_SIZE 100
+#endif
+
+#ifndef CINATRA_MAX_QUERY_FIELD_COUNT
+#define CINATRA_MAX_QUERY_FIELD_COUNT 1024
 #endif
 
 namespace cinatra {
@@ -99,12 +104,18 @@ class http_parser {
     }
 
     full_url_ = url_;
-    if (!queries_.empty()) {
+    if (parameter_count_ != 0 || parameter_limit_exceeded_) {
       queries_.clear();
+      parameter_count_ = 0;
+      parameter_limit_exceeded_ = false;
     }
     if (has_query) {
       size_t pos = url_.find('?');
       parse_query(url_.substr(pos + 1, url_len - pos - 1));
+      if (parameter_limit_exceeded_) [[unlikely]] {
+        CINATRA_LOG_WARNING << "too many query fields";
+        return -1;
+      }
       url_ = {url, pos};
     }
 
@@ -126,6 +137,8 @@ class http_parser {
   }
 
   const auto &queries() const { return queries_; }
+
+  bool parameter_limit_exceeded() const { return parameter_limit_exceeded_; }
 
   std::string_view full_url() { return full_url_; }
 
@@ -216,27 +229,48 @@ class http_parser {
   }
 
   void parse_query(std::string_view str) {
-    std::string_view key;
-    std::string_view val;
-
-    auto vec = split_sv(str, "&");
-    for (auto s : vec) {
+    size_t start = 0;
+    while (start <= str.size()) {
+      size_t end = str.find('&', start);
+      auto s = str.substr(start, end - start);
       if (s.empty()) {
+        if (end == std::string_view::npos) {
+          break;
+        }
+        start = end + 1;
         continue;
       }
+
       size_t pos = s.find('=');
-      if (s.find('=') != std::string_view::npos) {
+      std::string_view key;
+      std::string_view val;
+      if (pos != std::string_view::npos) {
         key = s.substr(0, pos);
         if (key.empty()) {
+          if (end == std::string_view::npos) {
+            break;
+          }
+          start = end + 1;
           continue;
         }
-        val = s.substr(pos + 1, s.length() - pos);
+        val = s.substr(pos + 1, s.length() - pos - 1);
       }
       else {
         key = s;
         val = "";
       }
+
+      if (parameter_count_ >= CINATRA_MAX_QUERY_FIELD_COUNT) [[unlikely]] {
+        parameter_limit_exceeded_ = true;
+        return;
+      }
+      ++parameter_count_;
       queries_.emplace(key, val);
+
+      if (end == std::string_view::npos) {
+        break;
+      }
+      start = end + 1;
     }
   }
 
@@ -261,6 +295,9 @@ class http_parser {
   std::string_view method_;
   std::string_view url_;
   std::string_view full_url_;
-  std::unordered_map<std::string_view, std::string_view> queries_;
+  std::unordered_map<std::string_view, std::string_view, secure_string_hash>
+      queries_;
+  size_t parameter_count_ = 0;
+  bool parameter_limit_exceeded_ = false;
 };
 }  // namespace cinatra

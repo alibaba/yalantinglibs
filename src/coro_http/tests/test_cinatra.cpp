@@ -1,6 +1,7 @@
 #include <async_simple/coro/Collect.h>
 
 #include <array>
+#include <atomic>
 #include <charconv>
 #include <chrono>
 #include <cstdint>
@@ -84,6 +85,61 @@ void check_external_http_result(const resp_data &r) {
 
   CHECK(!r.net_err);
   CHECK(r.status < 400);
+}
+
+std::string make_request_fields(size_t count, bool unique = false) {
+  std::string fields;
+  for (size_t i = 0; i < count; ++i) {
+    if (!fields.empty()) {
+      fields.push_back('&');
+    }
+    if (unique) {
+      fields.append("key").append(std::to_string(i));
+    }
+    else {
+      fields.push_back('a');
+    }
+  }
+  return fields;
+}
+
+TEST_CASE("request field limits reject before routing") {
+  std::atomic<size_t> handler_calls = 0;
+  coro_http_server server(1, "127.0.0.1:0");
+  server.set_http_handler<GET, POST>(
+      "/field-limit",
+      [&handler_calls](coro_http_request &, coro_http_response &response) {
+        ++handler_calls;
+        response.set_status_and_content(status_type::ok, "accepted");
+      });
+  server.async_start();
+  REQUIRE(server.port() > 0);
+
+  const auto uri =
+      "http://127.0.0.1:" + std::to_string(server.port()) + "/field-limit";
+  const auto at_limit = make_request_fields(CINATRA_MAX_QUERY_FIELD_COUNT);
+  const auto over_limit =
+      make_request_fields(CINATRA_MAX_QUERY_FIELD_COUNT + 1);
+
+  auto get_status = [](const std::string &target) {
+    coro_http_client client;
+    return client.get(target).status;
+  };
+  auto post_status = [&uri](const std::string &body) {
+    coro_http_client client;
+    return client.post(uri, body, req_content_type::form_url_encode).status;
+  };
+
+  CHECK(get_status(uri + "?" + at_limit) == 200);
+  CHECK(handler_calls == 1);
+  CHECK(get_status(uri + "?" + over_limit) == 400);
+  CHECK(handler_calls == 1);
+  CHECK(post_status(at_limit) == 200);
+  CHECK(handler_calls == 2);
+  CHECK(post_status(over_limit) == 413);
+  CHECK(handler_calls == 2);
+
+  server.stop();
 }
 
 #ifdef CINATRA_ENABLE_GZIP
@@ -598,6 +654,34 @@ TEST_CASE("test parse query") {
     auto map = parser.queries();
     CHECK(map["test"].empty());
     CHECK(map.size() == 21);
+  }
+  {
+    http_parser parser{};
+    parser.parse_query(
+        make_request_fields(CINATRA_MAX_QUERY_FIELD_COUNT + 1, true));
+    CHECK(parser.parameter_limit_exceeded());
+    CHECK(parser.queries().size() == CINATRA_MAX_QUERY_FIELD_COUNT);
+  }
+  {
+    auto over_limit = make_request_fields(CINATRA_MAX_QUERY_FIELD_COUNT + 1);
+    std::string request =
+        "GET /?" + over_limit + " HTTP/1.1\r\nHost: localhost\r\n\r\n";
+    http_parser parser{};
+    CHECK(parser.parse_request(request.data(), request.size(), 0) < 0);
+    CHECK(parser.parameter_limit_exceeded());
+  }
+  {
+    std::string request =
+        "POST /?url=value HTTP/1.1\r\n"
+        "Host: localhost\r\n"
+        "Content-Type: application/x-www-form-urlencoded\r\n"
+        "Content-Length: 0\r\n\r\n";
+    http_parser parser{};
+    REQUIRE(parser.parse_request(request.data(), request.size(), 0) > 0);
+    coro_http_request form(parser, nullptr);
+    auto fields = make_request_fields(CINATRA_MAX_QUERY_FIELD_COUNT);
+    form.set_body(fields);
+    CHECK(parser.parameter_limit_exceeded());
   }
 }
 

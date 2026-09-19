@@ -628,6 +628,14 @@ class coro_http_connection
 
       if (!body_.empty()) {
         request_.set_body(body_);
+        if (parser_.parameter_limit_exceeded()) [[unlikely]] {
+          CINATRA_LOG_WARNING << "too many form fields";
+          response_.set_status_and_content(
+              status_type::request_entity_too_large, "too many form fields");
+          co_await reply();
+          close();
+          break;
+        }
       }
 
       if (auto handler = router_.get_handler(key); handler) {
