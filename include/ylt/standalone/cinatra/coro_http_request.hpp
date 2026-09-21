@@ -254,16 +254,22 @@ class coro_http_request {
 
   std::vector<std::string> &get_aspect_data() { return aspect_data_; }
 
-  std::unordered_map<std::string_view, std::string_view> get_cookies(
-      std::string_view cookie_str) const {
-    auto cookies = get_cookies_map(cookie_str);
+  cookie_map get_cookies(std::string_view cookie_str,
+                         bool *limit_exceeded = nullptr) const {
+    auto cookies = get_cookies_map(cookie_str, limit_exceeded);
     return cookies;
   }
 
   std::shared_ptr<session> get_session(bool create = true) {
     auto &session_manager = session_manager::get();
 
-    auto cookies = get_cookies(get_header_value("Cookie"));
+    bool cookie_limit_exceeded = false;
+    auto cookies =
+        get_cookies(get_header_value("Cookie"), &cookie_limit_exceeded);
+    if (cookie_limit_exceeded) [[unlikely]] {
+      CINATRA_LOG_WARNING << "too many cookies";
+      return nullptr;
+    }
     std::string session_id;
     auto iter = cookies.find(CSESSIONID);
     if (iter == cookies.end() && !create) {

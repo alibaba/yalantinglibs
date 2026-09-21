@@ -24,7 +24,12 @@
 
 #include "define.h"
 #include "response_cv.hpp"
+#include "secure_string_hash.hpp"
 #include "string_resize.hpp"
+
+#ifndef CINATRA_MAX_COOKIE_COUNT
+#define CINATRA_MAX_COOKIE_COUNT 256
+#endif
 
 namespace cinatra {
 struct ci_less {
@@ -277,15 +282,40 @@ inline std::vector<std::string_view> split(std::string_view s,
   return output;
 }
 
-inline const std::unordered_map<std::string_view, std::string_view>
-get_cookies_map(std::string_view cookies_str) {
-  std::unordered_map<std::string_view, std::string_view> cookies;
-  auto cookies_vec = split(cookies_str, "; ");
-  for (auto iter : cookies_vec) {
-    auto cookie_key_vlaue = split(iter, "=");
-    if (cookie_key_vlaue.size() == 2) {
-      cookies[cookie_key_vlaue[0]] = cookie_key_vlaue[1];
+using cookie_map =
+    std::unordered_map<std::string_view, std::string_view, secure_string_hash>;
+
+inline cookie_map get_cookies_map(std::string_view cookies_str,
+                                  bool *limit_exceeded = nullptr) {
+  if (limit_exceeded != nullptr) {
+    *limit_exceeded = false;
+  }
+
+  cookie_map cookies;
+  size_t start = 0;
+  size_t cookie_count = 0;
+  while (start <= cookies_str.size()) {
+    size_t end = cookies_str.find_first_of("; ", start);
+    auto cookie = cookies_str.substr(start, end - start);
+    if (!cookie.empty()) {
+      size_t separator = cookie.find('=');
+      if (separator != std::string_view::npos &&
+          cookie.find('=', separator + 1) == std::string_view::npos) {
+        if (cookie_count >= CINATRA_MAX_COOKIE_COUNT) [[unlikely]] {
+          if (limit_exceeded != nullptr) {
+            *limit_exceeded = true;
+          }
+          return {};
+        }
+        ++cookie_count;
+        cookies[cookie.substr(0, separator)] = cookie.substr(separator + 1);
+      }
     }
+
+    if (end == std::string_view::npos) {
+      break;
+    }
+    start = end + 1;
   }
   return cookies;
 };

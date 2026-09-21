@@ -220,6 +220,8 @@ inline constexpr std::string_view to_http_status_string(status_type status) {
       return rep_method_not_allowed;
     case cinatra::status_type::conflict:
       return rep_conflict;
+    case cinatra::status_type::request_entity_too_large:
+      return rep_request_entity_too_large;
     case cinatra::status_type::range_not_satisfiable:
       return rep_range_not_satisfiable;
     case cinatra::status_type::internal_server_error:
