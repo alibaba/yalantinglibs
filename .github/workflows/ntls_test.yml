@@ -96,6 +96,12 @@ jobs:
           ${TONGSUO_INSTALL_PREFIX}/bin/tongsuo s_client -help 2>&1 | grep -i ntls || \
           ${TONGSUO_INSTALL_PREFIX}/bin/openssl s_client -help 2>&1 | grep -i ntls || true
 
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2.23
+        with:
+          key: ntls-${{ matrix.mode }}-tongsuo-${{ env.TONGSUO_VERSION }}
+          max-size: 350MB
+
       - name: Configure CMake with NTLS (GCC)
         run: |
           export CC=gcc
@@ -108,6 +114,7 @@ jobs:
                 -DYLT_ENABLE_SSL=ON \
                 -DYLT_ENABLE_NTLS=ON \
                 -DYLT_HAVE_IBVERBS=0 \
+                -DUSE_CCACHE=ON \
                 -DCMAKE_PREFIX_PATH=${TONGSUO_INSTALL_PREFIX} \
                 -DOPENSSL_ROOT_DIR=${TONGSUO_INSTALL_PREFIX} \
                 -DOPENSSL_INCLUDE_DIR=${TONGSUO_INSTALL_PREFIX}/include
