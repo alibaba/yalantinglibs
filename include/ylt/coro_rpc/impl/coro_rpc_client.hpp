@@ -1204,21 +1204,19 @@ class coro_rpc_client {
       eps = &eps_tmp;
     }
     std::error_code ec;
-    asio::ip::tcp::resolver::iterator iter;
+    asio::ip::tcp::resolver::results_type results;
     if (eps->empty()) {
       ELOG_TRACE << "start resolve host: " << config_.host << ":"
                  << config_.port << ", client_id: " << config_.client_id;
-      std::tie(ec, iter) = co_await coro_io::async_resolve(
+      std::tie(ec, results) = co_await coro_io::async_resolve(
           control_->executor_, config_.host, config_.port);
       if (ec) {
         ELOG_WARN << "client_id " << config_.client_id
                   << " async_resolve failed:" << ec.message();
         co_return errc::not_connected;
       }
-      asio::ip::tcp::resolver::iterator end;
-      while (iter != end) {
-        eps->push_back(iter->endpoint());
-        ++iter;
+      for (const auto &entry : results) {
+        eps->push_back(entry.endpoint());
       }
       if (eps->empty()) [[unlikely]] {
         co_return errc::not_connected;
@@ -1235,8 +1233,7 @@ class coro_rpc_client {
     ec = co_await control_->socket_wrapper_.visit([eps](auto &fresh_soc) {
       return coro_io::async_connect(fresh_soc, *eps);
     });
-    std::error_code ignore_ec;
-    timer_->cancel(ignore_ec);
+    timer_->cancel();
     if (control_->is_timeout_) {
       ELOG_WARN << "client_id " << config_.client_id << " connect timeout";
       co_return errc::timed_out;

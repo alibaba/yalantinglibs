@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <asio/executor_work_guard.hpp>
 #include <atomic>
 #include <chrono>
 #include <cstddef>
@@ -316,7 +317,7 @@ void task(std::string_view input, std::string_view output) {
   /*---start task ---*/
   for (size_t i = 0; i < config.thread_cnt; ++i) {
     thrds.emplace_back([&iocs, i] {
-      asio::io_context::work work(iocs[i]);
+      auto work = asio::make_work_guard(iocs[i]);
       iocs[i].run();
     });
   }

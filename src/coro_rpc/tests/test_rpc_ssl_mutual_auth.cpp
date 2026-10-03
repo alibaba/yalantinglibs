@@ -16,6 +16,7 @@
 
 #include <async_simple/coro/SyncAwait.h>
 
+#include <asio/executor_work_guard.hpp>
 #include <asio/io_context.hpp>
 #include <cinatra/coro_http_client.hpp>
 #include <iostream>
@@ -55,7 +56,7 @@ TEST_CASE("testing RPC SSL one-way authentication") {
 
   asio::io_context io_context;
   std::thread thd([&io_context]() {
-    asio::io_context::work work(io_context);
+    auto work = asio::make_work_guard(io_context);
     io_context.run();
   });
 
@@ -93,7 +94,7 @@ TEST_CASE("testing RPC SSL mutual authentication - success") {
 
   asio::io_context io_context;
   std::thread thd([&io_context]() {
-    asio::io_context::work work(io_context);
+    auto work = asio::make_work_guard(io_context);
     io_context.run();
   });
 
@@ -132,7 +133,7 @@ TEST_CASE("testing RPC SSL mutual authentication - client without cert") {
 
   asio::io_context io_context;
   std::thread thd([&io_context]() {
-    asio::io_context::work work(io_context);
+    auto work = asio::make_work_guard(io_context);
     io_context.run();
   });
 
@@ -178,7 +179,7 @@ TEST_CASE("testing RPC SSL mutual authentication - client with invalid cert") {
 
   asio::io_context io_context;
   std::thread thd([&io_context]() {
-    asio::io_context::work work(io_context);
+    auto work = asio::make_work_guard(io_context);
     io_context.run();
   });
 

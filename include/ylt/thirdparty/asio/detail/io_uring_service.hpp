@@ -2,7 +2,7 @@
 // detail/io_uring_service.hpp
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2022 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2025 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -69,11 +69,8 @@ public:
   };
 
   // Per I/O object state.
-  class io_object
+  struct io_object
   {
-    friend class io_uring_service;
-    friend class object_pool_access;
-
     io_object* next_;
     io_object* prev_;
 
@@ -82,7 +79,7 @@ public:
     io_queue queues_[max_ops];
     bool shutdown_;
 
-    ASIO_DECL io_object(bool locking);
+    ASIO_DECL io_object(bool locking, int spin_count);
   };
 
   // Per I/O object data.
@@ -146,38 +143,39 @@ public:
   ASIO_DECL void cleanup_io_object(per_io_object_data& io_obj);
 
   // Add a new timer queue to the reactor.
-  template <typename Time_Traits>
-  void add_timer_queue(timer_queue<Time_Traits>& timer_queue);
+  template <typename TimeTraits, typename Allocator>
+  void add_timer_queue(timer_queue<TimeTraits, Allocator>& timer_queue);
 
   // Remove a timer queue from the reactor.
-  template <typename Time_Traits>
-  void remove_timer_queue(timer_queue<Time_Traits>& timer_queue);
+  template <typename TimeTraits, typename Allocator>
+  void remove_timer_queue(timer_queue<TimeTraits, Allocator>& timer_queue);
 
   // Schedule a new operation in the given timer queue to expire at the
   // specified absolute time.
-  template <typename Time_Traits>
-  void schedule_timer(timer_queue<Time_Traits>& queue,
-      const typename Time_Traits::time_type& time,
-      typename timer_queue<Time_Traits>::per_timer_data& timer, wait_op* op);
+  template <typename TimeTraits, typename Allocator>
+  void schedule_timer(timer_queue<TimeTraits, Allocator>& queue,
+      const typename TimeTraits::time_type& time,
+      typename timer_queue<TimeTraits, Allocator>::per_timer_data& timer,
+      wait_op* op);
 
   // Cancel the timer operations associated with the given token. Returns the
   // number of operations that have been posted or dispatched.
-  template <typename Time_Traits>
-  std::size_t cancel_timer(timer_queue<Time_Traits>& queue,
-      typename timer_queue<Time_Traits>::per_timer_data& timer,
+  template <typename TimeTraits, typename Allocator>
+  std::size_t cancel_timer(timer_queue<TimeTraits, Allocator>& queue,
+      typename timer_queue<TimeTraits, Allocator>::per_timer_data& timer,
       std::size_t max_cancelled = (std::numeric_limits<std::size_t>::max)());
 
   // Cancel the timer operations associated with the given key.
-  template <typename Time_Traits>
-  void cancel_timer_by_key(timer_queue<Time_Traits>& queue,
-      typename timer_queue<Time_Traits>::per_timer_data* timer,
+  template <typename TimeTraits, typename Allocator>
+  void cancel_timer_by_key(timer_queue<TimeTraits, Allocator>& queue,
+      typename timer_queue<TimeTraits, Allocator>::per_timer_data* timer,
       void* cancellation_key);
 
   // Move the timer operations associated with the given timer.
-  template <typename Time_Traits>
-  void move_timer(timer_queue<Time_Traits>& queue,
-      typename timer_queue<Time_Traits>::per_timer_data& target,
-      typename timer_queue<Time_Traits>::per_timer_data& source);
+  template <typename TimeTraits, typename Allocator>
+  void move_timer(timer_queue<TimeTraits, Allocator>& queue,
+      typename timer_queue<TimeTraits, Allocator>::per_timer_data& target,
+      typename timer_queue<TimeTraits, Allocator>::per_timer_data& source);
 
   // Wait on io_uring once until interrupted or events are ready to be
   // dispatched.
@@ -212,8 +210,9 @@ private:
   ASIO_DECL void free_io_object(io_object* s);
 
   // Helper function to cancel all operations associated with the given I/O
-  // object. This function does not acquire the I/O object's mutex.
-  ASIO_DECL void do_cancel_ops(
+  // object. This function must be called while the I/O object's mutex is held.
+  // Returns true if there are operations for which cancellation is pending.
+  ASIO_DECL bool do_cancel_ops(
       per_io_object_data& io_obj, op_queue<operation>& ops);
 
   // Helper function to add a new timer queue.
@@ -276,6 +275,12 @@ private:
   // Whether the service has been shut down.
   bool shutdown_;
 
+  // Whether I/O locking is enabled.
+  const bool io_locking_;
+
+  // How any times to spin waiting for the I/O mutex.
+  const int io_locking_spin_count_;
+
   // The timer queues.
   timer_queue_set timer_queues_;
 
@@ -287,7 +292,8 @@ private:
   mutex registration_mutex_;
 
   // Keep track of all registered I/O objects.
-  object_pool<io_object> registered_io_objects_;
+  object_pool<io_object, execution_context::allocator<void>>
+    registered_io_objects_;
 
   // Helper class to do post-perform_io cleanup.
   struct perform_io_cleanup_on_block_exit;

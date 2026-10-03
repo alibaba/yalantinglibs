@@ -26,6 +26,7 @@
 
 #include <async_simple/coro/SyncAwait.h>
 
+#include <asio/executor_work_guard.hpp>
 #include <asio/io_context.hpp>
 #include <iostream>
 #include <thread>
@@ -173,7 +174,7 @@ TEST_CASE("testing SSL client direct reconnect") {
 
   asio::io_context io_context;
   std::thread thd([&io_context]() {
-    asio::io_context::work work(io_context);
+    auto work = asio::make_work_guard(io_context);
     io_context.run();
   });
 

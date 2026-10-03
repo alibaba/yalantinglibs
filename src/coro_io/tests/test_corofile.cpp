@@ -486,7 +486,9 @@ TEST_CASE("small_file_read_test") {
   auto block_vec = create_filled_vec(fill_with);
   create_file(filename, 1 * KB, block_vec);
   asio::io_context ioc;
-  auto work = std::make_unique<asio::io_context::work>(ioc);
+  auto work = std::make_unique<
+      asio::executor_work_guard<asio::io_context::executor_type>>(
+      asio::make_work_guard(ioc));
   std::thread thd([&ioc] {
     ioc.run();
   });
@@ -522,7 +524,9 @@ TEST_CASE("large_file_read_test") {
   create_file(filename, file_size, block_vec);
   CHECK(fs::file_size(filename) == file_size);
   asio::io_context ioc;
-  auto work = std::make_unique<asio::io_context::work>(ioc);
+  auto work = std::make_unique<
+      asio::executor_work_guard<asio::io_context::executor_type>>(
+      asio::make_work_guard(ioc));
   std::thread thd([&ioc] {
     ioc.run();
   });
@@ -563,7 +567,9 @@ TEST_CASE("empty_file_read_test") {
   auto block_vec = create_filled_vec(fill_with);
   create_file(filename, 0, block_vec);
   asio::io_context ioc;
-  auto work = std::make_unique<asio::io_context::work>(ioc);
+  auto work = std::make_unique<
+      asio::executor_work_guard<asio::io_context::executor_type>>(
+      asio::make_work_guard(ioc));
   std::thread thd([&ioc] {
     ioc.run();
   });
@@ -663,7 +669,9 @@ TEST_CASE("large_file_read_with_pool_test") {
 TEST_CASE("small_file_write_test") {
   std::string filename = "small_file_write_test.txt";
   asio::io_context ioc;
-  auto work = std::make_unique<asio::io_context::work>(ioc);
+  auto work = std::make_unique<
+      asio::executor_work_guard<asio::io_context::executor_type>>(
+      asio::make_work_guard(ioc));
   std::thread thd([&ioc] {
     ioc.run();
   });
@@ -729,7 +737,9 @@ TEST_CASE("large_file_write_test") {
   std::string filename = "large_file_write_test.txt";
   size_t file_size = 100 * MB;
   asio::io_context ioc;
-  auto work = std::make_unique<asio::io_context::work>(ioc);
+  auto work = std::make_unique<
+      asio::executor_work_guard<asio::io_context::executor_type>>(
+      asio::make_work_guard(ioc));
   std::thread thd([&ioc] {
     ioc.run();
   });
@@ -779,7 +789,9 @@ TEST_CASE("large_file_write_test") {
 TEST_CASE("empty_file_write_test") {
   std::string filename = "empty_file_write_test.txt";
   asio::io_context ioc;
-  auto work = std::make_unique<asio::io_context::work>(ioc);
+  auto work = std::make_unique<
+      asio::executor_work_guard<asio::io_context::executor_type>>(
+      asio::make_work_guard(ioc));
   std::thread thd([&ioc] {
     ioc.run();
   });

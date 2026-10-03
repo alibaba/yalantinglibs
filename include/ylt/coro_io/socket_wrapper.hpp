@@ -79,7 +79,7 @@ struct socket_wrapper_t {
   void init_tcp_socket() {
     asio::ip::address addr;
     if (!local_ip_.empty()) {
-      addr = asio::ip::address::from_string(local_ip_);
+      addr = asio::ip::make_address(local_ip_);
     }
     auto ep = asio::ip::tcp::endpoint(std::move(addr), 0);
     if (!socket_) {

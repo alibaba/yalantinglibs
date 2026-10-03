@@ -49,7 +49,7 @@ struct cidr_network {
     std::string ip_part = cidr_str.substr(0, slash_pos);
     std::string prefix_part = cidr_str.substr(slash_pos + 1);
 
-    network_addr = asio::ip::address::from_string(ip_part);
+    network_addr = asio::ip::make_address(ip_part);
     prefix_length = std::stoi(prefix_part);
     is_v4 = network_addr.is_v4();
   }
@@ -185,7 +185,7 @@ class UnifiedIPFilter {
  private:
   bool add_single_ip(const std::string& ip_str) {
     try {
-      auto addr = asio::ip::address::from_string(ip_str);
+      auto addr = asio::ip::make_address(ip_str);
       single_ips_.insert(addr);
       return true;
     } catch (const std::exception&) {
@@ -204,8 +204,8 @@ class UnifiedIPFilter {
 
   bool add_ip_range(const std::string& start_ip, const std::string& end_ip) {
     try {
-      auto start_addr = asio::ip::address::from_string(start_ip);
-      auto end_addr = asio::ip::address::from_string(end_ip);
+      auto start_addr = asio::ip::make_address(start_ip);
+      auto end_addr = asio::ip::make_address(end_ip);
 
       if (start_addr.is_v4() != end_addr.is_v4()) {
         return false;
@@ -310,9 +310,9 @@ TEST_CASE("test UnifiedIPFilter class") {
     CHECK(filter.add_rule("192.168.1.100"));
     CHECK(filter.size() == 2);
 
-    auto localhost = asio::ip::address::from_string("127.0.0.1");
-    auto allowed_ip = asio::ip::address::from_string("192.168.1.100");
-    auto denied_ip = asio::ip::address::from_string("8.8.8.8");
+    auto localhost = asio::ip::make_address("127.0.0.1");
+    auto allowed_ip = asio::ip::make_address("192.168.1.100");
+    auto denied_ip = asio::ip::make_address("8.8.8.8");
 
     CHECK(filter.is_allowed(localhost));
     CHECK(filter.is_allowed(allowed_ip));
@@ -324,8 +324,8 @@ TEST_CASE("test UnifiedIPFilter class") {
     CHECK(filter.add_rule("192.168.1.0/24"));
     CHECK(filter.size() == 1);
 
-    auto ip_in_network = asio::ip::address::from_string("192.168.1.50");
-    auto ip_out_network = asio::ip::address::from_string("192.168.2.50");
+    auto ip_in_network = asio::ip::make_address("192.168.1.50");
+    auto ip_out_network = asio::ip::make_address("192.168.2.50");
 
     CHECK(filter.is_allowed(ip_in_network));
     CHECK(!filter.is_allowed(ip_out_network));
@@ -336,8 +336,8 @@ TEST_CASE("test UnifiedIPFilter class") {
     CHECK(filter.add_rule("10.0.0.1 - 10.0.0.100"));
     CHECK(filter.size() == 1);
 
-    auto ip_in_range = asio::ip::address::from_string("10.0.0.50");
-    auto ip_out_range = asio::ip::address::from_string("10.0.0.200");
+    auto ip_in_range = asio::ip::make_address("10.0.0.50");
+    auto ip_out_range = asio::ip::make_address("10.0.0.200");
 
     CHECK(filter.is_allowed(ip_in_range));
     CHECK(!filter.is_allowed(ip_out_range));
@@ -348,8 +348,8 @@ TEST_CASE("test UnifiedIPFilter class") {
     CHECK(filter.add_rule(R"(192\.168\.1\.[0-9]+)"));
     CHECK(filter.size() == 1);
 
-    auto matching_ip = asio::ip::address::from_string("192.168.1.123");
-    auto non_matching_ip = asio::ip::address::from_string("192.168.2.123");
+    auto matching_ip = asio::ip::make_address("192.168.1.123");
+    auto non_matching_ip = asio::ip::make_address("192.168.2.123");
 
     CHECK(filter.is_allowed(matching_ip));
     CHECK(!filter.is_allowed(non_matching_ip));
@@ -364,17 +364,13 @@ TEST_CASE("test UnifiedIPFilter class") {
     CHECK(filter.size() == 4);
 
     // Test each type
-    CHECK(filter.is_allowed(
-        asio::ip::address::from_string("127.0.0.1")));  // Single IP
-    CHECK(filter.is_allowed(
-        asio::ip::address::from_string("192.168.1.50")));  // CIDR
-    CHECK(filter.is_allowed(
-        asio::ip::address::from_string("10.0.0.25")));  // Range
-    CHECK(filter.is_allowed(
-        asio::ip::address::from_string("172.16.1.100")));  // Regex
+    CHECK(filter.is_allowed(asio::ip::make_address("127.0.0.1")));  // Single IP
+    CHECK(filter.is_allowed(asio::ip::make_address("192.168.1.50")));  // CIDR
+    CHECK(filter.is_allowed(asio::ip::make_address("10.0.0.25")));     // Range
+    CHECK(filter.is_allowed(asio::ip::make_address("172.16.1.100")));  // Regex
 
     // Test denied IP
-    CHECK(!filter.is_allowed(asio::ip::address::from_string("8.8.8.8")));
+    CHECK(!filter.is_allowed(asio::ip::make_address("8.8.8.8")));
   }
 }
 

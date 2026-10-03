@@ -18,6 +18,7 @@
 #include <async_simple/coro/Lazy.h>
 
 #include <any>
+#include <asio/executor_work_guard.hpp>
 #include <asio/io_context.hpp>
 #include <asio/post.hpp>
 #include <asio/steady_timer.hpp>
@@ -199,12 +200,12 @@ class io_context_pool {
 
     for (std::size_t i = 0; i < pool_size; ++i) {
       io_context_ptr io_context(new asio::io_context(1));
-      work_ptr work(new asio::io_context::work(*io_context));
+      auto work = asio::make_work_guard(*io_context);
       io_contexts_.push_back(io_context);
       auto executor = std::make_unique<coro_io::ExecutorWrapper<>>(
           io_context->get_executor());
       executors.push_back(std::move(executor));
-      work_.push_back(work);
+      work_.push_back(std::move(work));
     }
   }
 
@@ -311,7 +312,7 @@ class io_context_pool {
 
  private:
   using io_context_ptr = std::shared_ptr<asio::io_context>;
-  using work_ptr = std::shared_ptr<asio::io_context::work>;
+  using work_type = asio::executor_work_guard<asio::io_context::executor_type>;
 
 #ifdef __linux__
   static bool get_available_cpus(std::vector<uint32_t> &ids) {
@@ -342,7 +343,7 @@ class io_context_pool {
 
   std::vector<io_context_ptr> io_contexts_;
   std::vector<std::unique_ptr<coro_io::ExecutorWrapper<>>> executors;
-  std::vector<work_ptr> work_;
+  std::vector<work_type> work_;
   std::atomic<std::size_t> next_io_context_;
   std::promise<void> promise_;
   std::atomic<bool> has_run_or_stop_ = false;
@@ -358,7 +359,7 @@ inline size_t get_total_thread_num() {
 class multithread_context_pool {
  public:
   multithread_context_pool(size_t thd_num = std::thread::hardware_concurrency())
-      : work_(std::make_unique<asio::io_context::work>(ioc_)),
+      : work_(std::make_unique<work_type>(asio::make_work_guard(ioc_))),
         executor_(ioc_.get_executor()),
         thd_num_(thd_num) {}
 
@@ -391,7 +392,8 @@ class multithread_context_pool {
 
  private:
   asio::io_context ioc_;
-  std::unique_ptr<asio::io_context::work> work_;
+  using work_type = asio::executor_work_guard<asio::io_context::executor_type>;
+  std::unique_ptr<work_type> work_;
   coro_io::ExecutorWrapper<> executor_;
   size_t thd_num_;
   std::vector<std::thread> thds_;

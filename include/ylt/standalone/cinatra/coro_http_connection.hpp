@@ -1379,8 +1379,9 @@ class coro_http_connection
     if (ec) {
       return;
     }
-    address = pt.address().to_string(ec);
-    if (ec) {
+    try {
+      address = pt.address().to_string();
+    } catch (...) {
       return;
     }
     address.append(":").append(std::to_string(pt.port()));

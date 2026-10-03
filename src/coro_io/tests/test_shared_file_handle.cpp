@@ -114,7 +114,9 @@ class io_context_runner {
  public:
   explicit io_context_runner(asio::io_context &io_context)
       : io_context_(io_context),
-        work_(std::make_unique<asio::io_context::work>(io_context_)),
+        work_(std::make_unique<
+              asio::executor_work_guard<asio::io_context::executor_type>>(
+            asio::make_work_guard(io_context_))),
         thread_([this] {
           io_context_.run();
         }) {}
@@ -127,7 +129,8 @@ class io_context_runner {
 
  private:
   asio::io_context &io_context_;
-  std::unique_ptr<asio::io_context::work> work_;
+  std::unique_ptr<asio::executor_work_guard<asio::io_context::executor_type>>
+      work_;
   std::thread thread_;
 };
 

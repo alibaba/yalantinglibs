@@ -173,8 +173,7 @@ class cuda_event_watcher
     if (self->is_sleeping_.load(std::memory_order_acquire)) {
       self->executor_->schedule([self]() {
         if (self->is_sleeping_.load(std::memory_order_relaxed)) {
-          std::error_code ec;
-          self->timer_.cancel(ec);
+          self->timer_.cancel();
         }
       });
     }

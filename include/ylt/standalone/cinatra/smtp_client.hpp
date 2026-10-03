@@ -1,5 +1,6 @@
 #pragma once
 #include <asio.hpp>
+#include <fstream>
 #include <string>
 
 #include "utils.hpp"
@@ -23,7 +24,7 @@ template <typename T>
 class client {
  public:
   static constexpr bool IS_SSL = std::is_same_v<T, cinatra::SSL>;
-  client(asio::io_service &io_service)
+  client(asio::io_context &io_service)
       : io_context_(io_service), socket_(io_service), resolver_(io_service) {}
 
   ~client() { close(); }
@@ -38,11 +39,13 @@ class client {
       host.erase(0, pos + 3);
     }
 
-    asio::ip::tcp::resolver::query qry(
-        host, server_.port, asio::ip::resolver_query_base::numeric_service);
     std::error_code ec;
-    auto endpoint_iterator = resolver_.resolve(qry, ec);
-    asio::connect(socket_, endpoint_iterator, ec);
+    auto endpoints = resolver_.resolve(
+        host, server_.port, asio::ip::resolver_base::numeric_service, ec);
+    if (ec) {
+      return;
+    }
+    asio::connect(socket_, endpoints, ec);
     if (ec) {
       return;
     }
@@ -205,7 +208,7 @@ class client {
 };
 
 template <typename T>
-static inline auto get_smtp_client(asio::io_service &io_service) {
+static inline auto get_smtp_client(asio::io_context &io_service) {
   return smtp::client<T>(io_service);
 }
 

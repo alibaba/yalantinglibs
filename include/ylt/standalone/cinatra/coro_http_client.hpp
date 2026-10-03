@@ -810,8 +810,10 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
     ~timer_guard() {
       if (dur_.count() > 0 && self->socket_->is_timeout_ == false) {
-        std::error_code ignore_ec;
-        self->timer_.cancel(ignore_ec);
+        try {
+          self->timer_.cancel();
+        } catch (...) {
+        }
       }
     }
     coro_http_client *self;
@@ -2419,16 +2421,14 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       port_ = proxy_port_.empty() ? u.get_port() : proxy_port_;
       if (eps->empty()) {
         CINATRA_LOG_TRACE << "start resolve host: " << host_ << ":" << port_;
-        auto [ec, iter] = co_await coro_io::async_resolve(
+        auto [ec, results] = co_await coro_io::async_resolve(
             &executor_wrapper_, socket_->impl_, host_, port_);
         if (ec) {
           co_return resp_data{ec, 404};
         }
         else {
-          asio::ip::tcp::resolver::iterator end;
-          while (iter != end) {
-            eps->push_back(iter->endpoint());
-            ++iter;
+          for (const auto &entry : results) {
+            eps->push_back(entry.endpoint());
           }
           if (eps->empty()) [[unlikely]] {
             co_return resp_data{std::make_error_code(std::errc::not_connected),

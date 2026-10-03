@@ -2,7 +2,7 @@
 // impl/connect_pipe.ipp
 // ~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2022 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2025 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 // Copyright (c) 2021 Klemens D. Morgenstern
 //                    (klemens dot morgenstern at gmx dot net)
 //
@@ -62,8 +62,9 @@ void create_pipe(native_pipe_handle p[2], asio::error_code& ec)
   _snwprintf(
 #endif // defined(ASIO_HAS_SECURE_RTL)
       pipe_name, 128,
-      L"\\\\.\\pipe\\asio-A0812896-741A-484D-AF23-BE51BF620E22-%u-%ld-%ld",
-      static_cast<unsigned int>(::GetCurrentProcessId()), n1, n2);
+      // Include address of static to discriminate asio instances in DLLs.
+      L"\\\\.\\pipe\\asio-A0812896-741A-484D-AF23-BE51BF620E22-%u-%p-%ld-%ld",
+      static_cast<unsigned int>(::GetCurrentProcessId()), &counter1, n1, n2);
 
   p[0] = ::CreateNamedPipeW(pipe_name,
       PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED,
