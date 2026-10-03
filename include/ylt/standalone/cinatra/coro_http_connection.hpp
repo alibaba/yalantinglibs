@@ -1320,8 +1320,8 @@ class coro_http_connection
 
   void handle_session_for_response() {
     if (request_.has_session()) {
-      auto session =
-          session_manager::get().get_session(request_.get_cached_session_id());
+      auto session_id = request_.get_cached_session_id();
+      auto session = session_manager::get().find_session(session_id);
       if (session != nullptr && session->get_need_set_to_client()) {
         response_.add_cookie(session->get_session_cookie());
         session->set_need_set_to_client(false);

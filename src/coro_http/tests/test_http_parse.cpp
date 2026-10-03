@@ -264,3 +264,58 @@ TEST_CASE("uri test") {
   r = u.parse_from(uri.data());
   CHECK(r);
 }
+
+TEST_CASE("client supplied session ids cannot create sessions") {
+  auto &manager = session_manager::get();
+  const std::string client_session_id = "client-chosen-session-id";
+  REQUIRE_FALSE(manager.check_session_existence(client_session_id));
+
+  std::string raw_request = "GET / HTTP/1.1\r\nCookie: " + CSESSIONID + "=" +
+                            client_session_id + "\r\n\r\n";
+  http_parser parser;
+  REQUIRE(parser.parse_request(raw_request.data(), raw_request.size(), 0) > 0);
+  coro_http_request request(parser, nullptr);
+
+  CHECK(manager.get_session(client_session_id) == nullptr);
+  CHECK(request.get_session(false) == nullptr);
+  CHECK_FALSE(manager.check_session_existence(client_session_id));
+
+  auto created_session = request.get_session();
+  REQUIRE(created_session != nullptr);
+  std::string generated_session_id = created_session->get_session_id();
+  CHECK(generated_session_id != client_session_id);
+  CHECK(generated_session_id.size() == 32);
+  CHECK(generated_session_id.find_first_not_of("0123456789abcdef") ==
+        std::string::npos);
+  CHECK_FALSE(manager.check_session_existence(client_session_id));
+  CHECK(manager.find_session(generated_session_id) == created_session);
+  CHECK(manager.get_session(generated_session_id) == created_session);
+  CHECK(request.get_session() == created_session);
+
+  std::string existing_request = "GET / HTTP/1.1\r\nCookie: " + CSESSIONID +
+                                 "=" + generated_session_id + "\r\n\r\n";
+  http_parser existing_parser;
+  REQUIRE(existing_parser.parse_request(existing_request.data(),
+                                        existing_request.size(), 0) > 0);
+  coro_http_request existing(existing_parser, nullptr);
+  CHECK(existing.get_session(false) == created_session);
+
+  std::string oversized_session_id(CINATRA_MAX_SESSION_ID_SIZE + 1, 'a');
+  std::string oversized_request = "GET / HTTP/1.1\r\nCookie: " + CSESSIONID +
+                                  "=" + oversized_session_id + "\r\n\r\n";
+  http_parser oversized_parser;
+  REQUIRE(oversized_parser.parse_request(oversized_request.data(),
+                                         oversized_request.size(), 0) > 0);
+  coro_http_request oversized(oversized_parser, nullptr);
+  CHECK(oversized.get_session(false) == nullptr);
+  CHECK_FALSE(manager.check_session_existence(oversized_session_id));
+
+  auto replacement_session = oversized.get_session();
+  REQUIRE(replacement_session != nullptr);
+  CHECK(replacement_session->get_session_id() != oversized_session_id);
+
+  created_session->invalidate();
+  replacement_session->invalidate();
+  manager.remove_expire_session();
+  CHECK_FALSE(manager.check_session_existence(generated_session_id));
+}

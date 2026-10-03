@@ -263,6 +263,10 @@ class coro_http_request {
   std::shared_ptr<session> get_session(bool create = true) {
     auto &session_manager = session_manager::get();
 
+    if (!cached_session_id_.empty()) {
+      return session_manager.find_session(cached_session_id_);
+    }
+
     bool cookie_limit_exceeded = false;
     auto cookies =
         get_cookies(get_header_value("Cookie"), &cookie_limit_exceeded);
@@ -270,20 +274,24 @@ class coro_http_request {
       CINATRA_LOG_WARNING << "too many cookies";
       return nullptr;
     }
-    std::string session_id;
+
     auto iter = cookies.find(CSESSIONID);
-    if (iter == cookies.end() && !create) {
-      return nullptr;
-    }
-    else if (iter == cookies.end()) {
-      session_id = session_manager.generate_session_id();
-    }
-    else {
-      session_id = iter->second;
+    if (iter != cookies.end() &&
+        session_manager.is_valid_session_id(iter->second)) {
+      auto existing_session = session_manager.find_session(iter->second);
+      if (existing_session != nullptr) {
+        cached_session_id_ = iter->second;
+        return existing_session;
+      }
     }
 
-    cached_session_id_ = session_id;
-    return session_manager.get_session(session_id);
+    if (!create) {
+      return nullptr;
+    }
+
+    auto new_session = session_manager.create_session();
+    cached_session_id_ = new_session->get_session_id();
+    return new_session;
   }
 
   std::string get_cached_session_id() {
