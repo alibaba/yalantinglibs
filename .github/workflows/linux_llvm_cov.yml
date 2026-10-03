@@ -75,7 +75,7 @@ jobs:
         id: cached-base-cov
         if: steps.base-cov-cache.outputs.cache-hit == 'true'
         run: |
-          data=$(cat base-coverage-cache/data)
+          data=$(tr -d '[:space:]' < base-coverage-cache/data)
           [[ "$data" =~ ^[0-9]+([.][0-9]+)?$ ]]
           test -d base-coverage-cache/base-ylt-cov-report
           echo "data=$data" >> "$GITHUB_OUTPUT"
