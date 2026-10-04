@@ -10,28 +10,27 @@ on:
 jobs:
   build-ubuntu-s390x:
     name: Build Linux on s390x arch and run unit tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: uraimo/run-on-arch-action@v2
-        name: Test
-        id: runcmd
-        with:
-          arch: s390x
-          distro: ubuntu22.04
-          githubToken: ${{ github.token }}
-          install: |
-            apt-get update -q -y
-            apt-get -y install cmake
-            apt-get -y install make
-            apt-get -y install gcc
-            apt-get -y install g++
-          run: |
-            lscpu | grep Endian
-            cmake -B ${{github.workspace}}/build \
-                  -DCMAKE_BUILD_TYPE=Debug \
-                  -DBUILD_METRIC=OFF -DBUILD_CORO_HTTP=OFF -DBUILD_CORO_IO=OFF -DBUILD_CORO_RPC=OFF -DBUILD_EASYLOG=OFF -DBUILD_STRUCT_JSON=OFF -DBUILD_STRUCT_XML=OFF -DBUILD_STRUCT_YAML=OFF -DBUILD_UTIL=OFF -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARK=OFF
-            cmake --build ${{github.workspace}}/build --target struct_pack_test -- -j1
+      - uses: actions/checkout@v6
 
-            cd ${{github.workspace}}/build/output/tests
-            ./struct_pack_test
+      - name: Install s390x cross compiler and QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends g++-s390x-linux-gnu qemu-user
+
+      - name: Build s390x unit tests
+        run: |
+          # The previous QEMU build also found no working ASan runtime.
+          cmake -B build \
+                -DCMAKE_SYSTEM_NAME=Linux \
+                -DCMAKE_SYSTEM_PROCESSOR=s390x \
+                -DCMAKE_CXX_COMPILER=s390x-linux-gnu-g++ \
+                -DCMAKE_BUILD_TYPE=Debug \
+                -DENABLE_SANITIZER=OFF \
+                -DBUILD_METRIC=OFF -DBUILD_CORO_HTTP=OFF -DBUILD_CORO_IO=OFF -DBUILD_CORO_RPC=OFF -DBUILD_EASYLOG=OFF -DBUILD_STRUCT_JSON=OFF -DBUILD_STRUCT_XML=OFF -DBUILD_STRUCT_YAML=OFF -DBUILD_UTIL=OFF -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARK=OFF
+          cmake --build build --target struct_pack_test --parallel 2
+
+      - name: Run s390x unit tests under QEMU
+        working-directory: build/output/tests
+        run: qemu-s390x -L /usr/s390x-linux-gnu ./struct_pack_test
