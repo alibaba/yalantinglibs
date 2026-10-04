@@ -44,6 +44,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.23
         with:
           key: ${{ github.job }}-${{ matrix.mode}}-ssl( ${{ matrix.ssl}} )-libcxx( ${{ matrix.libcxx}} )
+          append-timestamp: false
 
       - name: Configure
         run: |
@@ -87,6 +88,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.23
         with:
           key: ${{ github.job }}-${{ matrix.mode}}-ssl( ${{ matrix.ssl}} )-libcxx( ${{ matrix.libcxx}} )
+          append-timestamp: false
       - name: Configure
         run: |
           CXX=clang++ CC=clang 
@@ -129,6 +131,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.23
         with:
           key: ${{ github.job }}-${{ matrix.mode}}-ssl( ${{ matrix.ssl}} )-libcxx( ${{ matrix.libcxx}} )
+          append-timestamp: false
 
       - name: Configure
         run: |
@@ -168,6 +171,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.23
         with:
           key: ${{ github.job }}-${{ matrix.mode}}
+          append-timestamp: false
 
       - name: Configure
         run: |

@@ -34,6 +34,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.23
         with:
           key: ${{ github.job }}-${{ matrix.mode}}-ssl( ${{ matrix.ssl}} )
+          append-timestamp: false
 
       - name: Configure
         run: |
@@ -69,6 +70,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.23
         with:
           key: ${{ github.job }}-${{ matrix.mode}}-ssl( ${{ matrix.ssl}} )
+          append-timestamp: false
           save: ${{ matrix.test_group == 'remaining' }}
 
       - name: Configure
@@ -113,6 +115,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.23
         with:
           key: ${{ github.job }}-${{ matrix.mode}}-ssl( ${{ matrix.ssl}} )
+          append-timestamp: false
 
       - name: Configure
         run: |
@@ -149,6 +152,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.23
         with:
           key: ${{ github.job }}-${{ matrix.mode}}
+          append-timestamp: false
 
       - name: Configure
         run: |
