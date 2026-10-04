@@ -52,6 +52,7 @@ if(YLT_ENABLE_ND)
 endif()
 
 add_test(NAME coro_rpc_test COMMAND coro_rpc_test)
+set_tests_properties(coro_rpc_test PROPERTIES RESOURCE_LOCK network_ports)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/output/tests/coro_rpc)
 

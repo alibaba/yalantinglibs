@@ -27,7 +27,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  TONGSUO_VERSION: "8.4.2"
+  TONGSUO_VERSION: "8.5.0"
   TONGSUO_INSTALL_PREFIX: /usr/local/tongsuo
 
 jobs:
@@ -53,12 +53,24 @@ jobs:
             zlib1g-dev \
             libbz2-dev
 
+      - name: Prepare Tongsuo cache directory
+        run: |
+          sudo mkdir -p "${TONGSUO_INSTALL_PREFIX}"
+          sudo chown "$USER" "${TONGSUO_INSTALL_PREFIX}"
+
+      - name: Cache Tongsuo installation
+        id: tongsuo-cache
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/tongsuo
+          key: tongsuo-ubuntu22.04-${{ runner.arch }}-${{ env.TONGSUO_VERSION }}-ntls-v1
+
       - name: Build and install Tongsuo
+        if: steps.tongsuo-cache.outputs.cache-hit != 'true'
         run: |
           set -e
           cd /tmp
-          git clone --depth 1 --branch ${TONGSUO_VERSION} https://github.com/Tongsuo-Project/Tongsuo.git tongsuo-src || \
-          git clone --depth 1 https://github.com/Tongsuo-Project/Tongsuo.git tongsuo-src
+          git clone --depth 1 --branch "${TONGSUO_VERSION}" https://github.com/Tongsuo-Project/Tongsuo.git tongsuo-src
           cd tongsuo-src
           
           # Configure and build Tongsuo
@@ -78,15 +90,24 @@ jobs:
           sudo ldconfig
           
           # Verify Tongsuo installation (ensure it links against newly installed libssl)
-          export LD_LIBRARY_PATH=${TONGSUO_INSTALL_PREFIX}/lib:$LD_LIBRARY_PATH
+          export LD_LIBRARY_PATH=${TONGSUO_INSTALL_PREFIX}/lib64:${TONGSUO_INSTALL_PREFIX}/lib:$LD_LIBRARY_PATH
+          ${TONGSUO_INSTALL_PREFIX}/bin/tongsuo version || \
+          ${TONGSUO_INSTALL_PREFIX}/bin/openssl version
+
+      - name: Verify restored Tongsuo
+        if: steps.tongsuo-cache.outputs.cache-hit == 'true'
+        run: |
+          sudo ldconfig
+          export LD_LIBRARY_PATH=${TONGSUO_INSTALL_PREFIX}/lib64:${TONGSUO_INSTALL_PREFIX}/lib:$LD_LIBRARY_PATH
+          test -d "${TONGSUO_INSTALL_PREFIX}/ssl/certs/sm2"
           ${TONGSUO_INSTALL_PREFIX}/bin/tongsuo version || \
           ${TONGSUO_INSTALL_PREFIX}/bin/openssl version
 
       - name: Setup environment for Tongsuo
         run: |
           echo "${TONGSUO_INSTALL_PREFIX}/bin" >> $GITHUB_PATH
-          echo "LD_LIBRARY_PATH=${TONGSUO_INSTALL_PREFIX}/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
-          echo "PKG_CONFIG_PATH=${TONGSUO_INSTALL_PREFIX}/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=${TONGSUO_INSTALL_PREFIX}/lib64:${TONGSUO_INSTALL_PREFIX}/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=${TONGSUO_INSTALL_PREFIX}/lib64/pkgconfig:${TONGSUO_INSTALL_PREFIX}/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
           
           # Create symlinks for cmake to find Tongsuo as OpenSSL
           sudo mkdir -p /usr/local/lib/pkgconfig
@@ -95,6 +116,12 @@ jobs:
           # Verify NTLS support
           ${TONGSUO_INSTALL_PREFIX}/bin/tongsuo s_client -help 2>&1 | grep -i ntls || \
           ${TONGSUO_INSTALL_PREFIX}/bin/openssl s_client -help 2>&1 | grep -i ntls || true
+
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2.23
+        with:
+          key: ntls-${{ matrix.mode }}-tongsuo-${{ env.TONGSUO_VERSION }}
+          max-size: 350MB
 
       - name: Configure CMake with NTLS (GCC)
         run: |
@@ -108,6 +135,7 @@ jobs:
                 -DYLT_ENABLE_SSL=ON \
                 -DYLT_ENABLE_NTLS=ON \
                 -DYLT_HAVE_IBVERBS=0 \
+                -DUSE_CCACHE=ON \
                 -DCMAKE_PREFIX_PATH=${TONGSUO_INSTALL_PREFIX} \
                 -DOPENSSL_ROOT_DIR=${TONGSUO_INSTALL_PREFIX} \
                 -DOPENSSL_INCLUDE_DIR=${TONGSUO_INSTALL_PREFIX}/include
@@ -115,7 +143,12 @@ jobs:
       - name: Build
         run: |
           export LD_LIBRARY_PATH=${TONGSUO_INSTALL_PREFIX}/lib:$LD_LIBRARY_PATH
-          cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
+          cmake --build ${{github.workspace}}/build --config ${{matrix.mode}} --target \
+            coro_http_test coro_io_test coro_file_error_test coro_rpc_test \
+            easylog_test metric_test reflection_test test_json \
+            struct_pack_test struct_pack_test_with_optimize struct_pb_test \
+            test_xml test_yaml util_meta_string_test util_time_test \
+            ntls_server ntls_client ntls_http_server ntls_http_client
 
       - name: Verify NTLS examples are built
         run: |

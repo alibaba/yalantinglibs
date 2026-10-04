@@ -109,3 +109,6 @@ runs:
     - name: 'Checkout source code'
       uses: actions/checkout@v6
       if: ${{ inputs.reset-commit-id }} != ""
+      with:
+        # Keep the generated base report for the caller to save in the cache.
+        clean: false

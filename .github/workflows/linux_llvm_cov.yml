@@ -61,15 +61,52 @@ jobs:
     needs: prerequisites
     runs-on: ubuntu-22.04
     outputs:
-      data: ${{ steps.base-cov.outputs.data }}
+      data: ${{ steps.base-cov.outputs.data || steps.cached-base-cov.outputs.data }}
     steps:
       - name: 'Checkout source code'
         uses: actions/checkout@v6
+      - name: 'Restore base coverage'
+        id: base-cov-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: base-coverage-cache
+          key: llvm-cov-base-v1-${{ needs.prerequisites.outputs.id }}-${{ hashFiles('.github/actions/coverage/action.yml') }}
+      - name: 'Read cached base coverage'
+        id: cached-base-cov
+        if: steps.base-cov-cache.outputs.cache-hit == 'true'
+        run: |
+          data=$(tr -d '[:space:]' < base-coverage-cache/data)
+          [[ "$data" =~ ^[0-9]+([.][0-9]+)?$ ]]
+          test -d base-coverage-cache/base-ylt-cov-report
+          echo "data=$data" >> "$GITHUB_OUTPUT"
+        shell: bash
+      - name: 'Upload cached base coverage report'
+        if: steps.base-cov-cache.outputs.cache-hit == 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: base-ylt-cov-report
+          path: base-coverage-cache/base-ylt-cov-report
       - name: 'Base coverage test'
         id: base-cov
+        if: steps.base-cov-cache.outputs.cache-hit != 'true'
         uses: ./.github/actions/coverage
         with:
           reset-commit-id: ${{ needs.prerequisites.outputs.id }}
+      - name: 'Prepare base coverage cache'
+        if: steps.base-cov-cache.outputs.cache-hit != 'true'
+        env:
+          COVERAGE_DATA: ${{ steps.base-cov.outputs.data }}
+        run: |
+          mkdir -p base-coverage-cache
+          cp -a build/output/tests/base-ylt-cov-report base-coverage-cache/
+          printf '%s\n' "$COVERAGE_DATA" > base-coverage-cache/data
+        shell: bash
+      - name: 'Save base coverage'
+        if: steps.base-cov-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: base-coverage-cache
+          key: llvm-cov-base-v1-${{ needs.prerequisites.outputs.id }}-${{ hashFiles('.github/actions/coverage/action.yml') }}
 
   cov-test:
     needs: prerequisites
@@ -79,11 +116,36 @@ jobs:
     steps:
       - name: 'Checkout source code'
         uses: actions/checkout@v6
+      - name: 'Cache coverage compilation'
+        uses: hendrikmuhs/ccache-action@v1.2.23
+        with:
+          key: llvm-cov-clang17-v1
+          max-size: 350MB
+      - name: 'Preserve compiler cache across checkout'
+        run: |
+          if [ -d .ccache ]; then
+            mv .ccache "$RUNNER_TEMP/coverage-ccache"
+          else
+            mkdir -p "$RUNNER_TEMP/coverage-ccache"
+          fi
       - name: 'Coverage test'
         id: cov
         uses: ./.github/actions/coverage
+        env:
+          CCACHE_DIR: ${{ runner.temp }}/coverage-ccache
+          CCACHE_MAXSIZE: 350MB
+          CCACHE_COMPRESS: 'true'
+          CMAKE_C_COMPILER_LAUNCHER: ccache
+          CMAKE_CXX_COMPILER_LAUNCHER: ccache
         with:
           reset-commit-id: ""
+      - name: 'Restore compiler cache for save'
+        if: always()
+        run: |
+          if [ -d "$RUNNER_TEMP/coverage-ccache" ]; then
+            mkdir -p .ccache
+            cp -a "$RUNNER_TEMP/coverage-ccache/." .ccache/
+          fi
 
   compare-cov-data:
     needs:
