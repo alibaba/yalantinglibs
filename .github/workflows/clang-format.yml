@@ -25,7 +25,10 @@ jobs:
         run: pip install clang-format==18.1.8
       - name: check-diff
         run: |
-            diff=$(git-clang-format --diff HEAD^) || true
+            # Preserve upstream formatting in the vendored Asio release.
+            diff=$(git-clang-format --diff HEAD^ -- \
+              ':(exclude)include/ylt/thirdparty/asio/**' \
+              ':(exclude)include/ylt/thirdparty/asio.hpp') || true
             if [ -n "$diff" ] \
               && [ "$diff" != "no modified files to format" ] \
               && [ "$diff" != "clang-format did not modify any files" ]; then

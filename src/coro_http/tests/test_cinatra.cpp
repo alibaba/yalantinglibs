@@ -1,6 +1,7 @@
 #include <async_simple/coro/Collect.h>
 
 #include <array>
+#include <asio/executor_work_guard.hpp>
 #include <atomic>
 #include <charconv>
 #include <chrono>
@@ -3465,7 +3466,9 @@ TEST_CASE("test coro_http_client using external io_context") {
   asio::io_context io_context;
   std::promise<void> promise;
   auto future = promise.get_future();
-  auto work = std::make_unique<asio::io_context::work>(io_context);
+  auto work = std::make_unique<
+      asio::executor_work_guard<asio::io_context::executor_type>>(
+      asio::make_work_guard(io_context));
   std::thread io_thd([&io_context, &promise] {
     promise.set_value();
     io_context.run();

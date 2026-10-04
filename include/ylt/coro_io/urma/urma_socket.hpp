@@ -650,7 +650,7 @@ struct urma_socket_shared_state_t
     if (has_close_.exchange(true))
       return;
     std::error_code ignored;
-    poll_timer_.cancel(ignored);
+    poll_timer_.cancel();
     if (event_fd_)
       event_fd_->cancel(ignored);
     socket_.cancel(ignored);

@@ -18,7 +18,7 @@ class multipart_reader_t {
     }
 
     if (head_buf_.size() > 0) {
-      const char *data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
+      const char *data_ptr = static_cast<const char *>(head_buf_.data().data());
       chunked_buf_.sputn(data_ptr, head_buf_.size());
       head_buf_.consume(head_buf_.size());
     }
@@ -47,7 +47,7 @@ class multipart_reader_t {
       }
 
       const char *data_ptr =
-          asio::buffer_cast<const char *>(chunked_buf_.data());
+          static_cast<const char *>(chunked_buf_.data().data());
       chunked_buf_.consume(size);
       if (*data_ptr == '-') {
         continue;
@@ -84,7 +84,8 @@ class multipart_reader_t {
       co_return result;
     }
 
-    const char *data_ptr = asio::buffer_cast<const char *>(chunked_buf_.data());
+    const char *data_ptr =
+        static_cast<const char *>(chunked_buf_.data().data());
     chunked_buf_.consume(size);
     result.data = std::string_view{
         data_ptr, size - boundary.size() - 4};  //-- boundary \r\n
@@ -98,7 +99,7 @@ class multipart_reader_t {
       co_return result;
     }
 
-    data_ptr = asio::buffer_cast<const char *>(chunked_buf_.data());
+    data_ptr = static_cast<const char *>(chunked_buf_.data().data());
     std::string data{data_ptr, size};
     if (size > 2) {
       constexpr std::string_view complete_flag = "--\r\n";

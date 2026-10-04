@@ -810,8 +810,11 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     }
     ~timer_guard() {
       if (dur_.count() > 0 && self->socket_->is_timeout_ == false) {
-        std::error_code ignore_ec;
-        self->timer_.cancel(ignore_ec);
+        try {
+          self->timer_.cancel();
+        } catch (const asio::system_error &) {
+          // The former cancel(ignore_ec) also ignored cancellation failures.
+        }
       }
     }
     coro_http_client *self;
@@ -2033,7 +2036,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   std::error_code handle_header(resp_data &data, http_parser &parser,
                                 size_t header_size) {
     // parse header
-    const char *data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
+    const char *data_ptr = static_cast<const char *>(head_buf_.data().data());
 
     int parse_ret = parser.parse_response(data_ptr, header_size, 0);
 #ifdef INJECT_FOR_HTTP_CLIENT_TEST
@@ -2099,7 +2102,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         is_keep_alive = true;
         if (head_buf_.size() > 0) {
           const char *data_ptr =
-              asio::buffer_cast<const char *>(head_buf_.data());
+              static_cast<const char *>(head_buf_.data().data());
           chunked_buf_.sputn(data_ptr, head_buf_.size());
           head_buf_.consume(head_buf_.size());
         }
@@ -2112,7 +2115,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         is_keep_alive = true;
         if (head_buf_.size() > 0) {
           const char *data_ptr =
-              asio::buffer_cast<const char *>(head_buf_.data());
+              static_cast<const char *>(head_buf_.data().data());
           chunked_buf_.sputn(data_ptr, head_buf_.size());
           head_buf_.consume(head_buf_.size());
         }
@@ -2152,7 +2155,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         // Now get entire content, additional data will discard.
         // copy body.
         if (content_len > 0) {
-          auto data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
+          auto data_ptr = static_cast<const char *>(head_buf_.data().data());
           if (is_out_buf) {
             memcpy(out_buf_.data(), data_ptr, content_len);
           }
@@ -2170,7 +2173,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       size_t part_size = head_buf_.size();
       size_t size_to_read = content_len - part_size;
 
-      auto data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
+      auto data_ptr = static_cast<const char *>(head_buf_.data().data());
       if (is_out_buf) {
         memcpy(out_buf_.data(), data_ptr, part_size);
       }
@@ -2225,7 +2228,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         }
       }
       else {
-        data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
+        data_ptr = static_cast<const char *>(head_buf_.data().data());
       }
 
       if (is_ranges) {
@@ -2350,7 +2353,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       size_t buf_size = chunked_buf_.size();
       size_t additional_size = buf_size - size;
       const char *data_ptr =
-          asio::buffer_cast<const char *>(chunked_buf_.data());
+          static_cast<const char *>(chunked_buf_.data().data());
       std::string_view size_str(data_ptr, size - CRCF.size());
       auto chunk_size = hex_to_int(size_str);
       chunked_buf_.consume(size);
@@ -2378,7 +2381,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         break;
       }
 
-      data_ptr = asio::buffer_cast<const char *>(chunked_buf_.data());
+      data_ptr = static_cast<const char *>(chunked_buf_.data().data());
       if (chunked_cb_) {
         co_await chunked_cb_(std::string_view(data_ptr, chunk_size));
       }
@@ -2419,16 +2422,14 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       port_ = proxy_port_.empty() ? u.get_port() : proxy_port_;
       if (eps->empty()) {
         CINATRA_LOG_TRACE << "start resolve host: " << host_ << ":" << port_;
-        auto [ec, iter] = co_await coro_io::async_resolve(
+        auto [ec, results] = co_await coro_io::async_resolve(
             &executor_wrapper_, socket_->impl_, host_, port_);
         if (ec) {
           co_return resp_data{ec, 404};
         }
         else {
-          asio::ip::tcp::resolver::iterator end;
-          while (iter != end) {
-            eps->push_back(iter->endpoint());
-            ++iter;
+          for (const auto &entry : results) {
+            eps->push_back(entry.endpoint());
           }
           if (eps->empty()) [[unlikely]] {
             co_return resp_data{std::make_error_code(std::errc::not_connected),
@@ -2615,7 +2616,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         co_return data;
       }
 
-      const char *data_ptr = asio::buffer_cast<const char *>(read_buf.data());
+      const char *data_ptr = static_cast<const char *>(read_buf.data().data());
       auto ret = ws.parse_header(data_ptr, read_buf.size(), false);
       if (ret == ws_header_status::incomplete) {
         continue;
@@ -2643,7 +2644,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         co_return data;
       }
 
-      data_ptr = asio::buffer_cast<const char *>(read_buf.data());
+      data_ptr = static_cast<const char *>(read_buf.data().data());
 #ifdef CINATRA_ENABLE_GZIP
       if (is_server_support_ws_deflate_ && enable_ws_deflate_) {
         inflate_str_.clear();

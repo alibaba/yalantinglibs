@@ -2,7 +2,7 @@
 // impl/src.hpp
 // ~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2022 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2025 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -19,14 +19,16 @@
 # error Do not compile Asio library source with ASIO_HEADER_ONLY defined
 #endif
 
+#include "asio/impl/any_completion_executor.ipp"
 #include "asio/impl/any_io_executor.ipp"
+#include "asio/impl/awaitable.ipp"
 #include "asio/impl/cancellation_signal.ipp"
+#include "asio/impl/config.ipp"
 #include "asio/impl/connect_pipe.ipp"
 #include "asio/impl/error.ipp"
 #include "asio/impl/error_code.ipp"
 #include "asio/impl/execution_context.ipp"
 #include "asio/impl/executor.ipp"
-#include "asio/impl/handler_alloc_hook.ipp"
 #include "asio/impl/io_context.ipp"
 #include "asio/impl/multiple_exceptions.ipp"
 #include "asio/impl/serial_port_base.ipp"
@@ -53,6 +55,7 @@
 #include "asio/detail/impl/reactive_descriptor_service.ipp"
 #include "asio/detail/impl/reactive_socket_service_base.ipp"
 #include "asio/detail/impl/resolver_service_base.ipp"
+#include "asio/detail/impl/resolver_thread_pool.ipp"
 #include "asio/detail/impl/scheduler.ipp"
 #include "asio/detail/impl/select_reactor.ipp"
 #include "asio/detail/impl/service_registry.ipp"
@@ -63,7 +66,6 @@
 #include "asio/detail/impl/strand_service.ipp"
 #include "asio/detail/impl/thread_context.ipp"
 #include "asio/detail/impl/throw_error.ipp"
-#include "asio/detail/impl/timer_queue_ptime.ipp"
 #include "asio/detail/impl/timer_queue_set.ipp"
 #include "asio/detail/impl/win_iocp_file_service.ipp"
 #include "asio/detail/impl/win_iocp_handle_service.ipp"
@@ -80,7 +82,6 @@
 #include "asio/detail/impl/winrt_timer_scheduler.ipp"
 #include "asio/detail/impl/winsock_init.ipp"
 #include "asio/execution/impl/bad_executor.ipp"
-#include "asio/execution/impl/receiver_invocation_error.ipp"
 #include "asio/experimental/impl/channel_error.ipp"
 #include "asio/generic/detail/impl/endpoint.ipp"
 #include "asio/ip/impl/address.ipp"

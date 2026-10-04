@@ -1,5 +1,6 @@
 #include <async_simple/coro/SyncAwait.h>
 
+#include <asio/executor_work_guard.hpp>
 #include <asio/io_context.hpp>
 #include <cassert>
 #include <filesystem>
@@ -44,7 +45,9 @@ void test_read_file() {
   std::string filename = "test1.txt";
   create_temp_file("test1.txt", 1024);
   asio::io_context ioc;
-  auto work = std::make_unique<asio::io_context::work>(ioc);
+  auto work = std::make_unique<
+      asio::executor_work_guard<asio::io_context::executor_type>>(
+      asio::make_work_guard(ioc));
   std::thread thd([&ioc] {
     ioc.run();
   });
@@ -79,7 +82,9 @@ void test_write_and_read_file() {
   create_temp_file(filename, 0);
 
   asio::io_context ioc;
-  auto work = std::make_unique<asio::io_context::work>(ioc);
+  auto work = std::make_unique<
+      asio::executor_work_guard<asio::io_context::executor_type>>(
+      asio::make_work_guard(ioc));
   std::thread thd([&ioc] {
     ioc.run();
   });

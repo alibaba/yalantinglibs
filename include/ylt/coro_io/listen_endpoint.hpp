@@ -100,13 +100,14 @@ inline std::optional<asio::ip::tcp::endpoint> resolve_listen_endpoint(
 
   ec.clear();
   tcp::resolver resolver(executor);
-  auto it =
-      resolver.resolve(tcp::resolver::query(address, std::to_string(port)), ec);
-  if (ec || it == tcp::resolver::iterator{}) {
+  auto results =
+      resolver.resolve(address, std::to_string(port),
+                       asio::ip::resolver_base::address_configured, ec);
+  if (ec || results.empty()) {
     return std::nullopt;
   }
 
-  return it->endpoint();
+  return results.begin()->endpoint();
 }
 
 // Disable IPV6_V6ONLY on a TCP acceptor so that an IPv6 socket also accepts

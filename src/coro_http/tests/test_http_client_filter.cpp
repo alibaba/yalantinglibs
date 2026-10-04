@@ -284,12 +284,12 @@ TEST_CASE("test UnifiedIPFilter single IP") {
                         "192.168.1.100");
 
   // Create test endpoints
-  asio::ip::tcp::endpoint allowed_ep(
-      asio::ip::address::from_string("127.0.0.1"), 12345);
-  asio::ip::tcp::endpoint allowed_ep2(
-      asio::ip::address::from_string("192.168.1.100"), 12345);
-  asio::ip::tcp::endpoint denied_ep(
-      asio::ip::address::from_string("192.168.1.1"), 12345);
+  asio::ip::tcp::endpoint allowed_ep(asio::ip::make_address("127.0.0.1"),
+                                     12345);
+  asio::ip::tcp::endpoint allowed_ep2(asio::ip::make_address("192.168.1.100"),
+                                      12345);
+  asio::ip::tcp::endpoint denied_ep(asio::ip::make_address("192.168.1.1"),
+                                    12345);
 
   CHECK(filter(allowed_ep) == true);
   CHECK(filter(allowed_ep2) == true);
@@ -304,20 +304,19 @@ TEST_CASE("test UnifiedIPFilter CIDR") {
   filter.add_allow_rule(UnifiedIPFilter::FilterType::CIDR, "10.0.0.0/8");
 
   // Test 192.168.1.0/24 network
-  asio::ip::tcp::endpoint allowed_ep1(
-      asio::ip::address::from_string("192.168.1.1"), 12345);
-  asio::ip::tcp::endpoint allowed_ep2(
-      asio::ip::address::from_string("192.168.1.254"), 12345);
-  asio::ip::tcp::endpoint denied_ep1(
-      asio::ip::address::from_string("192.168.2.1"), 12345);
+  asio::ip::tcp::endpoint allowed_ep1(asio::ip::make_address("192.168.1.1"),
+                                      12345);
+  asio::ip::tcp::endpoint allowed_ep2(asio::ip::make_address("192.168.1.254"),
+                                      12345);
+  asio::ip::tcp::endpoint denied_ep1(asio::ip::make_address("192.168.2.1"),
+                                     12345);
 
   // Test 10.0.0.0/8 network
-  asio::ip::tcp::endpoint allowed_ep3(
-      asio::ip::address::from_string("10.1.1.1"), 12345);
-  asio::ip::tcp::endpoint allowed_ep4(
-      asio::ip::address::from_string("10.255.255.255"), 12345);
-  asio::ip::tcp::endpoint denied_ep2(asio::ip::address::from_string("11.0.0.1"),
-                                     12345);
+  asio::ip::tcp::endpoint allowed_ep3(asio::ip::make_address("10.1.1.1"),
+                                      12345);
+  asio::ip::tcp::endpoint allowed_ep4(asio::ip::make_address("10.255.255.255"),
+                                      12345);
+  asio::ip::tcp::endpoint denied_ep2(asio::ip::make_address("11.0.0.1"), 12345);
 
   CHECK(filter(allowed_ep1) == true);
   CHECK(filter(allowed_ep2) == true);
@@ -337,22 +336,22 @@ TEST_CASE("test UnifiedIPFilter IP range") {
                         "10.0.0.1-10.0.0.100");
 
   // Test IPs within range
-  asio::ip::tcp::endpoint allowed_ep1(
-      asio::ip::address::from_string("192.168.1.10"), 12345);
-  asio::ip::tcp::endpoint allowed_ep2(
-      asio::ip::address::from_string("192.168.1.15"), 12345);
-  asio::ip::tcp::endpoint allowed_ep3(
-      asio::ip::address::from_string("192.168.1.20"), 12345);
-  asio::ip::tcp::endpoint allowed_ep4(
-      asio::ip::address::from_string("10.0.0.50"), 12345);
+  asio::ip::tcp::endpoint allowed_ep1(asio::ip::make_address("192.168.1.10"),
+                                      12345);
+  asio::ip::tcp::endpoint allowed_ep2(asio::ip::make_address("192.168.1.15"),
+                                      12345);
+  asio::ip::tcp::endpoint allowed_ep3(asio::ip::make_address("192.168.1.20"),
+                                      12345);
+  asio::ip::tcp::endpoint allowed_ep4(asio::ip::make_address("10.0.0.50"),
+                                      12345);
 
   // Test IPs outside range
-  asio::ip::tcp::endpoint denied_ep1(
-      asio::ip::address::from_string("192.168.1.9"), 12345);
-  asio::ip::tcp::endpoint denied_ep2(
-      asio::ip::address::from_string("192.168.1.21"), 12345);
-  asio::ip::tcp::endpoint denied_ep3(
-      asio::ip::address::from_string("10.0.0.101"), 12345);
+  asio::ip::tcp::endpoint denied_ep1(asio::ip::make_address("192.168.1.9"),
+                                     12345);
+  asio::ip::tcp::endpoint denied_ep2(asio::ip::make_address("192.168.1.21"),
+                                     12345);
+  asio::ip::tcp::endpoint denied_ep3(asio::ip::make_address("10.0.0.101"),
+                                     12345);
 
   CHECK(filter(allowed_ep1) == true);
   CHECK(filter(allowed_ep2) == true);
@@ -372,18 +371,17 @@ TEST_CASE("test UnifiedIPFilter regex") {
   filter.add_allow_rule(UnifiedIPFilter::FilterType::REGEX, R"(127\.0\.0\.1)");
 
   // Test matching IPs
-  asio::ip::tcp::endpoint allowed_ep1(
-      asio::ip::address::from_string("192.168.1.1"), 12345);
-  asio::ip::tcp::endpoint allowed_ep2(
-      asio::ip::address::from_string("192.168.1.255"), 12345);
-  asio::ip::tcp::endpoint allowed_ep3(
-      asio::ip::address::from_string("127.0.0.1"), 12345);
+  asio::ip::tcp::endpoint allowed_ep1(asio::ip::make_address("192.168.1.1"),
+                                      12345);
+  asio::ip::tcp::endpoint allowed_ep2(asio::ip::make_address("192.168.1.255"),
+                                      12345);
+  asio::ip::tcp::endpoint allowed_ep3(asio::ip::make_address("127.0.0.1"),
+                                      12345);
 
   // Test non-matching IPs
-  asio::ip::tcp::endpoint denied_ep1(
-      asio::ip::address::from_string("192.168.2.1"), 12345);
-  asio::ip::tcp::endpoint denied_ep2(asio::ip::address::from_string("10.0.0.1"),
+  asio::ip::tcp::endpoint denied_ep1(asio::ip::make_address("192.168.2.1"),
                                      12345);
+  asio::ip::tcp::endpoint denied_ep2(asio::ip::make_address("10.0.0.1"), 12345);
 
   CHECK(filter(allowed_ep1) == true);
   CHECK(filter(allowed_ep2) == true);
@@ -403,10 +401,10 @@ TEST_CASE("test UnifiedIPFilter deny rules priority") {
 
   // Test: 192.168.1.100 is in allowed network but explicitly denied by deny
   // rule
-  asio::ip::tcp::endpoint denied_ep(
-      asio::ip::address::from_string("192.168.1.100"), 12345);
-  asio::ip::tcp::endpoint allowed_ep(
-      asio::ip::address::from_string("192.168.1.1"), 12345);
+  asio::ip::tcp::endpoint denied_ep(asio::ip::make_address("192.168.1.100"),
+                                    12345);
+  asio::ip::tcp::endpoint allowed_ep(asio::ip::make_address("192.168.1.1"),
+                                     12345);
 
   CHECK(filter(denied_ep) == false);  // Denied by deny rule
   CHECK(filter(allowed_ep) == true);  // Allowed by allow rule

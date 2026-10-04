@@ -6,6 +6,7 @@
 #include <array>
 #include <asio/io_context.hpp>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <limits>
@@ -34,6 +35,24 @@ namespace fs = std::filesystem;
 
 #if defined(ASIO_WINDOWS)
 constexpr int read_only_flag = _O_RDONLY;
+
+class scoped_invalid_parameter_handler {
+ public:
+  scoped_invalid_parameter_handler()
+      : previous_(::_set_thread_local_invalid_parameter_handler(
+            &ignore_invalid_parameter)) {}
+
+  ~scoped_invalid_parameter_handler() {
+    ::_set_thread_local_invalid_parameter_handler(previous_);
+  }
+
+ private:
+  static void __cdecl ignore_invalid_parameter(const wchar_t *, const wchar_t *,
+                                               const wchar_t *, unsigned int,
+                                               uintptr_t) {}
+
+  _invalid_parameter_handler previous_;
+};
 #else
 constexpr int read_only_flag = O_RDONLY;
 #endif
@@ -114,7 +133,9 @@ class io_context_runner {
  public:
   explicit io_context_runner(asio::io_context &io_context)
       : io_context_(io_context),
-        work_(std::make_unique<asio::io_context::work>(io_context_)),
+        work_(std::make_unique<
+              asio::executor_work_guard<asio::io_context::executor_type>>(
+            asio::make_work_guard(io_context_))),
         thread_([this] {
           io_context_.run();
         }) {}
@@ -127,7 +148,8 @@ class io_context_runner {
 
  private:
   asio::io_context &io_context_;
-  std::unique_ptr<asio::io_context::work> work_;
+  std::unique_ptr<asio::executor_work_guard<asio::io_context::executor_type>>
+      work_;
   std::thread thread_;
 };
 
@@ -339,6 +361,10 @@ TEST_CASE("closed random_coro_file rejects new operations") {
 }
 
 TEST_CASE("random_coro_file reports native handle size errors") {
+#if defined(ASIO_WINDOWS)
+  // The Windows CRT invokes the invalid parameter handler for an invalid fd.
+  scoped_invalid_parameter_handler allow_invalid_fd;
+#endif
   auto handle = coro_io::shared_file_handle::adopt(
       std::numeric_limits<
           coro_io::shared_file_handle::native_handle_type>::max());
