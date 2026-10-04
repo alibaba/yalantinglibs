@@ -116,9 +116,17 @@ jobs:
     steps:
       - name: 'Checkout source code'
         uses: actions/checkout@v6
+      - name: 'Cache coverage compilation'
+        uses: hendrikmuhs/ccache-action@v1.2.23
+        with:
+          key: llvm-cov-clang17-v1
+          max-size: 350MB
       - name: 'Coverage test'
         id: cov
         uses: ./.github/actions/coverage
+        env:
+          CMAKE_C_COMPILER_LAUNCHER: ccache
+          CMAKE_CXX_COMPILER_LAUNCHER: ccache
         with:
           reset-commit-id: ""
 
