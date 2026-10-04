@@ -54,6 +54,8 @@ jobs:
       matrix:
         mode: [ Debug ]
         ssl: [ ON ]
+        # Network tests share fixed ports, so run HTTP on a separate runner.
+        test_group: [ http, remaining ]
     runs-on: ubuntu-22.04
 
     steps:
@@ -67,6 +69,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.23
         with:
           key: ${{ github.job }}-${{ matrix.mode}}-ssl( ${{ matrix.ssl}} )
+          save: ${{ matrix.test_group == 'remaining' }}
 
       - name: Configure
         run: |
@@ -76,11 +79,21 @@ jobs:
                 -DUSE_CCACHE=${{env.ccache}} -DENABLE_TSAN=ON -DBUILD_EXAMPLES=OFF
 
       - name: Build
-        run: cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
+        run: |
+          if [ "${{ matrix.test_group }}" = "http" ]; then
+            cmake --build ${{github.workspace}}/build --config ${{matrix.mode}} --target coro_http_test
+          else
+            cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
+          fi
 
       - name: Test
         working-directory: ${{github.workspace}}/build
-        run: ctest -C ${{matrix.mode}} -j 2 -V
+        run: |
+          if [ "${{ matrix.test_group }}" = "http" ]; then
+            ctest -C ${{matrix.mode}} -R '^coro_http_test$' --no-tests=error -V
+          else
+            ctest -C ${{matrix.mode}} -E '^coro_http_test$' --no-tests=error -j 2 -V
+          fi
 
   ubuntu_gcc_for_liburing:
     strategy:
