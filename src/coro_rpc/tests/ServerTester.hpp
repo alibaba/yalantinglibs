@@ -17,6 +17,7 @@
 #define CORO_RPC_SERVERTESTER_HPP
 #include <async_simple/coro/Lazy.h>
 
+#include <asio/executor_work_guard.hpp>
 #include <exception>
 #include <future>
 #include <ostream>
@@ -106,7 +107,7 @@ struct ServerTester : TesterConfig {
       std::promise<void> promise;
       auto future = promise.get_future();
       thd_ = std::thread([this, &promise]() {
-        asio::io_context::work work(io_context_);
+        auto work = asio::make_work_guard(io_context_);
         promise.set_value();
         io_context_.run();
       });

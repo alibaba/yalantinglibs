@@ -514,8 +514,7 @@ inline bool start_system_metric() {
   static auto timer = coro_io::period_timer(exucutor->get_executor());
   static std::shared_ptr<int> guard(nullptr, [](auto ptr) {
     asio::post(exucutor->get_executor()->get_asio_executor(), [] {
-      std::error_code ec;
-      timer.cancel(ec);
+      timer.cancel();
       detail::g_timer_has_cancel = true;
     });
     exucutor->stop();

@@ -16,6 +16,7 @@
 #include <async_simple/coro/Lazy.h>
 #include <async_simple/coro/SyncAwait.h>
 
+#include <asio/executor_work_guard.hpp>
 #include <asio/io_context.hpp>
 #include <asio/ip/host_name.hpp>
 #include <chrono>
@@ -79,7 +80,9 @@ TEST_CASE("testing client") {
   coro_io::ExecutorWrapper<> executor = io_context.get_executor();
   auto executor_ptr = &executor;
   std::promise<void> promise;
-  auto worker = std::make_unique<asio::io_context::work>(io_context);
+  auto worker = std::make_unique<
+      asio::executor_work_guard<asio::io_context::executor_type>>(
+      asio::make_work_guard(io_context));
   auto future = promise.get_future();
   std::thread thd([&io_context, &promise] {
     promise.set_value();
@@ -180,11 +183,10 @@ std::string get_first_local_ip() {
   using asio::ip::tcp;
   try {
     tcp::resolver resolver(coro_io::get_global_executor()->get_asio_executor());
-    tcp::resolver::query query(asio::ip::host_name(), "");
-    tcp::resolver::iterator iter = resolver.resolve(query);
-    tcp::resolver::iterator end;  // End marker.
-    while (iter != end) {
-      tcp::endpoint ep = *iter++;
+    auto results = resolver.resolve(
+        asio::ip::host_name(), "", asio::ip::resolver_base::address_configured);
+    for (const auto& entry : results) {
+      tcp::endpoint ep = entry.endpoint();
       auto addr = ep.address();
       if (addr.is_v4()) {
         return addr.to_string();
@@ -246,13 +248,13 @@ TEST_CASE("testing client with local ip") {
   CHECK(ret.value() == "hello"s);
 
   std::vector<asio::ip::tcp::endpoint> eps;
-  eps.push_back(asio::ip::tcp::endpoint(
-      asio::ip::address::from_string("192.0.2.1"), 8901));
-  eps.push_back(asio::ip::tcp::endpoint(
-      asio::ip::address::from_string("127.0.0.1"), 8901));
+  eps.push_back(
+      asio::ip::tcp::endpoint(asio::ip::make_address("192.0.2.1"), 8901));
+  eps.push_back(
+      asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), 8901));
 
   auto local_ep =
-      asio::ip::tcp::endpoint(asio::ip::address::from_string("127.0.0.1"), 0);
+      asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), 0);
   asio::ip::tcp::socket socket(client.get_executor().get_asio_executor());
   socket.open(local_ep.protocol());
   socket.bind(local_ep);
@@ -269,7 +271,9 @@ TEST_CASE("testing client with inject server") {
   asio::io_context io_context;
   coro_io::ExecutorWrapper<> executor = io_context.get_executor();
   auto executor_ptr = &executor;
-  auto worker = std::make_unique<asio::io_context::work>(io_context);
+  auto worker = std::make_unique<
+      asio::executor_work_guard<asio::io_context::executor_type>>(
+      asio::make_work_guard(io_context));
   std::thread thd([&io_context] {
     io_context.run();
   });
@@ -352,7 +356,9 @@ class SSLClientTester {
 
     std::promise<void> promise;
     auto future = promise.get_future();
-    worker = std::make_unique<asio::io_context::work>(io_context);
+    worker = std::make_unique<
+        asio::executor_work_guard<asio::io_context::executor_type>>(
+        asio::make_work_guard(io_context));
     thd = std::thread([this, &promise] {
       promise.set_value();
       io_context.run();
@@ -449,7 +455,8 @@ class SSLClientTester {
   asio::io_context io_context;
   coro_io::ExecutorWrapper<> executor_;
   std::thread thd;
-  std::unique_ptr<asio::io_context::work> worker;
+  std::unique_ptr<asio::executor_work_guard<asio::io_context::executor_type>>
+      worker;
 };
 
 TEST_CASE("testing client with ssl server") {

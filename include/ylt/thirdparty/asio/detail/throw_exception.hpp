@@ -2,7 +2,7 @@
 // detail/throw_exception.hpp
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2022 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2025 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -30,7 +30,7 @@ using boost::throw_exception;
 
 // Declare the throw_exception function for all targets.
 template <typename Exception>
-void throw_exception(
+[[noreturn]] void throw_exception(
     const Exception& e
     ASIO_SOURCE_LOCATION_DEFAULTED_PARAM);
 

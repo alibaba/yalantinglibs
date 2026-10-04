@@ -292,8 +292,7 @@ class dynamic_metric_manager {
 
   ~dynamic_metric_manager() {
     asio::post(executor_->get_executor()->get_asio_executor(), [this] {
-      std::error_code ec;
-      timer_.cancel(ec);
+      timer_.cancel();
       has_cancel_ = true;
     });
 

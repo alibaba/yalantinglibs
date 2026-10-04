@@ -718,7 +718,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       return;
     }
 
-    timer_.expires_from_now(keep_alive_timeout_duration_);
+    timer_.expires_after(keep_alive_timeout_duration_);
     timer_.async_wait(
         [this, self = shared_from_this(), id](asio::error_code const &ec) {
           if (!ec) {
@@ -741,8 +741,7 @@ class coro_connection : public std::enable_shared_from_this<coro_connection> {
       return;
     }
 
-    asio::error_code ec;
-    timer_.cancel(ec);
+    timer_.cancel();
   }
   coro_io::socket_wrapper_t socket_wrapper_;
   // FIXME: queue's performance can be imporved.

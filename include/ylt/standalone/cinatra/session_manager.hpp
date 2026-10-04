@@ -147,8 +147,7 @@ class session_manager {
     check_session_duration_ = duration;
     {
       std::lock_guard lock(timer_mtx_);
-      std::error_code ec;
-      check_session_timer_->cancel(ec);
+      check_session_timer_->cancel();
     }
 
     start_check_session_timer();

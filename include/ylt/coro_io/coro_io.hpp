@@ -467,11 +467,11 @@ inline async_simple::coro::Lazy<std::error_code> async_connect(
     const std::string &host, const std::string &port) noexcept {
   std::error_code ec;
   auto address = asio::ip::make_address(host, ec);
-  std::pair<std::error_code, asio::ip::tcp::resolver::iterator> result;
+  std::pair<std::error_code, asio::ip::tcp::resolver::results_type> result;
   if (ec) {
     asio::ip::tcp::resolver resolver(executor->get_asio_executor());
     result = co_await async_io<
-        std::pair<std::error_code, asio::ip::tcp::resolver::iterator>>(
+        std::pair<std::error_code, asio::ip::tcp::resolver::results_type>>(
         [&](auto &&cb) {
           ELOG_INFO << "call asio resolver.async_resolve";
           resolver.async_resolve(host, port, std::move(cb));
@@ -538,12 +538,12 @@ inline async_simple::coro::Lazy<std::error_code> async_connect(
 
 template <typename executor_t>
 inline async_simple::coro::Lazy<
-    std::pair<std::error_code, asio::ip::tcp::resolver::iterator>>
+    std::pair<std::error_code, asio::ip::tcp::resolver::results_type>>
 async_resolve(executor_t *executor, asio::ip::tcp::socket &socket,
               const std::string &host, const std::string &port) noexcept {
   asio::ip::tcp::resolver resolver(executor->get_asio_executor());
   co_return co_await async_io<
-      std::pair<std::error_code, asio::ip::tcp::resolver::iterator>>(
+      std::pair<std::error_code, asio::ip::tcp::resolver::results_type>>(
       [&](auto &&cb) {
         resolver.async_resolve(host, port, std::move(cb));
       },
@@ -552,12 +552,12 @@ async_resolve(executor_t *executor, asio::ip::tcp::socket &socket,
 
 template <typename executor_t>
 inline async_simple::coro::Lazy<
-    std::pair<std::error_code, asio::ip::tcp::resolver::iterator>>
+    std::pair<std::error_code, asio::ip::tcp::resolver::results_type>>
 async_resolve(executor_t *executor, const std::string &host,
               const std::string &port) noexcept {
   asio::ip::tcp::resolver resolver(executor->get_asio_executor());
   co_return co_await async_io<
-      std::pair<std::error_code, asio::ip::tcp::resolver::iterator>>(
+      std::pair<std::error_code, asio::ip::tcp::resolver::results_type>>(
       [&](auto &&cb) {
         resolver.async_resolve(host, port, std::move(cb));
       },

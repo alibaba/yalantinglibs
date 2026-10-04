@@ -16,6 +16,7 @@
 #include <async_simple/coro/Collect.h>
 #include <async_simple/coro/SyncAwait.h>
 
+#include <asio/executor_work_guard.hpp>
 #include <thread>
 #include <variant>
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
@@ -443,7 +444,7 @@ TEST_CASE("test server write queue") {
   struct_pack::serialize_to(buffer, std::monostate{});
   asio::io_context io_context;
   std::thread thd([&io_context]() {
-    asio::io_context::work work(io_context);
+    auto work = asio::make_work_guard(io_context);
     io_context.run();
   });
   asio::ip::tcp::socket socket(io_context);

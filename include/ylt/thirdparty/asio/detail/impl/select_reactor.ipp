@@ -2,7 +2,7 @@
 // detail/impl/select_reactor.ipp
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2022 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2025 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -65,14 +65,14 @@ select_reactor::select_reactor(asio::execution_context& ctx)
     interrupter_(),
 #if defined(ASIO_HAS_IOCP)
     stop_thread_(false),
-    thread_(0),
+    thread_(),
     restart_reactor_(this),
 #endif // defined(ASIO_HAS_IOCP)
     shutdown_(false)
 {
 #if defined(ASIO_HAS_IOCP)
   asio::detail::signal_blocker sb;
-  thread_ = new asio::detail::thread(thread_function(this));
+  thread_ = thread(thread_function(this));
 #endif // defined(ASIO_HAS_IOCP)
 }
 
@@ -87,18 +87,13 @@ void select_reactor::shutdown()
   shutdown_ = true;
 #if defined(ASIO_HAS_IOCP)
   stop_thread_ = true;
-  if (thread_)
+  if (thread_.joinable())
     interrupter_.interrupt();
 #endif // defined(ASIO_HAS_IOCP)
   lock.unlock();
 
 #if defined(ASIO_HAS_IOCP)
-  if (thread_)
-  {
-    thread_->join();
-    delete thread_;
-    thread_ = 0;
-  }
+  thread_.join();
 #endif // defined(ASIO_HAS_IOCP)
 
   op_queue<operation> ops;
@@ -151,15 +146,23 @@ void select_reactor::move_descriptor(socket_type,
 {
 }
 
+void select_reactor::call_post_immediate_completion(
+    operation* op, bool is_continuation, const void* self)
+{
+  static_cast<const select_reactor*>(self)->post_immediate_completion(
+      op, is_continuation);
+}
+
 void select_reactor::start_op(int op_type, socket_type descriptor,
-    select_reactor::per_descriptor_data&, reactor_op* op,
-    bool is_continuation, bool)
+    select_reactor::per_descriptor_data&, reactor_op* op, bool is_continuation,
+    bool, void (*on_immediate)(operation*, bool, const void*),
+    const void* immediate_arg)
 {
   asio::detail::mutex::scoped_lock lock(mutex_);
 
   if (shutdown_)
   {
-    post_immediate_completion(op, is_continuation);
+    on_immediate(op, is_continuation, immediate_arg);
     return;
   }
 
@@ -309,7 +312,7 @@ void select_reactor::run_thread()
   {
     lock.unlock();
     op_queue<operation> ops;
-    run(true, ops);
+    run(-1, ops);
     scheduler_.post_deferred_completions(ops);
     lock.lock();
   }
@@ -322,12 +325,7 @@ void select_reactor::restart_reactor::do_complete(void* owner, operation* base,
   {
     select_reactor* reactor = static_cast<restart_reactor*>(base)->reactor_;
 
-    if (reactor->thread_)
-    {
-      reactor->thread_->join();
-      delete reactor->thread_;
-      reactor->thread_ = 0;
-    }
+    reactor->thread_.join();
 
     asio::detail::mutex::scoped_lock lock(reactor->mutex_);
     reactor->interrupter_.recreate();
@@ -335,8 +333,7 @@ void select_reactor::restart_reactor::do_complete(void* owner, operation* base,
     lock.unlock();
 
     asio::detail::signal_blocker sb;
-    reactor->thread_ =
-      new asio::detail::thread(thread_function(reactor));
+    reactor->thread_ = thread(thread_function(reactor));
   }
 }
 #endif // defined(ASIO_HAS_IOCP)

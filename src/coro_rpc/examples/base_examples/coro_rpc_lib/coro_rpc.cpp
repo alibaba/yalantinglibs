@@ -258,11 +258,10 @@ char *get_first_local_ip() {
   std::string local_ip = "localhost";
   using asio::ip::tcp;
   tcp::resolver resolver(coro_io::get_global_executor()->get_asio_executor());
-  tcp::resolver::query query(asio::ip::host_name(), "");
-  tcp::resolver::iterator iter = resolver.resolve(query);
-  tcp::resolver::iterator end;  // End marker.
-  while (iter != end) {
-    tcp::endpoint ep = *iter++;
+  auto results = resolver.resolve(asio::ip::host_name(), "",
+                                  asio::ip::resolver_base::address_configured);
+  for (const auto &entry : results) {
+    tcp::endpoint ep = entry.endpoint();
     auto addr = ep.address();
     if (addr.is_v4()) {
       local_ip = addr.to_string();

@@ -2,7 +2,7 @@
 // experimental/channel_traits.hpp
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Copyright (c) 2003-2022 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+// Copyright (c) 2003-2025 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -81,6 +81,40 @@ struct channel_traits
   };
 };
 
+template <typename R>
+struct channel_traits<R(asio::error_code)>
+{
+  template <typename... NewSignatures>
+  struct rebind
+  {
+    typedef channel_traits<NewSignatures...> other;
+  };
+
+  template <typename Element>
+  struct container
+  {
+    typedef std::deque<Element> type;
+  };
+
+  typedef R receive_cancelled_signature(asio::error_code);
+
+  template <typename F>
+  static void invoke_receive_cancelled(F f)
+  {
+    const asio::error_code e = error::channel_cancelled;
+    static_cast<F&&>(f)(e);
+  }
+
+  typedef R receive_closed_signature(asio::error_code);
+
+  template <typename F>
+  static void invoke_receive_closed(F f)
+  {
+    const asio::error_code e = error::channel_closed;
+    static_cast<F&&>(f)(e);
+  }
+};
+
 template <typename R, typename... Args, typename... Signatures>
 struct channel_traits<R(asio::error_code, Args...), Signatures...>
 {
@@ -102,7 +136,7 @@ struct channel_traits<R(asio::error_code, Args...), Signatures...>
   static void invoke_receive_cancelled(F f)
   {
     const asio::error_code e = error::channel_cancelled;
-    ASIO_MOVE_OR_LVALUE(F)(f)(e, typename decay<Args>::type()...);
+    static_cast<F&&>(f)(e, decay_t<Args>()...);
   }
 
   typedef R receive_closed_signature(asio::error_code, Args...);
@@ -111,7 +145,43 @@ struct channel_traits<R(asio::error_code, Args...), Signatures...>
   static void invoke_receive_closed(F f)
   {
     const asio::error_code e = error::channel_closed;
-    ASIO_MOVE_OR_LVALUE(F)(f)(e, typename decay<Args>::type()...);
+    static_cast<F&&>(f)(e, decay_t<Args>()...);
+  }
+};
+
+template <typename R>
+struct channel_traits<R(std::exception_ptr)>
+{
+  template <typename... NewSignatures>
+  struct rebind
+  {
+    typedef channel_traits<NewSignatures...> other;
+  };
+
+  template <typename Element>
+  struct container
+  {
+    typedef std::deque<Element> type;
+  };
+
+  typedef R receive_cancelled_signature(std::exception_ptr);
+
+  template <typename F>
+  static void invoke_receive_cancelled(F f)
+  {
+    const asio::error_code e = error::channel_cancelled;
+    static_cast<F&&>(f)(
+        std::make_exception_ptr(asio::system_error(e)));
+  }
+
+  typedef R receive_closed_signature(std::exception_ptr);
+
+  template <typename F>
+  static void invoke_receive_closed(F f)
+  {
+    const asio::error_code e = error::channel_closed;
+    static_cast<F&&>(f)(
+        std::make_exception_ptr(asio::system_error(e)));
   }
 };
 
@@ -136,9 +206,9 @@ struct channel_traits<R(std::exception_ptr, Args...), Signatures...>
   static void invoke_receive_cancelled(F f)
   {
     const asio::error_code e = error::channel_cancelled;
-    ASIO_MOVE_OR_LVALUE(F)(f)(
+    static_cast<F&&>(f)(
         std::make_exception_ptr(asio::system_error(e)),
-        typename decay<Args>::type()...);
+        decay_t<Args>()...);
   }
 
   typedef R receive_closed_signature(std::exception_ptr, Args...);
@@ -147,9 +217,9 @@ struct channel_traits<R(std::exception_ptr, Args...), Signatures...>
   static void invoke_receive_closed(F f)
   {
     const asio::error_code e = error::channel_closed;
-    ASIO_MOVE_OR_LVALUE(F)(f)(
+    static_cast<F&&>(f)(
         std::make_exception_ptr(asio::system_error(e)),
-        typename decay<Args>::type()...);
+        decay_t<Args>()...);
   }
 };
 
@@ -174,7 +244,7 @@ struct channel_traits<R()>
   static void invoke_receive_cancelled(F f)
   {
     const asio::error_code e = error::channel_cancelled;
-    ASIO_MOVE_OR_LVALUE(F)(f)(e);
+    static_cast<F&&>(f)(e);
   }
 
   typedef R receive_closed_signature(asio::error_code);
@@ -183,7 +253,7 @@ struct channel_traits<R()>
   static void invoke_receive_closed(F f)
   {
     const asio::error_code e = error::channel_closed;
-    ASIO_MOVE_OR_LVALUE(F)(f)(e);
+    static_cast<F&&>(f)(e);
   }
 };
 
@@ -208,7 +278,7 @@ struct channel_traits<R(T)>
   static void invoke_receive_cancelled(F f)
   {
     const asio::error_code e = error::channel_cancelled;
-    ASIO_MOVE_OR_LVALUE(F)(f)(e);
+    static_cast<F&&>(f)(e);
   }
 
   typedef R receive_closed_signature(asio::error_code);
@@ -217,7 +287,7 @@ struct channel_traits<R(T)>
   static void invoke_receive_closed(F f)
   {
     const asio::error_code e = error::channel_closed;
-    ASIO_MOVE_OR_LVALUE(F)(f)(e);
+    static_cast<F&&>(f)(e);
   }
 };
 
