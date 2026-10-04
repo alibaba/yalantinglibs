@@ -47,6 +47,7 @@ add_definitions(-DINJECT_FOR_HTTP_CLIENT_TEST)
 add_definitions(-DINJECT_FOR_HTTP_SEVER_TEST)
 
 add_test(NAME coro_http_test COMMAND coro_http_test)
+set_tests_properties(coro_http_test PROPERTIES RESOURCE_LOCK network_ports)
 # target_compile_definitions(easylog_test PRIVATE STRUCT_PACK_ENABLE_UNPORTABLE_TYPE)
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_SYSTEM_NAME MATCHES "Windows") # mingw-w64
