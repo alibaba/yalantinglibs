@@ -121,14 +121,31 @@ jobs:
         with:
           key: llvm-cov-clang17-v1
           max-size: 350MB
+      - name: 'Preserve compiler cache across checkout'
+        run: |
+          if [ -d .ccache ]; then
+            mv .ccache "$RUNNER_TEMP/coverage-ccache"
+          else
+            mkdir -p "$RUNNER_TEMP/coverage-ccache"
+          fi
       - name: 'Coverage test'
         id: cov
         uses: ./.github/actions/coverage
         env:
+          CCACHE_DIR: ${{ runner.temp }}/coverage-ccache
+          CCACHE_MAXSIZE: 350MB
+          CCACHE_COMPRESS: 'true'
           CMAKE_C_COMPILER_LAUNCHER: ccache
           CMAKE_CXX_COMPILER_LAUNCHER: ccache
         with:
           reset-commit-id: ""
+      - name: 'Restore compiler cache for save'
+        if: always()
+        run: |
+          if [ -d "$RUNNER_TEMP/coverage-ccache" ]; then
+            mkdir -p .ccache
+            cp -a "$RUNNER_TEMP/coverage-ccache/." .ccache/
+          fi
 
   compare-cov-data:
     needs:
