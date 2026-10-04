@@ -143,7 +143,12 @@ jobs:
       - name: Build
         run: |
           export LD_LIBRARY_PATH=${TONGSUO_INSTALL_PREFIX}/lib:$LD_LIBRARY_PATH
-          cmake --build ${{github.workspace}}/build --config ${{matrix.mode}}
+          cmake --build ${{github.workspace}}/build --config ${{matrix.mode}} --target \
+            coro_http_test coro_io_test coro_file_error_test coro_rpc_test \
+            easylog_test metric_test reflection_test test_json \
+            struct_pack_test struct_pack_test_with_optimize struct_pb_test \
+            test_xml test_yaml util_meta_string_test util_time_test \
+            ntls_server ntls_client ntls_http_server ntls_http_client
 
       - name: Verify NTLS examples are built
         run: |
