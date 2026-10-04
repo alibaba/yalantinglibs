@@ -33,11 +33,17 @@ jobs:
         chmod +x ./llvm.sh
         sudo ./llvm.sh 17
 
+    - name: Cache Codecov compilation
+      uses: hendrikmuhs/ccache-action@v1.2.23
+      with:
+        key: codecov-clang17-debug-ssl-v1
+        max-size: 350MB
+
     - name: Configure
       run: |
         cmake -B ${{github.workspace}}/build \
               -DCMAKE_BUILD_TYPE=Debug -DBUILD_WITH_LIBCXX=OFF -DYLT_ENABLE_SSL=ON \
-              -DUSE_CCACHE=OFF -DCMAKE_C_COMPILER=clang-17 -DCMAKE_CXX_COMPILER=clang++-17
+              -DUSE_CCACHE=ON -DCMAKE_C_COMPILER=clang-17 -DCMAKE_CXX_COMPILER=clang++-17
 
     - name: Build
       run:  cmake --build ${{github.workspace}}/build --config Debug -- -j$(($(nproc)/2 + 1))
