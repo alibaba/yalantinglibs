@@ -47,10 +47,9 @@ class scoped_invalid_parameter_handler {
   }
 
  private:
-  static void __cdecl ignore_invalid_parameter(const wchar_t*,
-                                                const wchar_t*,
-                                                const wchar_t*, unsigned int,
-                                                uintptr_t) {}
+  static void __cdecl ignore_invalid_parameter(const wchar_t *, const wchar_t *,
+                                               const wchar_t *, unsigned int,
+                                               uintptr_t) {}
 
   _invalid_parameter_handler previous_;
 };

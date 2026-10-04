@@ -538,7 +538,7 @@ class coro_http_connection
         break;
       }
 
-      const char *data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
+      const char *data_ptr = static_cast<const char *>(head_buf_.data().data());
       int head_len = parser_.parse_request(data_ptr, size, 0);
       if (head_len <= 0) {
         CINATRA_LOG_ERROR << "parse http header error";
@@ -592,7 +592,7 @@ class coro_http_connection
         else if (body_len <= head_buf_.size()) {
           if (body_len > 0) {
             detail::resize(body_, body_len);
-            auto data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
+            auto data_ptr = static_cast<const char *>(head_buf_.data().data());
             memcpy(body_.data(), data_ptr, body_len);
             head_buf_.consume(head_buf_.size());
           }
@@ -600,7 +600,7 @@ class coro_http_connection
         else {
           size_t part_size = head_buf_.size();
           size_t size_to_read = body_len - part_size;
-          auto data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
+          auto data_ptr = static_cast<const char *>(head_buf_.data().data());
           detail::resize(body_, body_len);
           memcpy(body_.data(), data_ptr, part_size);
           head_buf_.consume(part_size);
@@ -759,7 +759,7 @@ class coro_http_connection
             while (true) {
               size_t left_size = head_buf_.size();
               auto next_data_ptr =
-                  asio::buffer_cast<const char *>(head_buf_.data());
+                  static_cast<const char *>(head_buf_.data().data());
               std::string_view left_content{next_data_ptr, left_size};
               size_t pos = left_content.find(TWO_CRCF);
               if (pos == std::string_view::npos) {
@@ -974,7 +974,7 @@ class coro_http_connection
 
   async_simple::coro::Lazy<chunked_result> read_chunked() {
     if (head_buf_.size() > 0) {
-      const char *data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
+      const char *data_ptr = static_cast<const char *>(head_buf_.data().data());
       chunked_buf_.sputn(data_ptr, head_buf_.size());
       head_buf_.consume(head_buf_.size());
     }
@@ -992,7 +992,8 @@ class coro_http_connection
 
     size_t buf_size = chunked_buf_.size();
     size_t additional_size = buf_size - size;
-    const char *data_ptr = asio::buffer_cast<const char *>(chunked_buf_.data());
+    const char *data_ptr =
+        static_cast<const char *>(chunked_buf_.data().data());
     std::string_view size_str(data_ptr, size - CRCF.size());
     size_t chunk_size;
     auto [ptr, err] = std::from_chars(
@@ -1023,7 +1024,7 @@ class coro_http_connection
       co_return result;
     }
 
-    data_ptr = asio::buffer_cast<const char *>(chunked_buf_.data());
+    data_ptr = static_cast<const char *>(chunked_buf_.data().data());
     result.data = std::string_view{data_ptr, (size_t)chunk_size};
     chunked_buf_.consume(chunk_size + CRCF.size());
 
@@ -1067,7 +1068,7 @@ class coro_http_connection
     }
 
     while (true) {
-      const char *data_ptr = asio::buffer_cast<const char *>(head_buf_.data());
+      const char *data_ptr = static_cast<const char *>(head_buf_.data().data());
       auto status = ws_.parse_header(data_ptr, ws_.len_bytes());
       if (status == ws_header_status::complete) {
         ws_.reset_len_bytes();
@@ -1381,7 +1382,8 @@ class coro_http_connection
     }
     try {
       address = pt.address().to_string();
-    } catch (...) {
+    } catch (const asio::system_error &) {
+      address.clear();
       return;
     }
     address.append(":").append(std::to_string(pt.port()));

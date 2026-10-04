@@ -4,7 +4,6 @@
 #include <string_view>
 #include <unordered_map>
 
-#include "asio_compat.hpp"
 namespace fs = std::filesystem;
 using namespace std::string_view_literals;
 

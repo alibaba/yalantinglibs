@@ -100,7 +100,9 @@ inline std::optional<asio::ip::tcp::endpoint> resolve_listen_endpoint(
 
   ec.clear();
   tcp::resolver resolver(executor);
-  auto results = resolver.resolve(address, std::to_string(port), ec);
+  auto results =
+      resolver.resolve(address, std::to_string(port),
+                       asio::ip::resolver_base::address_configured, ec);
   if (ec || results.empty()) {
     return std::nullopt;
   }
