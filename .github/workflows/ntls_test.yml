@@ -90,7 +90,7 @@ jobs:
           sudo ldconfig
           
           # Verify Tongsuo installation (ensure it links against newly installed libssl)
-          export LD_LIBRARY_PATH=${TONGSUO_INSTALL_PREFIX}/lib:$LD_LIBRARY_PATH
+          export LD_LIBRARY_PATH=${TONGSUO_INSTALL_PREFIX}/lib64:${TONGSUO_INSTALL_PREFIX}/lib:$LD_LIBRARY_PATH
           ${TONGSUO_INSTALL_PREFIX}/bin/tongsuo version || \
           ${TONGSUO_INSTALL_PREFIX}/bin/openssl version
 
@@ -98,7 +98,7 @@ jobs:
         if: steps.tongsuo-cache.outputs.cache-hit == 'true'
         run: |
           sudo ldconfig
-          export LD_LIBRARY_PATH=${TONGSUO_INSTALL_PREFIX}/lib:$LD_LIBRARY_PATH
+          export LD_LIBRARY_PATH=${TONGSUO_INSTALL_PREFIX}/lib64:${TONGSUO_INSTALL_PREFIX}/lib:$LD_LIBRARY_PATH
           test -d "${TONGSUO_INSTALL_PREFIX}/ssl/certs/sm2"
           ${TONGSUO_INSTALL_PREFIX}/bin/tongsuo version || \
           ${TONGSUO_INSTALL_PREFIX}/bin/openssl version
@@ -106,8 +106,8 @@ jobs:
       - name: Setup environment for Tongsuo
         run: |
           echo "${TONGSUO_INSTALL_PREFIX}/bin" >> $GITHUB_PATH
-          echo "LD_LIBRARY_PATH=${TONGSUO_INSTALL_PREFIX}/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
-          echo "PKG_CONFIG_PATH=${TONGSUO_INSTALL_PREFIX}/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=${TONGSUO_INSTALL_PREFIX}/lib64:${TONGSUO_INSTALL_PREFIX}/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=${TONGSUO_INSTALL_PREFIX}/lib64/pkgconfig:${TONGSUO_INSTALL_PREFIX}/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
           
           # Create symlinks for cmake to find Tongsuo as OpenSSL
           sudo mkdir -p /usr/local/lib/pkgconfig
