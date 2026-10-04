@@ -27,7 +27,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  TONGSUO_VERSION: "8.4.2"
+  TONGSUO_VERSION: "8.5.0"
   TONGSUO_INSTALL_PREFIX: /usr/local/tongsuo
 
 jobs:
@@ -53,12 +53,24 @@ jobs:
             zlib1g-dev \
             libbz2-dev
 
+      - name: Prepare Tongsuo cache directory
+        run: |
+          sudo mkdir -p "${TONGSUO_INSTALL_PREFIX}"
+          sudo chown "$USER" "${TONGSUO_INSTALL_PREFIX}"
+
+      - name: Cache Tongsuo installation
+        id: tongsuo-cache
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/tongsuo
+          key: tongsuo-ubuntu22.04-${{ runner.arch }}-${{ env.TONGSUO_VERSION }}-ntls-v1
+
       - name: Build and install Tongsuo
+        if: steps.tongsuo-cache.outputs.cache-hit != 'true'
         run: |
           set -e
           cd /tmp
-          git clone --depth 1 --branch ${TONGSUO_VERSION} https://github.com/Tongsuo-Project/Tongsuo.git tongsuo-src || \
-          git clone --depth 1 https://github.com/Tongsuo-Project/Tongsuo.git tongsuo-src
+          git clone --depth 1 --branch "${TONGSUO_VERSION}" https://github.com/Tongsuo-Project/Tongsuo.git tongsuo-src
           cd tongsuo-src
           
           # Configure and build Tongsuo
@@ -79,6 +91,15 @@ jobs:
           
           # Verify Tongsuo installation (ensure it links against newly installed libssl)
           export LD_LIBRARY_PATH=${TONGSUO_INSTALL_PREFIX}/lib:$LD_LIBRARY_PATH
+          ${TONGSUO_INSTALL_PREFIX}/bin/tongsuo version || \
+          ${TONGSUO_INSTALL_PREFIX}/bin/openssl version
+
+      - name: Verify restored Tongsuo
+        if: steps.tongsuo-cache.outputs.cache-hit == 'true'
+        run: |
+          sudo ldconfig
+          export LD_LIBRARY_PATH=${TONGSUO_INSTALL_PREFIX}/lib:$LD_LIBRARY_PATH
+          test -d "${TONGSUO_INSTALL_PREFIX}/ssl/certs/sm2"
           ${TONGSUO_INSTALL_PREFIX}/bin/tongsuo version || \
           ${TONGSUO_INSTALL_PREFIX}/bin/openssl version
 
