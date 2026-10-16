@@ -1243,6 +1243,14 @@ class coro_rpc_client {
                 << " failed:" << ec.message();
       co_return errc::not_connected;
     }
+    std::visit(
+        [this](const auto &socket_config) {
+          if constexpr (requires { socket_config.enable_tcp_no_delay; }) {
+            control_->socket_wrapper_.set_tcp_no_delay(
+                socket_config.enable_tcp_no_delay);
+          }
+        },
+        config_.socket_config);
     ELOG_INFO << "connect successful, remote addr: "
               << control_->socket_wrapper_.remote_endpoint()
               << ", local addr: " << control_->socket_wrapper_.local_endpoint()

@@ -24,6 +24,14 @@
 #include <memory>
 #include <thread>
 #include <variant>
+#ifdef __linux__
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <sys/socket.h>
+
+#include <filesystem>
+#endif
 #include <ylt/coro_io/coro_io.hpp>
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
 #include <ylt/coro_rpc/coro_rpc_server.hpp>
@@ -788,6 +796,45 @@ TEST_CASE("testing client reconnect") {
     CHECK_MESSAGE(result2.value() == "hi", result2.value());
   }
 }
+#ifdef __linux__
+// Returns TCP_NODELAY of this process's socket connected to 127.0.0.1:port.
+static int peer_tcp_nodelay(unsigned short port) {
+  int found = -1;
+  for (auto& entry : std::filesystem::directory_iterator("/proc/self/fd")) {
+    int fd = std::stoi(entry.path().filename().string());
+    sockaddr_in peer{};
+    socklen_t len = sizeof(peer);
+    if (getpeername(fd, reinterpret_cast<sockaddr*>(&peer), &len) != 0 ||
+        peer.sin_family != AF_INET || ntohs(peer.sin_port) != port) {
+      continue;
+    }
+    int nodelay = -1;
+    len = sizeof(nodelay);
+    REQUIRE(getsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, &len) == 0);
+    REQUIRE_MESSAGE(found == -1, "more than one socket connected to port");
+    found = nodelay != 0;
+  }
+  return found;
+}
+
+TEST_CASE("testing client tcp_no_delay survives connect") {
+  coro_rpc_server server(1, 0);
+  server.register_handler<echo>();
+  REQUIRE(!server.async_start().hasResult());
+  const auto port = std::to_string(server.port());
+  coro_rpc_client cli;
+  auto ec = syncAwait(cli.connect("127.0.0.1", port));
+  REQUIRE_MESSAGE(!ec, ec.message());
+  REQUIRE(syncAwait(cli.call<echo>("hi")).has_value());
+  CHECK(peer_tcp_nodelay(server.port()) == 1);
+
+  cli.close();
+  ec = syncAwait(cli.connect("127.0.0.1", port));
+  REQUIRE_MESSAGE(!ec, ec.message());
+  REQUIRE(syncAwait(cli.call<echo>("hi")).has_value());
+  CHECK(peer_tcp_nodelay(server.port()) == 1);
+}
+#endif
 std::errc init_acceptor(auto& acceptor_, auto port_) {
   using asio::ip::tcp;
   auto endpoint = tcp::endpoint(tcp::v4(), port_);

@@ -205,6 +205,23 @@ struct socket_wrapper_t {
 
   void set_local_ip(const std::string &local_ip) { local_ip_ = local_ip; }
 
+  // asio's endpoint-range async_connect closes and reopens the socket for each
+  // endpoint, dropping options set by init_client, so re-apply after connect.
+  void set_tcp_no_delay(bool enable_tcp_no_delay) noexcept {
+#ifdef YLT_ENABLE_IBV
+    if (ib_socket_) {
+      return;
+    }
+#endif
+    if (socket_ && socket_->is_open()) {
+      std::error_code ec;
+      socket_->set_option(asio::ip::tcp::no_delay(enable_tcp_no_delay), ec);
+      if (ec) {
+        ELOG_WARN << "set tcp no_delay failed:" << ec.message();
+      }
+    }
+  }
+
  private:
 #ifdef YLT_ENABLE_ND
   static bool init_nd_context(coro_io::ExecutorWrapper<> *executor,
