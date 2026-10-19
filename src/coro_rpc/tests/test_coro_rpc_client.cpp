@@ -62,6 +62,62 @@ Lazy<std::shared_ptr<coro_rpc_client>> create_client(
 
 void show(auto& s) { return; }
 
+TEST_CASE("RPC client reapplies configured TCP_NODELAY after connecting") {
+  g_action = {};
+  for (bool enabled : {false, true}) {
+    for (bool bound : {false, true}) {
+      CAPTURE(enabled);
+      CAPTURE(bound);
+      coro_rpc_server server(1, 0, "127.0.0.1");
+      REQUIRE_FALSE(server.async_start().hasResult());
+      coro_rpc_client client;
+      coro_rpc_client::config config;
+      config.socket_config =
+          coro_rpc_client::tcp_config{.enable_tcp_no_delay = enabled};
+      if (bound) {
+        config.local_ip = "127.0.0.1";
+      }
+      REQUIRE(client.init_config(config));
+      for (int attempt = 0; attempt < 2; ++attempt) {
+        CAPTURE(attempt);
+        REQUIRE_FALSE(
+            syncAwait(client.connect(attempt == 0 ? "127.0.0.1" : "localhost",
+                                     std::to_string(server.port()))));
+        CHECK(client.tcp_no_delay() == enabled);
+      }
+    }
+  }
+}
+
+#ifdef YLT_ENABLE_SSL
+TEST_CASE(
+    "SSL RPC client reapplies configured TCP_NODELAY after reconnecting") {
+  g_action = {};
+  for (bool enabled : {false, true}) {
+    CAPTURE(enabled);
+    coro_rpc_server server(1, 0, "127.0.0.1");
+    server.init_ssl(
+        ssl_configure{"../openssl_files", "server.crt", "server.key"});
+    REQUIRE_FALSE(server.async_start().hasResult());
+    coro_rpc_client client;
+    coro_rpc_client::config config;
+    coro_rpc_client::tcp_with_ssl_config ssl;
+    ssl.ssl_cert_path =
+        std::filesystem::path("../openssl_files") / "server.crt";
+    ssl.ssl_domain = "localhost";
+    ssl.enable_tcp_no_delay = enabled;
+    config.socket_config = ssl;
+    REQUIRE(client.init_config(config));
+    for (int attempt = 0; attempt < 2; ++attempt) {
+      CAPTURE(attempt);
+      REQUIRE_FALSE(syncAwait(
+          client.connect("127.0.0.1", std::to_string(server.port()))));
+      CHECK(client.tcp_no_delay() == enabled);
+    }
+  }
+}
+#endif
+
 TEST_CASE("testing client") {
   {
     coro_rpc::coro_rpc_client client;

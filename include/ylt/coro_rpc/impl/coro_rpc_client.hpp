@@ -1243,6 +1243,22 @@ class coro_rpc_client {
                 << " failed:" << ec.message();
       co_return errc::not_connected;
     }
+    // Endpoint-list connect may reopen the socket, losing pre-connect options.
+    // Reapply the RPC client's TCP policy to the actual connected socket.
+    std::visit(
+        [&](const auto &socket_config) {
+          if constexpr (requires { socket_config.enable_tcp_no_delay; }) {
+            control_->socket_wrapper_.socket()->set_option(
+                asio::ip::tcp::no_delay(socket_config.enable_tcp_no_delay), ec);
+          }
+        },
+        config_.socket_config);
+    if (ec) {
+      ELOG_WARN << "client_id " << config_.client_id
+                << " failed to configure TCP_NODELAY: " << ec.message();
+      close_socket_async(control_);
+      co_return errc::not_connected;
+    }
     ELOG_INFO << "connect successful, remote addr: "
               << control_->socket_wrapper_.remote_endpoint()
               << ", local addr: " << control_->socket_wrapper_.local_endpoint()
@@ -1561,6 +1577,12 @@ class coro_rpc_client {
 
 #ifdef UNIT_TEST_INJECT
  public:
+  bool tcp_no_delay() {
+    asio::ip::tcp::no_delay option;
+    control_->socket_wrapper_.socket()->get_option(option);
+    return option.value();
+  }
+
   coro_rpc::err_code sync_connect(const std::string &host,
                                   const std::string &port) {
     return async_simple::coro::syncAwait(connect(host, port));
