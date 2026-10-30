@@ -863,6 +863,74 @@ std::errc init_acceptor(auto& acceptor_, auto port_) {
   ELOGV(INFO, "listen port %d successfully", port_);
   return std::errc{};
 }
+
+TEST_CASE("RPC client rejects an oversized response before allocating") {
+  g_action = {};
+  coro_rpc_server server(1, 0, "127.0.0.1");
+  server.register_handler<large_arg_fun>();
+  server.register_handler<echo_with_attachment>();
+  REQUIRE_FALSE(server.async_start().hasResult());
+
+  const std::string payload(4096, 'x');
+  const std::string port = std::to_string(server.port());
+
+  SUBCASE("a body over the limit fails the call and drops the connection") {
+    coro_rpc_client client;
+    coro_rpc_client::config config;
+    config.max_response_body_bytes = 16;
+    REQUIRE(client.init_config(config));
+    REQUIRE_FALSE(syncAwait(client.connect("127.0.0.1", port)));
+
+    auto ret = syncAwait(client.call<large_arg_fun>(payload));
+    REQUIRE_FALSE(ret.has_value());
+    CHECK(ret.error().code.ec == errc::message_too_large);
+    // The body was never read, so the frame is unusable and the connection
+    // is gone.
+    CHECK(client.has_closed());
+  }
+
+  SUBCASE("an attachment over the limit fails the call") {
+    coro_rpc_client client;
+    coro_rpc_client::config config;
+    config.max_response_attachment_bytes = payload.size() - 1;
+    REQUIRE(client.init_config(config));
+    REQUIRE_FALSE(syncAwait(client.connect("127.0.0.1", port)));
+
+    client.set_req_attachment(payload);
+    auto ret = syncAwait(client.call<echo_with_attachment>());
+    REQUIRE_FALSE(ret.has_value());
+    CHECK(ret.error().code.ec == errc::message_too_large);
+    CHECK(client.has_closed());
+  }
+
+  SUBCASE("an attachment at the limit is accepted") {
+    coro_rpc_client client;
+    coro_rpc_client::config config;
+    config.max_response_attachment_bytes = payload.size();
+    REQUIRE(client.init_config(config));
+    REQUIRE_FALSE(syncAwait(client.connect("127.0.0.1", port)));
+
+    client.set_req_attachment(payload);
+    auto ret = syncAwait(client.call<echo_with_attachment>());
+    REQUIRE(ret.has_value());
+    CHECK(client.get_resp_attachment() == payload);
+  }
+
+  SUBCASE("no limit keeps the historical behavior") {
+    coro_rpc_client client;
+    REQUIRE_FALSE(syncAwait(client.connect("127.0.0.1", port)));
+
+    auto ret = syncAwait(client.call<large_arg_fun>(payload));
+    REQUIRE(ret.has_value());
+    CHECK(ret.value() == payload);
+
+    client.set_req_attachment(payload);
+    auto ret2 = syncAwait(client.call<echo_with_attachment>());
+    REQUIRE(ret2.has_value());
+    CHECK(client.get_resp_attachment() == payload);
+  }
+}
+
 // TODO: will open after code refactor.
 //  TEST_CASE("testing read body timeout") {
 //    register_handler<hello>();

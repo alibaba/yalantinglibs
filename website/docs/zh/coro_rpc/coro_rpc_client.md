@@ -156,12 +156,18 @@ void set_config(coro_rpc_client& client) {
   std::string host;
   std::string port;
   std::string local_ip;
+  uint64_t max_response_body_bytes;
+  uint64_t max_response_attachment_bytes;
   client.init_config(config{
     .connect_timeout_duration = 5s, // 连接的超时时间
     .request_timeout_duration = 5s, // 请求超时时间
     .host = "localhost", // 服务器域名
     .port = "9001", // 服务器端口
     .local_ip = "", // 本地ip，用于指定本地通信的ip地址。
+    // 单次响应体/附件的长度上限。超过上限的响应不会读取，直接以
+    // errc::message_too_large 失败。默认0表示不限制，保持原有行为。
+    .max_response_body_bytes = 0,
+    .max_response_attachment_bytes = 0,
     .socket_config=std::variant<tcp_config,
                  tcp_with_ssl_config,
                  coro_io::ib_socket_t::config_t>{tcp_config{}}; // 指定底层的协议及其底层配置，目前支持tcp, ssl over tcp, rdma三种协议。

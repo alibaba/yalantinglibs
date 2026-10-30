@@ -17,6 +17,9 @@
 #include <async_simple/coro/SyncAwait.h>
 
 #include <asio/executor_work_guard.hpp>
+#include <atomic>
+#include <chrono>
+#include <memory>
 #include <thread>
 #include <variant>
 #include <ylt/coro_rpc/coro_rpc_client.hpp>
@@ -778,3 +781,55 @@ TEST_CASE("testing coro rpc subserver with rdma") {
 #endif
 #endif
 #endif
+
+TEST_CASE("testing coro rpc connection admission") {
+  g_action = {};
+  std::atomic<int> live{0};
+  std::atomic<int> rejected{0};
+  coro_rpc_server server(1, 0, "127.0.0.1");
+  server.register_handler<hi>();
+  server.connection_admission(
+      [&live, &rejected] {
+        if (live.fetch_add(1) >= 1) {
+          live.fetch_sub(1);
+          ++rejected;
+          return false;
+        }
+        return true;
+      },
+      [&live] {
+        live.fetch_sub(1);
+      });
+  REQUIRE_FALSE(server.async_start().hasResult());
+
+  const std::string port = std::to_string(server.port());
+
+  auto first = std::make_unique<coro_rpc_client>();
+  REQUIRE_FALSE(syncAwait(first->connect("127.0.0.1", port)));
+  REQUIRE(syncAwait(first->call<hi>()).has_value());
+  CHECK(live.load() == 1);
+
+  // The second socket is accepted and closed before a connection exists.
+  coro_rpc_client second;
+  auto ec = syncAwait(second.connect("127.0.0.1", port));
+  if (!ec) {
+    CHECK_FALSE(syncAwait(second.call<hi>()).has_value());
+  }
+  CHECK(rejected.load() == 1);
+  CHECK(live.load() == 1);
+
+  // Dropping the first client releases its slot.
+  first.reset();
+  auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+  while (live.load() != 0 && std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
+  CHECK(live.load() == 0);
+
+  coro_rpc_client third;
+  REQUIRE_FALSE(syncAwait(third.connect("127.0.0.1", port)));
+  CHECK(syncAwait(third.call<hi>()).has_value());
+  CHECK(live.load() == 1);
+
+  server.stop();
+}
