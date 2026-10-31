@@ -500,7 +500,7 @@ async_io_split(coro_io::ib_socket_t& ib_socket, Buffer&& raw_buffer,
                bool read_some = false) {
   if (!ib_socket.get_executor().running_in_this_thread()) {
     // switch to io_thread
-    co_await dispatch(ib_socket.get_executor());
+    co_await coro_io::dispatch(ib_socket.get_executor());
   }
   auto ret = co_await async_io_split_impl<io>(
       ib_socket, std::forward<Buffer>(raw_buffer), read_some);
