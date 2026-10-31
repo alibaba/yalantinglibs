@@ -1,3 +1,4 @@
+#include <array>
 #include <chrono>
 #include <cstdio>
 #include <fstream>
@@ -585,6 +586,121 @@ TEST_CASE("test server sync_start and stop") {
   thd.join();
   CHECK(server.port() > 0);
   CHECK(ec == asio::error::operation_aborted);
+}
+
+TEST_CASE("http stop waits for pending file reads") {
+  enum class connection_mode {
+    owned,
+    external,
+    transferred,
+    parent_stops_first
+  };
+  auto mode = connection_mode::owned;
+  SUBCASE("server-owned io_context") { mode = connection_mode::owned; }
+  SUBCASE("external io_context") { mode = connection_mode::external; }
+  SUBCASE("transferred connection") { mode = connection_mode::transferred; }
+  SUBCASE("shared io_context stops before the subserver") {
+    mode = connection_mode::parent_stops_first;
+  }
+  bool transferred = mode == connection_mode::transferred ||
+                     mode == connection_mode::parent_stops_first;
+
+  auto file_pool = coro_io::create_io_context_pool(1);
+  auto external_pool = coro_io::create_io_context_pool(1);
+  auto external_executor = external_pool->get_executor();
+  auto server =
+      mode == connection_mode::external
+          ? std::make_unique<coro_http_server>(external_executor->context(), 0)
+          : std::make_unique<coro_http_server>(1, 0);
+
+  std::promise<void> read_pending;
+  auto pending = read_pending.get_future();
+  std::promise<void> release_read;
+  auto released = release_read.get_future().share();
+  std::promise<bool> handler_finished;
+  auto finished = handler_finished.get_future();
+  server->set_http_handler<GET>(
+      "/file",
+      [&](coro_http_request& req,
+          coro_http_response& resp) -> async_simple::coro::Lazy<void> {
+        coro_io::basic_seq_coro_file<coro_io::execution_type::thread_pool> file(
+            file_pool->get_executor());
+        if (!file.open(__FILE__, std::ios::in)) {
+          handler_finished.set_value(false);
+          co_return;
+        }
+        resp.set_delay(true);
+        // Hold the file worker before async_read resumes the request handler.
+        // A timeout also lets the test clean up if an earlier check fails.
+        asio::post(file_pool->get_executor()->get_asio_executor(), [&] {
+          read_pending.set_value();
+          released.wait_for(10s);
+        });
+        std::array<char, 64> content;
+        auto [ec, size] =
+            co_await file.async_read(content.data(), content.size());
+        co_await req.get_conn()->write_data(
+            "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
+        handler_finished.set_value(!ec && size != 0);
+      });
+  // An HTTP subserver only receives transferred sockets; it never starts its
+  // own accept loop or IO threads.
+  if (!transferred) {
+    server->async_start();
+  }
+
+  asio::io_context client_context;
+  asio::ip::tcp::socket client(client_context);
+  if (transferred) {
+    asio::ip::tcp::acceptor acceptor(external_executor->context(),
+                                     {asio::ip::tcp::v4(), 0});
+    client.connect(
+        {asio::ip::address_v4::loopback(), acceptor.local_endpoint().port()});
+    asio::ip::tcp::socket accepted(external_executor->get_asio_executor());
+    acceptor.accept(accepted);
+    server->transfer_connection(
+        coro_io::socket_wrapper_t{std::move(accepted), external_executor}, "");
+  }
+  else {
+    client.connect({asio::ip::address_v4::loopback(), server->port()});
+  }
+  const std::string request = "GET /file HTTP/1.1\r\nHost: localhost\r\n\r\n";
+  asio::write(client, asio::buffer(request));
+  CHECK(pending.wait_for(5s) == std::future_status::ready);
+
+  if (mode == connection_mode::parent_stops_first) {
+    // The RPC server drains its IO pool before destroying its HTTP subserver.
+    client.close();
+  }
+  auto stopped = std::async(std::launch::async, [&] {
+    if (mode == connection_mode::parent_stops_first) {
+      external_pool->stop();
+    }
+    else {
+      server->stop();
+    }
+  });
+  if (mode != connection_mode::parent_stops_first) {
+    auto deadline = std::chrono::steady_clock::now() + 5s;
+    while (server->connection_count() != 0 &&
+           std::chrono::steady_clock::now() < deadline) {
+      std::this_thread::yield();
+    }
+    CHECK(server->connection_count() == 0);
+  }
+  CHECK(stopped.wait_for(100ms) == std::future_status::timeout);
+
+  release_read.set_value();
+  CHECK(stopped.wait_for(5s) == std::future_status::ready);
+  stopped.get();
+  CHECK(finished.wait_for(5s) == std::future_status::ready);
+  if (finished.wait_for(0s) == std::future_status::ready) {
+    CHECK(finished.get());
+  }
+  server->stop();
+  server.reset();
+  file_pool->stop();
+  external_pool->stop();
 }
 
 TEST_CASE("get post") {

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <asio/executor_work_guard.hpp>
+#include <condition_variable>
 #include <memory>
 #include <optional>
 
@@ -244,16 +246,17 @@ class coro_http_server {
 
   // only call once, not thread safe.
   void stop() {
+    bool has_io_thread;
     {
       std::lock_guard lock(thd_mtx_);
-      if (out_ctx_ == nullptr && !thd_.joinable()) {
-        return;
-      }
+      has_io_thread = thd_.joinable();
     }
 
     stop_timer_ = true;
 
-    close_acceptor();
+    if (acceptor_.is_open()) {
+      close_acceptor();
+    }
 
     // close current connections.
     {
@@ -264,7 +267,16 @@ class coro_http_server {
       connections_.clear();
     }
 
-    if (out_ctx_ == nullptr) {
+    // File I/O can still be running outside the socket's io_context.
+    // Keep the server and its context alive until those handlers return.
+    {
+      std::unique_lock lock(*conn_mtx_);
+      connection_tasks_done_.wait(lock, [this] {
+        return pending_connection_tasks_ == 0;
+      });
+    }
+
+    if (out_ctx_ == nullptr && has_io_thread) {
       CINATRA_LOG_INFO << "wait for server's thread-pool finish all work.";
       pool_->stop();
 
@@ -806,7 +818,7 @@ class coro_http_server {
                            std::string_view head_msg) {
     auto conn = accept_impl(std::move(soc), true);
     conn->add_head(head_msg);
-    start_one(conn, true).via(conn->get_executor()).detach();
+    start_connection(std::move(conn), true);
   }
 
  private:
@@ -919,12 +931,29 @@ class coro_http_server {
 
       auto conn =
           accept_impl(coro_io::socket_wrapper_t{std::move(socket), executor});
-      start_one(conn).via(conn->get_executor()).detach();
+      start_connection(std::move(conn));
     }
   }
-  async_simple::coro::Lazy<void> start_one(
-      std::shared_ptr<coro_http_connection> conn) noexcept {
-    co_await conn->start();
+  void start_connection(std::shared_ptr<coro_http_connection> conn,
+                        bool has_shake = false) {
+    {
+      std::scoped_lock lock(*conn_mtx_);
+      ++pending_connection_tasks_;
+    }
+    auto executor = conn->get_executor();
+    // A transferred socket may use its parent's pool. Keep that pool running
+    // while the connection handler awaits work on another executor.
+    auto work = asio::make_work_guard(executor->get_asio_executor());
+    start_one(std::move(conn), has_shake)
+        .via(executor)
+        .start([this, work = std::move(work)](auto&& result) {
+          std::scoped_lock lock(*conn_mtx_);
+          --pending_connection_tasks_;
+          connection_tasks_done_.notify_all();
+          if (result.hasError()) {
+            std::rethrow_exception(result.getException());
+          }
+        });
   }
 
   async_simple::coro::Lazy<void> start_one(
@@ -1193,6 +1222,8 @@ class coro_http_server {
   std::unordered_map<uint64_t, std::shared_ptr<coro_http_connection>>
       connections_;
   std::shared_ptr<std::mutex> conn_mtx_ = std::make_shared<std::mutex>();
+  std::condition_variable connection_tasks_done_;
+  size_t pending_connection_tasks_ = 0;
   std::chrono::steady_clock::duration check_duration_ =
       std::chrono::seconds(15);
   std::chrono::steady_clock::duration timeout_duration_{};
