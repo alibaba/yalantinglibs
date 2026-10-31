@@ -838,7 +838,7 @@ class urma_socket_t {
       co_return std::make_error_code(std::errc::protocol_error);
     std::array<char, size.size()> bytes{};
     std::memcpy(bytes.data(), magic.data(), magic.size());
-    auto [ec, ignored] = co_await async_read(
+    auto [ec, ignored] = co_await coro_io::async_read(
         state_->socket_,
         asio::buffer(bytes.data() + magic.size(), bytes.size() - magic.size()));
     if (ec)
@@ -856,7 +856,7 @@ class urma_socket_t {
     auto local_info = make_local_info();
     struct_pack::serialize_to(bytes.data(), size, local_info);
     auto [write_ec, ignored_write] =
-        co_await async_write(state_->socket_, asio::buffer(bytes));
+        co_await coro_io::async_write(state_->socket_, asio::buffer(bytes));
     if (write_ec)
       co_return write_ec;
     record_handshake_endpoints();
@@ -1169,11 +1169,11 @@ class urma_socket_t {
     std::array<char, size.size()> bytes{};
     struct_pack::serialize_to(bytes.data(), size, local_info);
     auto [write_ec, ignored_write] =
-        co_await async_write(state_->socket_, asio::buffer(bytes));
+        co_await coro_io::async_write(state_->socket_, asio::buffer(bytes));
     if (write_ec)
       co_return write_ec;
     auto [read_ec, ignored_read] =
-        co_await async_read(state_->socket_, asio::buffer(bytes));
+        co_await coro_io::async_read(state_->socket_, asio::buffer(bytes));
     if (read_ec)
       co_return read_ec;
     urma_socket_info peer{};
