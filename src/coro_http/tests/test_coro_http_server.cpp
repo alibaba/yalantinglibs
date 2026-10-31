@@ -641,7 +641,9 @@ TEST_CASE("http stop waits for pending file reads") {
             co_await file.async_read(content.data(), content.size());
         co_await req.get_conn()->write_data(
             "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
-        handler_finished.set_value(!ec && size != 0);
+        handler_finished.set_value(
+            !ec && size != 0 &&
+            req.get_conn()->get_executor()->currentThreadInExecutor());
       });
   // An HTTP subserver only receives transferred sockets; it never starts its
   // own accept loop or IO threads.

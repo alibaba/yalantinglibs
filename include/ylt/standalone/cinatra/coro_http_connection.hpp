@@ -1227,21 +1227,22 @@ class coro_http_connection
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read(
       AsioBuffer &&buffer, size_t size_to_read) noexcept {
+    co_await coro_io::dispatch(executor_->get_asio_executor());
 #ifdef INJECT_FOR_HTTP_SEVER_TEST
     if (read_failed_forever_) {
-      return async_read_failed();
+      co_return co_await async_read_failed();
     }
 #endif
     set_last_time();
 #ifdef CINATRA_ENABLE_SSL
     if (socket_wrapper_.use_ssl()) {
-      return coro_io::async_read(*socket_wrapper_.ssl_stream(), buffer,
-                                 size_to_read);
+      co_return co_await coro_io::async_read(*socket_wrapper_.ssl_stream(),
+                                             buffer, size_to_read);
     }
     else {
 #endif
-      return coro_io::async_read(*socket_wrapper_.socket(), buffer,
-                                 size_to_read);
+      co_return co_await coro_io::async_read(*socket_wrapper_.socket(), buffer,
+                                             size_to_read);
 #ifdef CINATRA_ENABLE_SSL
     }
 #endif
@@ -1249,20 +1250,25 @@ class coro_http_connection
 
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_write(
-      AsioBuffer &&buffer) {
+      AsioBuffer buffer) {
+    // File I/O can resume a handler on a worker thread. Socket operations must
+    // run on the connection's executor, where close() is dispatched as well.
+    co_await coro_io::dispatch(executor_->get_asio_executor());
 #ifdef INJECT_FOR_HTTP_SEVER_TEST
     if (write_failed_forever_) {
-      return async_write_failed();
+      co_return co_await async_write_failed();
     }
 #endif
     set_last_time();
 #ifdef CINATRA_ENABLE_SSL
     if (socket_wrapper_.use_ssl()) {
-      return coro_io::async_write(*socket_wrapper_.ssl_stream(), buffer);
+      co_return co_await coro_io::async_write(*socket_wrapper_.ssl_stream(),
+                                              std::move(buffer));
     }
     else {
 #endif
-      return coro_io::async_write(*socket_wrapper_.socket(), buffer);
+      co_return co_await coro_io::async_write(*socket_wrapper_.socket(),
+                                              std::move(buffer));
 #ifdef CINATRA_ENABLE_SSL
     }
 #endif
@@ -1271,16 +1277,17 @@ class coro_http_connection
   template <typename AsioBuffer>
   async_simple::coro::Lazy<std::pair<std::error_code, size_t>> async_read_until(
       AsioBuffer &buffer, asio::string_view delim) noexcept {
+    co_await coro_io::dispatch(executor_->get_asio_executor());
     set_last_time();
 #ifdef CINATRA_ENABLE_SSL
     if (socket_wrapper_.use_ssl()) {
-      return coro_io::async_read_until(*socket_wrapper_.ssl_stream(), buffer,
-                                       delim);
+      co_return co_await coro_io::async_read_until(
+          *socket_wrapper_.ssl_stream(), buffer, delim);
     }
     else {
 #endif
-      return coro_io::async_read_until(*socket_wrapper_.socket(), buffer,
-                                       delim);
+      co_return co_await coro_io::async_read_until(*socket_wrapper_.socket(),
+                                                   buffer, delim);
 #ifdef CINATRA_ENABLE_SSL
     }
 #endif
