@@ -657,16 +657,15 @@ class coro_rpc_server_base {
                                                     conn_timeout_duration_);
       conn->set_quit_callback(
           [this](const uint64_t& id) {
-            std::function<void()> closed;
             {
               std::unique_lock lock(conns_mtx_);
               conns_.erase(id);
-              closed = connection_closed_;
             }
             // Outside the lock: the callback is user code and may touch
-            // state that locks conns_mtx_ again.
-            if (closed) {
-              closed();
+            // state that locks conns_mtx_ again. Call the registered object
+            // itself, not a copy, so state kept inside it accumulates.
+            if (connection_closed_) {
+              connection_closed_();
             }
           },
           conn_id);

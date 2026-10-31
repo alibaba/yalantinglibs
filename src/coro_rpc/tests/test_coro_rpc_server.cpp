@@ -833,3 +833,37 @@ TEST_CASE("testing coro rpc connection admission") {
 
   server.stop();
 }
+
+TEST_CASE("testing coro rpc connection closed callback keeps its state") {
+  g_action = {};
+  std::atomic<int> last_seen{0};
+  coro_rpc_server server(1, 0, "127.0.0.1");
+  server.register_handler<hi>();
+  // The counter lives inside the callback. If the server invoked a copy of
+  // the callback, every close would report 1.
+  server.connection_admission(
+      [] {
+        return true;
+      },
+      [&last_seen, count = 0]() mutable {
+        last_seen.store(++count);
+      });
+  REQUIRE_FALSE(server.async_start().hasResult());
+
+  const std::string port = std::to_string(server.port());
+  for (int expected = 1; expected <= 3; ++expected) {
+    {
+      coro_rpc_client client;
+      REQUIRE_FALSE(syncAwait(client.connect("127.0.0.1", port)));
+      REQUIRE(syncAwait(client.call<hi>()).has_value());
+    }
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (last_seen.load() < expected &&
+           std::chrono::steady_clock::now() < deadline) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    CHECK(last_seen.load() == expected);
+  }
+
+  server.stop();
+}
