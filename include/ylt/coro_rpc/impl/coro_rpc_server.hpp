@@ -539,6 +539,25 @@ class coro_rpc_server_base {
     client_filter_ = std::move(filter);
   }
 
+  /*!
+   * Set connection admission callbacks, so a server can bound the number of
+   * connections it holds. Both run on the server's IO threads and must be
+   * thread-safe; set them before starting the server.
+   *
+   * @param admit called for every accepted socket, before the connection
+   *              object is created. Return false to close the socket right
+   *              away. Runs on the acceptor's IO thread.
+   * @param closed called exactly once for every socket that `admit` let
+   *               through, when that connection is closed. It is not called
+   *               for rejected sockets, so `admit` should only account for
+   *               connections it accepted.
+   */
+  void connection_admission(std::function<bool()> admit,
+                            std::function<void()> closed) {
+    connection_admit_ = std::move(admit);
+    connection_closed_ = std::move(closed);
+  }
+
  private:
   async_simple::coro::Lazy<coro_rpc::err_code> accept() {
     std::vector<async_simple::coro::Lazy<coro_rpc::err_code>> tasks;
@@ -610,6 +629,13 @@ class coro_rpc_server_base {
                   << " allowed by client filter";
       }
 
+      // Admission check, before any per-connection resource is allocated
+      if (connection_admit_ && !connection_admit_()) {
+        ELOG_WARN << "connection rejected by admission control";
+        wrapper.close();
+        continue;
+      }
+
       uint64_t conn_id = get_global_conn_id();
       ELOG_INFO << "new client conn_id " << conn_id << " coming, peer addr["
                 << wrapper.remote_endpoint() << "], local addr["
@@ -631,8 +657,16 @@ class coro_rpc_server_base {
                                                     conn_timeout_duration_);
       conn->set_quit_callback(
           [this](const uint64_t& id) {
-            std::unique_lock lock(conns_mtx_);
-            conns_.erase(id);
+            {
+              std::unique_lock lock(conns_mtx_);
+              conns_.erase(id);
+            }
+            // Outside the lock: the callback is user code and may touch
+            // state that locks conns_mtx_ again. Call the registered object
+            // itself, not a copy, so state kept inside it accumulates.
+            if (connection_closed_) {
+              connection_closed_();
+            }
           },
           conn_id);
       {
@@ -784,5 +818,7 @@ class coro_rpc_server_base {
 #endif
 
   std::function<bool(const asio::ip::tcp::endpoint&)> client_filter_;
+  std::function<bool()> connection_admit_;
+  std::function<void()> connection_closed_;
 };
 }  // namespace coro_rpc

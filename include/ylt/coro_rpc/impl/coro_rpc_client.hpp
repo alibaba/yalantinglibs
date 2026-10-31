@@ -249,6 +249,13 @@ class coro_rpc_client {
     std::string host;
     std::string port;
     std::string local_ip;
+    // Upper bound a server may declare for one response body or attachment.
+    // Zero keeps the historical behavior: the buffer is sized from the length
+    // in the response header without checking it first. A non-zero limit
+    // fails the call with errc::message_too_large before any buffer is
+    // allocated.
+    uint64_t max_response_body_bytes = 0;
+    uint64_t max_response_attachment_bytes = 0;
     std::variant<tcp_config
 #ifdef YLT_ENABLE_SSL
                  ,
@@ -641,6 +648,9 @@ class coro_rpc_client {
 #endif
     control_->socket_wrapper_.set_local_ip(config_.local_ip);
     control_->client_id = config_.client_id;
+    control_->max_response_body_bytes = config_.max_response_body_bytes;
+    control_->max_response_attachment_bytes =
+        config_.max_response_attachment_bytes;
     return std::visit(
         [this](auto &socket_config) {
           return init_socket_wrapper(socket_config);
@@ -1533,6 +1543,9 @@ class coro_rpc_client {
     std::atomic<uint32_t> recving_cnt_ = 0;
     std::atomic<bool> recv_running_ = false;
     uint64_t client_id = 0;
+    // Copied from config, so they are 0 (unlimited) unless the client opts in.
+    uint64_t max_response_body_bytes = 0;
+    uint64_t max_response_attachment_bytes = 0;
     control_t(coro_io::ExecutorWrapper<> *executor, bool is_timeout,
               const std::string &local_ip)
         : is_timeout_(is_timeout),
@@ -1642,6 +1655,11 @@ class coro_rpc_client {
     }
     for (auto &handler : handlers) handler->local_error(errc);
   }
+  // A zero limit means unlimited, which keeps the historical behavior.
+  static bool response_exceeds_limit(uint64_t length, uint64_t limit) {
+    return limit != 0 && length > limit;
+  }
+
   template <typename Socket>
   static async_simple::coro::Lazy<void> recv(
       std::shared_ptr<control_t> controller, Socket &socket) {
@@ -1683,6 +1701,16 @@ class coro_rpc_client {
       ELOG_TRACE << "find request ID: " << header.seq_num
                  << ". start notify response handler"
                  << ", client_id: " << controller->client_id;
+      if (response_exceeds_limit(header.length,
+                                 controller->max_response_body_bytes) ||
+          response_exceeds_limit(header.attach_length,
+                                 controller->max_response_attachment_bytes)) {
+        ELOG_ERROR << "response exceeds the configured size limit, body: "
+                   << header.length << ", attachment: " << header.attach_length
+                   << ", client_id: " << controller->client_id;
+        ret.first = std::make_error_code(std::errc::message_size);
+        break;
+      }
       uint32_t body_len = header.length;
       struct_pack::detail::resize(
           controller->resp_buffer_.read_buf_,
@@ -1835,6 +1863,10 @@ class coro_rpc_client {
           ret.value() == static_cast<int>(std::errc::timed_out)) {
         co_return coro_rpc::unexpected<rpc_error>{
             rpc_error{errc::timed_out, ret.message()}};
+      }
+      else if (ret.value() == static_cast<int>(std::errc::message_size)) {
+        co_return coro_rpc::unexpected<rpc_error>{
+            rpc_error{errc::message_too_large, ret.message()}};
       }
       else {
         co_return coro_rpc::unexpected<rpc_error>{
