@@ -863,6 +863,165 @@ std::errc init_acceptor(auto& acceptor_, auto port_) {
   ELOGV(INFO, "listen port %d successfully", port_);
   return std::errc{};
 }
+
+TEST_CASE("RPC client rejects an oversized response before allocating") {
+  g_action = {};
+  coro_rpc_server server(1, 0, "127.0.0.1");
+  server.register_handler<large_arg_fun>();
+  server.register_handler<echo_with_attachment>();
+  REQUIRE_FALSE(server.async_start().hasResult());
+
+  const std::string payload(4096, 'x');
+  const std::string port = std::to_string(server.port());
+  // large_arg_fun echoes payload, so this is the exact response body size.
+  const uint64_t body_size =
+      struct_pack::serialize<std::string>(payload).size();
+
+  SUBCASE("a body over the limit fails the call and drops the connection") {
+    coro_rpc_client client;
+    coro_rpc_client::config config;
+    config.max_response_body_bytes = body_size - 1;
+    REQUIRE(client.init_config(config));
+    REQUIRE_FALSE(syncAwait(client.connect("127.0.0.1", port)));
+
+    auto ret = syncAwait(client.call<large_arg_fun>(payload));
+    REQUIRE_FALSE(ret.has_value());
+    CHECK(ret.error().code.ec == errc::message_too_large);
+    // The body was never read, so the frame is unusable and the connection
+    // is gone.
+    CHECK(client.has_closed());
+  }
+
+  SUBCASE("a body at the limit is accepted") {
+    coro_rpc_client client;
+    coro_rpc_client::config config;
+    config.max_response_body_bytes = body_size;
+    REQUIRE(client.init_config(config));
+    REQUIRE_FALSE(syncAwait(client.connect("127.0.0.1", port)));
+
+    auto ret = syncAwait(client.call<large_arg_fun>(payload));
+    REQUIRE(ret.has_value());
+    CHECK(ret.value() == payload);
+  }
+
+  SUBCASE("an attachment over the limit fails the call") {
+    coro_rpc_client client;
+    coro_rpc_client::config config;
+    config.max_response_attachment_bytes = payload.size() - 1;
+    REQUIRE(client.init_config(config));
+    REQUIRE_FALSE(syncAwait(client.connect("127.0.0.1", port)));
+
+    client.set_req_attachment(payload);
+    auto ret = syncAwait(client.call<echo_with_attachment>());
+    REQUIRE_FALSE(ret.has_value());
+    CHECK(ret.error().code.ec == errc::message_too_large);
+    CHECK(client.has_closed());
+  }
+
+  SUBCASE("an attachment at the limit is accepted") {
+    coro_rpc_client client;
+    coro_rpc_client::config config;
+    config.max_response_attachment_bytes = payload.size();
+    REQUIRE(client.init_config(config));
+    REQUIRE_FALSE(syncAwait(client.connect("127.0.0.1", port)));
+
+    client.set_req_attachment(payload);
+    auto ret = syncAwait(client.call<echo_with_attachment>());
+    REQUIRE(ret.has_value());
+    CHECK(client.get_resp_attachment() == payload);
+  }
+
+  SUBCASE("no limit keeps the historical behavior") {
+    coro_rpc_client client;
+    REQUIRE_FALSE(syncAwait(client.connect("127.0.0.1", port)));
+
+    auto ret = syncAwait(client.call<large_arg_fun>(payload));
+    REQUIRE(ret.has_value());
+    CHECK(ret.value() == payload);
+
+    client.set_req_attachment(payload);
+    auto ret2 = syncAwait(client.call<echo_with_attachment>());
+    REQUIRE(ret2.has_value());
+    CHECK(client.get_resp_attachment() == payload);
+  }
+}
+
+namespace {
+using coro_rpc_protocol = coro_rpc::protocol::coro_rpc_protocol;
+
+// Answers one request with a response header only: the declared payload is
+// never sent. A client that tried to read or allocate the payload would block
+// until its request timeout instead of failing with message_too_large.
+void serve_oversized_response_header(asio::ip::tcp::acceptor& acceptor,
+                                     uint32_t body_length,
+                                     uint32_t attach_length) {
+  asio::ip::tcp::socket socket(acceptor.get_executor());
+  acceptor.accept(socket);
+
+  char req_buf[coro_rpc_protocol::REQ_HEAD_LEN];
+  asio::read(socket, asio::buffer(req_buf));
+  coro_rpc_protocol::req_header req_head{};
+  auto ec = struct_pack::deserialize_to<
+      struct_pack::sp_config::DISABLE_ALL_META_INFO>(
+      req_head, std::string_view{req_buf, sizeof(req_buf)});
+  CHECK_FALSE(ec);
+  std::string req_payload(req_head.length + req_head.attach_length, '\0');
+  asio::read(socket, asio::buffer(req_payload));
+
+  coro_rpc_protocol::resp_header resp_head{};
+  resp_head.magic = coro_rpc_protocol::magic_number;
+  resp_head.version = coro_rpc_protocol::VERSION_NUMBER;
+  resp_head.seq_num = req_head.seq_num;
+  resp_head.length = body_length;
+  resp_head.attach_length = attach_length;
+  std::string resp_buf;
+  struct_pack::serialize_to<struct_pack::sp_config::DISABLE_ALL_META_INFO>(
+      resp_buf, resp_head);
+  CHECK(resp_buf.size() == coro_rpc_protocol::RESP_HEAD_LEN);
+  asio::write(socket, asio::buffer(resp_buf));
+
+  // Hold the socket open until the client drops it.
+  std::error_code read_ec;
+  char byte;
+  socket.read_some(asio::buffer(&byte, 1), read_ec);
+}
+
+void check_rejected_from_header(uint32_t body_length, uint32_t attach_length) {
+  asio::io_context io_context;
+  asio::ip::tcp::acceptor acceptor(
+      io_context,
+      asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), 0));
+  const std::string port = std::to_string(acceptor.local_endpoint().port());
+  std::thread server([&] {
+    serve_oversized_response_header(acceptor, body_length, attach_length);
+  });
+
+  {
+    coro_rpc_client client;
+    coro_rpc_client::config config;
+    config.max_response_body_bytes = 1024;
+    config.max_response_attachment_bytes = 1024;
+    REQUIRE(client.init_config(config));
+    REQUIRE_FALSE(syncAwait(client.connect("127.0.0.1", port)));
+
+    auto start = std::chrono::steady_clock::now();
+    auto ret = syncAwait(client.call_for<hi>(5s));
+    auto elapsed = std::chrono::steady_clock::now() - start;
+    REQUIRE_FALSE(ret.has_value());
+    CHECK(ret.error().code.ec == errc::message_too_large);
+    CHECK(elapsed < 2s);
+    CHECK(client.has_closed());
+  }
+  server.join();
+}
+}  // namespace
+
+TEST_CASE("RPC client rejects an oversized response from its header alone") {
+  g_action = {};
+  SUBCASE("body") { check_rejected_from_header(1024 * 1024 * 1024, 0); }
+  SUBCASE("attachment") { check_rejected_from_header(0, 1024 * 1024 * 1024); }
+}
+
 // TODO: will open after code refactor.
 //  TEST_CASE("testing read body timeout") {
 //    register_handler<hello>();

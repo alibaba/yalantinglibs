@@ -148,12 +148,19 @@ void set_config(coro_rpc_client& client) {
   std::string host;
   std::string port;
   std::string local_ip;
+  uint64_t max_response_body_bytes;
+  uint64_t max_response_attachment_bytes;
   client.init_config(config{
     .connect_timeout_duration = 5s, // Connection timeout duration
     .request_timeout_duration = 5s, // Request timeout duration
     .host = "localhost", // Server hostname
     .port = "9001", // Server port
     .local_ip = "", // Local IP address used to specify the local communication interface
+    // Upper bounds on one response. A response that declares a larger body or
+    // attachment is rejected with errc::message_too_large before it is read.
+    // 0, the default, keeps the historical unlimited behavior.
+    .max_response_body_bytes = 0,
+    .max_response_attachment_bytes = 0,
     .socket_config=std::variant<tcp_config,
                  tcp_with_ssl_config,
                  coro_io::ib_socket_t::config_t>{tcp_config{}}; // Specify transport protocol and its configuration. Supported protocols: TCP, SSL over TCP, RDMA
