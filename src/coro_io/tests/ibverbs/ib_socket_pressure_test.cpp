@@ -172,7 +172,7 @@ async_simple::coro::Lazy<std::error_code> echo_accept() {
   asio::ip::tcp::acceptor acceptor(
       coro_io::get_global_executor()->get_asio_executor());
   std::error_code ec;
-  auto address = asio::ip::address_v4::from_string("0.0.0.0", ec);
+  auto address = asio::ip::make_address_v4("0.0.0.0", ec);
   if (ec) [[unlikely]] {
     co_return ec;
   }

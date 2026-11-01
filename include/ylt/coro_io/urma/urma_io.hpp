@@ -78,7 +78,7 @@ template <typename Buffer>
 async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>>
 async_urma_read(urma_socket_t& socket, Buffer&& raw_buffer, bool read_some) {
   if (!socket.get_executor().running_in_this_thread())
-    co_await dispatch(socket.get_executor());
+    co_await coro_io::dispatch(socket.get_executor());
 
   std::vector<asio::mutable_buffer> buffers;
   make_urma_buffers(buffers, raw_buffer);
@@ -127,7 +127,7 @@ inline async_simple::coro::Lazy<
     std::pair<std::error_code, std::vector<owned_data_view>>>
 async_urma_read_views(urma_socket_t& socket, std::size_t size) {
   if (!socket.get_executor().running_in_this_thread())
-    co_await dispatch(socket.get_executor());
+    co_await coro_io::dispatch(socket.get_executor());
 
   std::vector<owned_data_view> views;
   std::size_t completed = 0;
@@ -180,7 +180,7 @@ template <typename Buffer>
 async_simple::coro::Lazy<std::pair<std::error_code, std::size_t>> async_write(
     urma_socket_t& socket, Buffer&& raw_buffer) {
   if (!socket.get_executor().running_in_this_thread())
-    co_await dispatch(socket.get_executor());
+    co_await coro_io::dispatch(socket.get_executor());
 
   std::vector<asio::const_buffer> buffers;
   detail::make_urma_buffers(buffers, raw_buffer);

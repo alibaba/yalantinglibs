@@ -228,7 +228,7 @@ inline async_simple::coro::Lazy<
     async_simple::Try<typename util::function_traits<Func>::return_type>>
 post(Func func,
      coro_io::ExecutorWrapper<> *e = coro_io::get_global_block_executor()) {
-  return post(std::move(func), e->get_asio_executor());
+  return coro_io::post(std::move(func), e->get_asio_executor());
 }
 
 template <typename Func, typename Executor>
@@ -248,7 +248,7 @@ inline async_simple::coro::Lazy<async_simple::Try<void>> dispatch(
   if (executor.running_in_this_thread()) {
     co_return async_simple::Try<void>{};
   }
-  co_return co_await dispatch(
+  co_return co_await coro_io::dispatch(
       []() {
       },
       executor);

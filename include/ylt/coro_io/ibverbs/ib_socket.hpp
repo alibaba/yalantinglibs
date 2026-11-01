@@ -578,7 +578,7 @@ class ib_socket_t {
     assert(magic.size() < sz.size());
     char buffer[sz.size()];
     memcpy(buffer, magic.data(), magic.size());
-    auto [ec, _] = co_await async_read(
+    auto [ec, _] = co_await coro_io::async_read(
         state_->soc_,
         asio::buffer(buffer + magic.size(), sizeof(buffer) - magic.size()));
     if (ec) [[unlikely]] {
@@ -650,7 +650,7 @@ class ib_socket_t {
     peer_info.buffer_size = buffer_pool()->buffer_size();
     memcpy(peer_info.gid, &state_->device_->gid(), sizeof(peer_info.gid));
     struct_pack::serialize_to((char*)buffer, sz, peer_info);
-    async_write(state_->soc_, asio::buffer(buffer))
+    coro_io::async_write(state_->soc_, asio::buffer(buffer))
         .start([state = state_](auto&& ec) {
           try {
             if (!ec.value().first) {
@@ -727,12 +727,13 @@ class ib_socket_t {
       constexpr auto sz = struct_pack::get_needed_size(peer_info);
       char buffer[sz.size()];
       struct_pack::serialize_to((char*)buffer, sz, peer_info);
-      auto [ec, len] = co_await async_write(state_->soc_, asio::buffer(buffer));
+      auto [ec, len] =
+          co_await coro_io::async_write(state_->soc_, asio::buffer(buffer));
       if (ec) {
         co_return std::move(ec);
       }
       std::tie(ec, len) =
-          co_await async_read(state_->soc_, asio::buffer(buffer));
+          co_await coro_io::async_read(state_->soc_, asio::buffer(buffer));
       std::error_code ignore_ec;
       state_->soc_.shutdown(asio::ip::tcp::socket::shutdown_both, ignore_ec);
       state_->soc_.close(ignore_ec);
