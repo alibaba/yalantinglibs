@@ -197,7 +197,7 @@ template <uint64_t v, typename Writer, size_t... I>
 IGUANA_INLINE void append_varint_u32(Writer& writer,
                                      std::index_sequence<I...>) {
   uint8_t temp = 0;
-  ((temp = static_cast<uint8_t>(v >> (7 * I)),
+  ((temp = static_cast<uint8_t>((v >> (7 * I)) | 0x80),
     writer.write((const char*)&temp, 1)),
    ...);
 }

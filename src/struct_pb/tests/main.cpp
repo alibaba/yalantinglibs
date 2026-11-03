@@ -1136,6 +1136,33 @@ TEST_CASE("test variant") {
   }
 }
 
+// Field 32 is the first whose tag (256) needs the continuation bit set on a
+// byte where the tag's own bit 7 is clear.
+struct wide_msg_t {
+  int32_t f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16,
+      f17, f18, f19, f20, f21, f22, f23, f24, f25, f26, f27, f28, f29, f30, f31,
+      f32;
+};
+YLT_REFL(wide_msg_t, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13,
+         f14, f15, f16, f17, f18, f19, f20, f21, f22, f23, f24, f25, f26, f27,
+         f28, f29, f30, f31, f32);
+
+TEST_CASE("test multi-byte field tags") {
+  wide_msg_t st1{};
+  st1.f32 = 1;
+  std::string str;
+  iguana::to_pb(st1, str);
+  CHECK(str == std::string("\x80\x02\x01", 3));
+
+  st1.f16 = 16;
+  str.clear();
+  iguana::to_pb(st1, str);
+  wide_msg_t st2{};
+  iguana::from_pb(st2, str);
+  CHECK(st2.f16 == 16);
+  CHECK(st2.f32 == 1);
+}
+
 #if defined(__clang__) || defined(_MSC_VER) || \
     (defined(__GNUC__) && __GNUC__ > 8)
 struct person PUBLIC(person) {
