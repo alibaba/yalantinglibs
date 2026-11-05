@@ -90,7 +90,7 @@ class packer {
   template <uint64_t conf, typename T, typename... Args>
   static constexpr uint32_t STRUCT_PACK_INLINE calculate_hash_head() {
     constexpr uint32_t raw_types_code = calculate_raw_hash<T, Args...>();
-    if constexpr (check_has_metainfo<conf, T>()) {
+    if constexpr (check_has_metainfo<conf, get_args_type<T, Args...>>()) {
       return raw_types_code + 1;
     }
     else {  // default case, only has hash_code
