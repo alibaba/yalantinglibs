@@ -2590,7 +2590,10 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
   async_simple::coro::Lazy<resp_data> async_read_ws() {
     resp_data data{};
 
-    head_buf_.consume(head_buf_.size());
+    // Whatever is already buffered is the start of the next frame: connect()
+    // reads the 101 response with async_read_until, which can read past it, so
+    // frames a server writes as soon as it upgrades land here. Read only what
+    // is missing, and consume only what is parsed.
     std::shared_ptr sock = socket_;
     asio::streambuf &read_buf = sock->head_buf_;
     bool has_init_ssl = false;
@@ -2598,30 +2601,38 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
     has_init_ssl = has_init_ssl_;
 #endif
     websocket ws{};
+    size_t header_len = ws.left_header_len();
     while (true) {
-      if (auto [ec, _] = co_await async_read_ws(
-              sock, read_buf, ws.left_header_len(), has_init_ssl);
-          ec) {
-        if (socket_->is_timeout_) {
-          co_return resp_data{make_error_code(http_errc::request_timeout), 404};
-        }
-        data.net_err = ec;
-        data.status = 404;
+      if (read_buf.size() < header_len) {
+        if (auto [ec, _] = co_await async_read_ws(
+                sock, read_buf, header_len - read_buf.size(), has_init_ssl);
+            ec) {
+          // A partial frame must not be parsed by the next read.
+          read_buf.consume(read_buf.size());
+          if (socket_->is_timeout_) {
+            co_return resp_data{make_error_code(http_errc::request_timeout),
+                                404};
+          }
+          data.net_err = ec;
+          data.status = 404;
 
-        if (sock->has_closed_) {
+          if (sock->has_closed_) {
+            co_return data;
+          }
+
+          close_socket(*sock);
           co_return data;
         }
-
-        close_socket(*sock);
-        co_return data;
       }
 
       const char *data_ptr = static_cast<const char *>(read_buf.data().data());
-      auto ret = ws.parse_header(data_ptr, read_buf.size(), false);
+      auto ret = ws.parse_header(data_ptr, header_len, false);
       if (ret == ws_header_status::incomplete) {
+        header_len += ws.left_header_len();
         continue;
       }
       else if (ret == ws_header_status::error) {
+        read_buf.consume(read_buf.size());
         data.net_err = std::make_error_code(std::errc::protocol_error);
         data.status = 404;
         close_socket(*sock);
@@ -2631,17 +2642,21 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       frame_header *header = (frame_header *)data_ptr;
       bool is_close_frame = header->opcode == opcode::close;
 
-      read_buf.consume(read_buf.size());
+      read_buf.consume(header_len);
 
       size_t payload_len = ws.payload_length();
+      const size_t frame_payload_len = payload_len;
 
-      if (auto [ec, size] =
-              co_await async_read_ws(sock, read_buf, payload_len, has_init_ssl);
-          ec) {
-        data.net_err = ec;
-        data.status = 404;
-        close_socket(*sock);
-        co_return data;
+      if (read_buf.size() < payload_len) {
+        if (auto [ec, _] = co_await async_read_ws(
+                sock, read_buf, payload_len - read_buf.size(), has_init_ssl);
+            ec) {
+          read_buf.consume(read_buf.size());
+          data.net_err = ec;
+          data.status = 404;
+          close_socket(*sock);
+          co_return data;
+        }
       }
 
       data_ptr = static_cast<const char *>(read_buf.data().data());
@@ -2651,6 +2666,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
         if (!cinatra::gzip_codec::inflate({data_ptr, payload_len},
                                           inflate_str_)) {
           CINATRA_LOG_ERROR << "uncompuress data error";
+          read_buf.consume(read_buf.size());
           data.status = 404;
           data.net_err = std::make_error_code(std::errc::protocol_error);
           co_return data;
@@ -2668,7 +2684,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       data.status = 200;
       data.resp_body = {data_ptr, payload_len};
 
-      read_buf.consume(read_buf.size());
+      read_buf.consume(frame_payload_len);
 
       if (is_close_frame) {
         std::string reason = "close";
