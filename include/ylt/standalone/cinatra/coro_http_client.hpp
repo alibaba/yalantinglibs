@@ -2648,7 +2648,7 @@ class coro_http_client : public std::enable_shared_from_this<coro_http_client> {
       const size_t frame_payload_len = payload_len;
 
       if (read_buf.size() < payload_len) {
-        if (auto [ec, size] = co_await async_read_ws(
+        if (auto [ec, _] = co_await async_read_ws(
                 sock, read_buf, payload_len - read_buf.size(), has_init_ssl);
             ec) {
           read_buf.consume(read_buf.size());
