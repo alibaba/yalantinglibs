@@ -1,9 +1,17 @@
 #include <chrono>
 #include <filesystem>
+#include <functional>
 #include <future>
 #include <memory>
 #include <system_error>
+#include <thread>
 
+#include "asio/io_context.hpp"
+#include "asio/ip/tcp.hpp"
+#include "asio/read_until.hpp"
+#include "asio/steady_timer.hpp"
+#include "asio/streambuf.hpp"
+#include "asio/write.hpp"
 #include "cinatra/error.hpp"
 #include "doctest.h"
 #include "ylt/coro_http/coro_http_client.hpp"
@@ -274,6 +282,91 @@ TEST_CASE("test send after server stop") {
   async_simple::coro::syncAwait(client.write_websocket(""));
   auto data = async_simple::coro::syncAwait(client.read_websocket());
   CHECK(data.net_err);
+}
+
+TEST_CASE("test websocket frames that arrive with the handshake") {
+  // One write carries the 101 response and the frames, so they reach the
+  // client in the read that consumes the handshake. The second frame is cut
+  // inside its extended header, so a later read has to complete it.
+  asio::io_context ctx;
+  asio::ip::tcp::acceptor acceptor(
+      ctx, asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), 0));
+  auto port = acceptor.local_endpoint().port();
+
+  std::string first(10, 'a');
+  std::string second(200, 'b');
+  auto frame = [](const std::string &payload) {
+    cinatra::websocket ws;
+    return std::string(ws.encode_ws_header(
+               payload.size(), cinatra::opcode::binary, true, false, false)) +
+           payload;
+  };
+  size_t cut = frame(first).size() + 3;
+  std::string frames = frame(first) + frame(second);
+  std::string reply =
+      "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n"
+      "Connection: Upgrade\r\n\r\n" +
+      frames.substr(0, cut);
+  std::string rest = frames.substr(cut);
+
+  asio::ip::tcp::socket socket(ctx);
+  asio::streambuf request;
+  asio::steady_timer pause(ctx);
+  char sink[64];
+  std::function<void()> drain = [&] {
+    socket.async_read_some(asio::buffer(sink), [&](std::error_code ec, size_t) {
+      if (!ec) {
+        drain();
+      }
+    });
+  };
+  acceptor.async_accept(socket, [&](std::error_code ec) {
+    if (ec) {
+      return;
+    }
+    asio::async_read_until(
+        socket, request, "\r\n\r\n", [&](std::error_code ec, size_t) {
+          if (ec) {
+            return;
+          }
+          asio::async_write(
+              socket, asio::buffer(reply), [&](std::error_code ec, size_t) {
+                if (ec) {
+                  return;
+                }
+                pause.expires_after(50ms);
+                pause.async_wait([&](std::error_code) {
+                  asio::async_write(socket, asio::buffer(rest),
+                                    [&](std::error_code ec, size_t) {
+                                      if (!ec) {
+                                        drain();
+                                      }
+                                    });
+                });
+              });
+        });
+  });
+  // Bounded, so a client that never connects fails the checks, not the run.
+  std::thread server([&] {
+    ctx.run_for(5s);
+  });
+
+  {
+    coro_http_client client{};
+    client.set_req_timeout(2s);
+    auto handshake = async_simple::coro::syncAwait(
+        client.connect("ws://127.0.0.1:" + std::to_string(port)));
+    CHECK(handshake.status == 101);
+
+    auto data = async_simple::coro::syncAwait(client.read_websocket());
+    CHECK(!data.net_err);
+    CHECK(data.resp_body == first);
+
+    data = async_simple::coro::syncAwait(client.read_websocket());
+    CHECK(!data.net_err);
+    CHECK(data.resp_body == second);
+  }
+  server.join();
 }
 
 TEST_CASE("test read write in different threads") {
