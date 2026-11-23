@@ -428,19 +428,15 @@ inline char* b_stacktrace_to_string(b_stacktrace_handle h) {
 /* noop implementation */
 
 namespace ylt::util {
-inline b_stacktrace_handle b_stacktrace_get(void) {
-    return nullptr;
-}
+inline b_stacktrace_handle b_stacktrace_get(void) { return nullptr; }
 
-inline int b_stacktrace_depth(b_stacktrace_handle) {
-    return 0;
-}
+inline int b_stacktrace_depth(b_stacktrace_handle) { return 0; }
 
 inline char* b_stacktrace_to_string(b_stacktrace_handle) {
-    print_buf out = buf_init();
-    *out.buf = 0;
-    buf_printf(&out, "b_stacktrace: unsupported platform\n");
-    return out.buf;
+  print_buf out = buf_init();
+  *out.buf = 0;
+  buf_printf(&out, "b_stacktrace: unsupported platform\n");
+  return out.buf;
 }
 }
 #endif /* platform */
