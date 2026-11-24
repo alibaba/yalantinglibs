@@ -76,12 +76,17 @@ struct ib_socket_shared_state_t
   }
   coro_io::ExecutorWrapper<>* executor_;
   std::shared_ptr<ib_device_t> device_;
-  ib_buffer_queue recv_queue_, send_queue_;
+  ib_buffer_queue recv_queue_;
   std::size_t recv_buffer_cnt_;
   circle_buffer<std::pair<std::error_code, std::size_t>> recv_result_;
   circle_buffer<callback_t> send_cb_;
   callback_t recv_cb_;
   ib_buffer_t recv_buf_;
+  // The single send buffer used to accumulate outgoing data (small-message
+  // combine). Acquired from the shared per-device pool on demand and returned
+  // to the pool as soon as its send completes, so idle connections don't pin
+  // send buffers.
+  ib_buffer_t current_send_buf_;
   std::unique_ptr<asio::posix::stream_descriptor> fd_;
   std::unique_ptr<ibv_comp_channel, ib_deleter> channel_;
   std::unique_ptr<ibv_cq, ib_deleter> cq_;
@@ -109,7 +114,6 @@ struct ib_socket_shared_state_t
         soc_(executor->get_asio_executor()),
         recv_buffer_cnt_(recv_buffer_cnt),
         recv_queue_(max_recv_buffer_cnt),
-        send_queue_(send_buffer_cnt + 1),
         recv_result_(max_recv_buffer_cnt),
         send_cb_(send_buffer_cnt + 2),
         max_inline_send_limit_(max_inline_data) {}
@@ -117,10 +121,11 @@ struct ib_socket_shared_state_t
   ib_socket_shared_state_t(ib_socket_shared_state_t&&) = delete;
   ib_socket_shared_state_t& operator=(ib_socket_shared_state_t&&) = delete;
 
-  void return_send_buffer(ib_buffer_t buffer) {
-    assert(!send_queue_.full());
-    send_queue_.push(std::move(buffer));
+  void return_send_buffer([[maybe_unused]] ib_buffer_t buffer) {
+    // Let the buffer destruct here so it returns to the shared per-device pool
+    // instead of being cached per-connection.
   }
+
   void wake_up_if_is_waiting(std::error_code ec) {
     if (wait_promise_) {
       auto promise = std::move(wait_promise_);
@@ -239,9 +244,9 @@ struct ib_socket_shared_state_t
   };
 
   ib_buffer_t release_send_buffer() noexcept {
-    assert(send_queue_.size());
+    assert(current_send_buf_);
     send_buffer_data_size_ = 0;
-    return send_queue_.pop();
+    return std::move(current_send_buf_);
   }
 
   std::size_t sent_request_count() const noexcept { return send_cb_.size(); }
@@ -845,7 +850,7 @@ class ib_socket_t {
   }
 
   std::optional<ibv_sge> get_send_buffer_view() noexcept {
-    if (state_->send_queue_.empty()) {
+    if (!state_->current_send_buf_) {
       auto buffer = buffer_pool()->get_buffer(gpu_id_);
       if (!buffer) {
         ELOG_WARN << "buffer out of limit, get send buffer failed, QP:"
@@ -853,9 +858,9 @@ class ib_socket_t {
         close();
         return std::nullopt;
       }
-      state_->send_queue_.push(std::move(buffer));
+      state_->current_send_buf_ = std::move(buffer);
     }
-    return state_->send_queue_.front().subview(state_->send_buffer_data_size_);
+    return state_->current_send_buf_.subview(state_->send_buffer_data_size_);
   }
 
   std::size_t get_free_send_buffer_size() noexcept {
