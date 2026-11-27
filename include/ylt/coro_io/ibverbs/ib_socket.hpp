@@ -31,6 +31,7 @@
 #include <stdexcept>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 #include "asio/dispatch.hpp"
 #include "asio/ip/address.hpp"
@@ -87,6 +88,13 @@ struct ib_socket_shared_state_t
   // to the pool as soon as its send completes, so idle connections don't pin
   // send buffers.
   ib_buffer_t current_send_buf_;
+  // Send buffers whose work completion never arrived. The QP may still be
+  // reading them, so they must not go back to the shared pool, where another
+  // connection could pick them up and overwrite them. They are released when
+  // this state object is destroyed, i.e. after the QP is gone. Declared before
+  // fd_/channel_/cq_/qp_ on purpose: members are destroyed in reverse order,
+  // so the QP is destroyed first.
+  std::vector<ib_buffer_t> quarantine_;
   std::unique_ptr<asio::posix::stream_descriptor> fd_;
   std::unique_ptr<ibv_comp_channel, ib_deleter> channel_;
   std::unique_ptr<ibv_cq, ib_deleter> cq_;
@@ -97,6 +105,11 @@ struct ib_socket_shared_state_t
   asio::ip::tcp::socket soc_;
   std::atomic<bool> has_close_ = false;
   bool peer_close_ = false;
+  // Set while the CQ listener drains send_cb_ with synthetic failures. Those
+  // callbacks never saw a work completion, so their buffers must not be reused
+  // yet. The listener and every callback run on executor_, so a plain bool is
+  // enough here.
+  bool draining_ = false;
 #ifdef YLT_ENABLE_CUDA
   std::unique_ptr<cuda_stream_handler_t> handler_;
 #else
@@ -121,9 +134,17 @@ struct ib_socket_shared_state_t
   ib_socket_shared_state_t(ib_socket_shared_state_t&&) = delete;
   ib_socket_shared_state_t& operator=(ib_socket_shared_state_t&&) = delete;
 
-  void return_send_buffer([[maybe_unused]] ib_buffer_t buffer) {
-    // Let the buffer destruct here so it returns to the shared per-device pool
-    // instead of being cached per-connection.
+  void return_send_buffer(ib_buffer_t buffer) {
+    if (draining_) [[unlikely]] {
+      // This callback was synthesised by the error drain, so no work
+      // completion was ever polled for the send and the QP may still be
+      // reading the buffer. Park it until the QP is destroyed.
+      quarantine_.push_back(std::move(buffer));
+      return;
+    }
+    // A real work completion has been polled, so the NIC is done with the
+    // buffer. Let it destruct here to return it to the shared per-device pool
+    // instead of caching it per-connection.
   }
 
   void wake_up_if_is_waiting(std::error_code ec) {
@@ -225,7 +246,8 @@ struct ib_socket_shared_state_t
                 auto view = buffer.subview(0, sz);
                 post_send_impl(
                     view,
-                    [buffer = std::move(buffer)](auto&&) {
+                    [this, buffer = std::move(buffer)](auto&&) mutable {
+                      return_send_buffer(std::move(buffer));
                     },
                     true);
               }
@@ -1119,6 +1141,9 @@ class ib_socket_t {
           self->close();
           detail::ib_socket_shared_state_t::resume(
               std::pair{ec, std::size_t{0}}, std::move(self->recv_cb_));
+          // Nothing below waited for a work completion, so the buffers behind
+          // these callbacks are still owned by the QP.
+          self->draining_ = true;
           while (!self->send_cb_.empty()) {
             detail::ib_socket_shared_state_t::resume(
                 std::pair{ec, std::size_t{0}}, self->send_cb_.pop());

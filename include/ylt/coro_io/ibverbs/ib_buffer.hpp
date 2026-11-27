@@ -18,6 +18,7 @@
 #include <infiniband/verbs.h>
 #include <sys/types.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cerrno>
 #include <cmath>
@@ -187,7 +188,17 @@ public:
       while (true) {
         ELOG_TRACE << "start ib_buffer timeout free of pool{" << self.get()
                    << "}, now ib_buffer count: " << self->free_buffers_.size();
-        auto [is_all_cleared, clear_cnt] = self->free_buffers_.clear_old(1000);
+        // clear_old(n) releases up to n buffers, so ask for the excess only.
+        // Asking for everything would drop the pool to zero and make a
+        // low-frequency sender pay an ibv_reg_mr on every send, which costs
+        // far more than the memory it frees.
+        const auto free_cnt = self->free_buffers_.size();
+        if (free_cnt <= self->min_idle_buffer_cnt_) {
+          break;
+        }
+        const auto to_clear = free_cnt - self->min_idle_buffer_cnt_;
+        auto [is_all_cleared, clear_cnt] =
+            self->free_buffers_.clear_old(to_clear);
         self->modify_memory_usage(-1 * (ssize_t)clear_cnt *
                                   (ssize_t)self->buffer_size());
         ELOG_INFO << "finish ib_buffer timeout free of pool{" << self.get()
@@ -231,15 +242,18 @@ public:
   }
   void collect_free(ib_buffer_t& buffer) {
     if (buffer) {
-      if (!memory_out_of_limit()) {
+      // Retention is bounded by buffer count, not by the allocation budget.
+      // The returned buffer is already registered and already counted in
+      // memory_usage(), so keeping it costs nothing extra; asking
+      // memory_out_of_limit() here used to deregister and re-register the
+      // buffer on every send once the pool sat at its limit.
+      if (free_buffers_.size() < max_free_buffer_cnt_) {
         ELOG_TRACE << "collect free buffer{data:" << buffer->addr << ",len"
                    << buffer->length << "} enqueue";
         enqueue(buffer);
       }
       else {
-        ELOG_TRACE << "out of max buffer pool limit " << max_memory_usage()
-                   << "now usage:" << buffer_size()
-                   << ",buffer{data:" << buffer->addr << ",len"
+        ELOG_TRACE << "buffer pool full, buffer{data:" << buffer->addr << ",len"
                    << buffer->length << "} wont be collect";
       }
     }
@@ -262,6 +276,11 @@ public:
         nullptr;  // nullopt means use global memory_usage_recorder
     std::chrono::milliseconds idle_timeout = std::chrono::milliseconds{5000};
     int gpu_id = -1;  // use cpu memory
+    // Keep at least this many registered buffers in the pool when the idle
+    // sweeper runs, so a connection that sends rarely (a heartbeat every few
+    // seconds, say) does not pay an ibv_reg_mr on every single send. Appended
+    // last so existing aggregate initialisers keep their meaning.
+    std::size_t min_idle_buffers = 4;
   };
   std::size_t max_memory_usage() { return pool_config_.max_memory_usage; }
 
@@ -330,7 +349,23 @@ public:
         memory_usage_recorder_(pool_config.memory_usage_recorder
                                    ? pool_config.memory_usage_recorder
                                    : g_memory_usage_recorder()),
-        pool_config_(std::move(pool_config)) {}
+        pool_config_(std::move(pool_config)) {
+    // A GPU buffer is rounded up to a 64 KiB page before it is registered, so
+    // divide by the effective block size to keep the count bound consistent
+    // with what the budget actually pays per block.
+    auto bs = (std::max)(pool_config_.buffer_size, std::size_t{1});
+    if (pool_config_.gpu_id >= 0) {
+      constexpr std::size_t k_gpu_page_size = 64 * 1024;
+      bs = (bs + k_gpu_page_size - 1) & ~(k_gpu_page_size - 1);
+    }
+    // Every retained block is already inside the budget, so bound retention by
+    // how many blocks the budget can hold at all.
+    max_free_buffer_cnt_ =
+        (std::max)(static_cast<std::size_t>(pool_config_.max_memory_usage / bs),
+                   std::size_t{2});
+    min_idle_buffer_cnt_ =
+        (std::min)(pool_config_.min_idle_buffers, max_free_buffer_cnt_);
+  }
   std::size_t memory_usage() const noexcept {
     return memory_usage_recorder_->now_usage.load(std::memory_order_relaxed);
   }
@@ -343,6 +378,11 @@ public:
   const config_t& get_config() const noexcept { return pool_config_; }
 
  private:
+  // Upper bound on how many registered buffers the pool retains, and the floor
+  // the idle sweeper keeps. Both are counts on purpose: the memory budget
+  // governs new allocations, not the retention of already-registered blocks.
+  std::size_t max_free_buffer_cnt_ = 0;
+  std::size_t min_idle_buffer_cnt_ = 0;
   coro_io::detail::client_queue<std::unique_ptr<ib_buffer_impl_t>>
       free_buffers_;
   std::shared_ptr<ib_buffer_mem_control_t> memory_usage_recorder_;
