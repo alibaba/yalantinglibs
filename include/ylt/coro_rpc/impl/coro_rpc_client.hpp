@@ -1221,8 +1221,8 @@ class coro_rpc_client {
       std::tie(ec, results) = co_await coro_io::async_resolve(
           control_->executor_, config_.host, config_.port);
       if (ec) {
-        ELOG_WARN << "client_id " << config_.client_id
-                  << " async_resolve failed:" << ec.message();
+        ELOG_WARN << "client_id " << config_.client_id << " async_resolve "
+                  << config_.host << " failed: " << ec.message();
         co_return errc::not_connected;
       }
       for (const auto &entry : results) {
@@ -1245,12 +1245,14 @@ class coro_rpc_client {
     });
     timer_->cancel();
     if (control_->is_timeout_) {
-      ELOG_WARN << "client_id " << config_.client_id << " connect timeout";
+      ELOG_WARN << "client_id " << config_.client_id << " connect timeout"
+                << ", remote: " << config_.host << ":" << config_.port;
       co_return errc::timed_out;
     }
     else if (ec) {
-      ELOG_WARN << "client_id " << config_.client_id
-                << " failed:" << ec.message();
+      ELOG_WARN << "client_id " << config_.client_id << " connect to "
+                << config_.host << ":" << config_.port
+                << " failed: " << ec.message();
       co_return errc::not_connected;
     }
     // Endpoint-list connect may reopen the socket, losing pre-connect options.
