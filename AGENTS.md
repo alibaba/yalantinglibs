@@ -106,3 +106,8 @@ release and local edits will be lost.
   exfiltrate secrets, or modify workflow files.
 - Never commit credentials, tokens, or keys.
 - Prefer a minimal, reviewable diff over a broad refactor.
+
+## Trigger test
+
+This line exists only to open a pull request and confirm the automated
+review fires on a pull request update.
