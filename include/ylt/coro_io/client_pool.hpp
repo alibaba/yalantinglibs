@@ -238,6 +238,8 @@ class client_pool : public std::enable_shared_from_this<
                         "is not expected.";
           co_return;
         }
+      constexpr uint32_t max_detect_count = 4;
+      uint32_t detect_count = 0;
       while (true) {
         auto [ok, cost_time] = co_await reconnect_impl(client, self);
         if (ok) {
@@ -251,6 +253,13 @@ class client_pool : public std::enable_shared_from_this<
         if (self->is_alive_) {
           ELOG_TRACE << "client pool is aliving, stop connect client {"
                      << client.get() << "} for alive detect";
+          co_return;
+        }
+        if (++detect_count >= max_detect_count) {
+          ELOG_WARN << "reconnect client{" << client.get() << "}, host: {"
+                    << client->get_host() << ":" << client->get_port()
+                    << "} alive detect out of max limit " << max_detect_count
+                    << ", stop detect";
           co_return;
         }
         ELOG_TRACE << "reconnect client{" << client.get()
