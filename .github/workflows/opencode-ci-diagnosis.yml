@@ -1,0 +1,223 @@
+#
+# Copyright (c) 2024 Alibaba Group Holding Limited. All Rights Reserved.
+# DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+#
+# This code is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License version 2 only, as
+# published by the Free Software Foundation. Alibaba designates this
+# particular file as subject to the "Classpath" exception as provided
+# by Oracle in the LICENSE file that accompanied this code.
+#
+# This code is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
+# version 2 for more details (a copy is included in the LICENSE file that
+# accompanied this code).
+#
+# You should have received a copy of the GNU General Public License version
+# 2 along with this work; if not, write to the Free Software Foundation,
+# Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+#
+
+# Automatic CI failure diagnosis.
+#
+# When a build/test workflow fails on a pull request, this job collects the
+# failing step logs and asks the agent to explain the root cause, then posts the
+# analysis as a PR comment. It never pushes code: diagnosis only.
+#
+# `workflow_run` is used rather than a step inside the existing workflows for
+# two reasons: it keeps the agent off the critical path of a 60-100 minute CI
+# run, and it runs in the base-repository context, so `secrets` are available
+# even when the failing run came from a fork.
+
+name: CI Failure Diagnosis
+
+on:
+  workflow_run:
+    # Keep in sync with the build/test workflows worth diagnosing.
+    # Coverage, website, formatting and cache workflows are excluded: their
+    # failures are rarely caused by the change under test.
+    workflows:
+      - "Ubuntu (gcc)"
+      - "Ubuntu (clang)"
+      - "macOS 15"
+      - "Windows Server 2022"
+    types: [completed]
+
+concurrency:
+  group: ci-diagnosis-${{ github.event.workflow_run.id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  actions: read
+
+jobs:
+  diagnose:
+    # Failures on pull requests only. A push to main has no PR to comment on.
+    if: |
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      REPO: ${{ github.repository }}
+
+    steps:
+      - name: Resolve the pull request number
+        id: pr
+        run: |
+          set -euo pipefail
+          # `workflow_run.pull_requests` is empty for fork PRs, which is the
+          # common case in this repository, so resolve by head SHA instead.
+          number=$(gh pr list --repo "$REPO" --state all --search "$HEAD_SHA" \
+                     --json number,headRefOid \
+                     --jq "[.[] | select(.headRefOid == \"$HEAD_SHA\")][0].number // empty")
+          if [ -z "$number" ]; then
+            echo "No pull request found for $HEAD_SHA; skipping."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Resolved PR #$number"
+          echo "found=true" >> "$GITHUB_OUTPUT"
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+
+      - name: Collect failed step logs
+        id: logs
+        if: steps.pr.outputs.found == 'true'
+        run: |
+          set -euo pipefail
+          gh run view "$RUN_ID" --repo "$REPO" --log-failed > /tmp/failed.log || true
+          if [ ! -s /tmp/failed.log ]; then
+            echo "No failed step logs available; skipping."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # The tail holds the actual compiler/test error; the head is setup
+          # noise. Cap the size so the prompt stays reasonable.
+          tail -c 60000 /tmp/failed.log > /tmp/failed-tail.log
+          echo "Captured $(wc -c < /tmp/failed-tail.log) bytes of log."
+          echo "found=true" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout repository
+        if: steps.pr.outputs.found == 'true' && steps.logs.outputs.found == 'true'
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Install OpenCode
+        if: steps.pr.outputs.found == 'true' && steps.logs.outputs.found == 'true'
+        run: |
+          curl -fsSL https://opencode.ai/install | bash
+          echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+
+      - name: Analyse the failure
+        id: analyse
+        if: steps.pr.outputs.found == 'true' && steps.logs.outputs.found == 'true'
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        run: |
+          set -euo pipefail
+          {
+            cat <<'PROMPT'
+          You are diagnosing a CI failure in yaLanTingLibs, a C++20 library.
+          Read AGENTS.md in the repository root for the build layout and rules.
+
+          Below is the tail of the failing CI step log. Determine the root cause
+          and write a concise PR comment in Markdown with exactly these sections:
+
+          ## CI failure analysis
+          **Failing job:** <the job name from the log>
+          **Root cause:** <one or two sentences>
+          **Evidence:** <quote the 1-3 most relevant log lines in a code block>
+          **Suggested fix:** <concrete, minimal steps, naming files and lines>
+
+          Rules:
+          - Be specific. Name files and lines when the log shows them.
+          - If the log is truncated or inconclusive, say so plainly instead of
+            guessing, and name which artifact or log to inspect next.
+          - Distinguish a real regression from a flaky or environment failure.
+            Network tests share fixed ports and are known to be flaky; RDMA
+            tests need a self-hosted runner and are opt-in via the `run-rdma-ci`
+            label. `RDMA (software)` waiting for a runner is not a code failure.
+          - Do not propose changes to `.github/workflows/` unless the log clearly
+            shows the workflow itself is at fault.
+          - Do not attempt to build or run tests: the log is the evidence and
+            there is no time budget for a build.
+          - Output the comment only. No preamble, no closing remarks.
+
+          <failed_log>
+          PROMPT
+            cat /tmp/failed-tail.log
+            printf '\n</failed_log>\n'
+          } > /tmp/prompt.txt
+
+          opencode run \
+            --model "opencode-go/deepseek-v4.1-flash" \
+            --variant max \
+            --agent build \
+            --auto \
+            "$(cat /tmp/prompt.txt)" > /tmp/analysis.md 2>/tmp/analysis.err || true
+
+          if [ ! -s /tmp/analysis.md ]; then
+            echo "Agent produced no output. Last lines of stderr:"
+            tail -40 /tmp/analysis.err || true
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Strip ANSI colour codes the CLI may emit.
+          sed -i 's/\x1b\[[0-9;]*m//g' /tmp/analysis.md
+          echo "found=true" >> "$GITHUB_OUTPUT"
+
+      - name: Post the analysis as a PR comment
+        if: steps.analyse.outputs.found == 'true'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs')
+            const marker = '<!-- ci-diagnosis -->'
+            const prNumber = Number('${{ steps.pr.outputs.number }}')
+
+            let body = fs.readFileSync('/tmp/analysis.md', 'utf8').trim()
+            if (!body) {
+              core.info('Empty analysis; not commenting.')
+              return
+            }
+
+            body = `${marker}\n${body}\n\n---\n<sub>Automated diagnosis by the OpenCode agent. ` +
+              `Verify before acting. Comment \`/oc\` to ask follow-up questions.</sub>`
+
+            // Replace the previous diagnosis on this PR instead of stacking a
+            // new comment on every failed re-run.
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              per_page: 100,
+            })
+            const existing = comments.find((c) => c.body && c.body.includes(marker))
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              })
+              core.info(`Updated existing diagnosis comment ${existing.id}`)
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body,
+              })
+              core.info('Posted a new diagnosis comment')
+            }
