@@ -1,0 +1,28 @@
+// OpenCode configuration for yaLanTingLibs.
+//
+// This file is read by the OpenCode agent when it runs in CI (see
+// .github/workflows/opencode-*.yml). Keeping the model and its reasoning
+// settings here — rather than only in the workflow file — means the choice
+// survives workflow edits and applies to anyone running the agent locally.
+//
+// The model id `deepseek-v4.1-flash` is the DeepSeek V4.1 Flash **1017**
+// release (2026-10-17) as served by OpenCode Go. The catalog does not expose a
+// separate `-1017` id, and passing one is rejected by the API, so this id is
+// the correct way to pin that release.
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "opencode-go/deepseek-v4.1-flash",
+  "provider": {
+    "opencode-go": {
+      "models": {
+        "deepseek-v4.1-flash": {
+          // Force maximum reasoning effort. Supported values for this model
+          // are low / high / max.
+          "options": {
+            "reasoningEffort": "max"
+          }
+        }
+      }
+    }
+  }
+}
