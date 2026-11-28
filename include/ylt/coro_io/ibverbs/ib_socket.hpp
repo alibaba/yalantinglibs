@@ -31,6 +31,7 @@
 #include <stdexcept>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 #include "asio/dispatch.hpp"
 #include "asio/ip/address.hpp"
@@ -76,12 +77,24 @@ struct ib_socket_shared_state_t
   }
   coro_io::ExecutorWrapper<>* executor_;
   std::shared_ptr<ib_device_t> device_;
-  ib_buffer_queue recv_queue_, send_queue_;
+  ib_buffer_queue recv_queue_;
   std::size_t recv_buffer_cnt_;
   circle_buffer<std::pair<std::error_code, std::size_t>> recv_result_;
   circle_buffer<callback_t> send_cb_;
   callback_t recv_cb_;
   ib_buffer_t recv_buf_;
+  // The single send buffer used to accumulate outgoing data (small-message
+  // combine). Acquired from the shared per-device pool on demand and returned
+  // to the pool as soon as its send completes, so idle connections don't pin
+  // send buffers.
+  ib_buffer_t current_send_buf_;
+  // Send buffers whose work completion never arrived. The QP may still be
+  // reading them, so they must not go back to the shared pool, where another
+  // connection could pick them up and overwrite them. They are released when
+  // this state object is destroyed, i.e. after the QP is gone. Declared before
+  // fd_/channel_/cq_/qp_ on purpose: members are destroyed in reverse order,
+  // so the QP is destroyed first.
+  std::vector<ib_buffer_t> quarantine_;
   std::unique_ptr<asio::posix::stream_descriptor> fd_;
   std::unique_ptr<ibv_comp_channel, ib_deleter> channel_;
   std::unique_ptr<ibv_cq, ib_deleter> cq_;
@@ -92,6 +105,11 @@ struct ib_socket_shared_state_t
   asio::ip::tcp::socket soc_;
   std::atomic<bool> has_close_ = false;
   bool peer_close_ = false;
+  // Set while the CQ listener drains send_cb_ with synthetic failures. Those
+  // callbacks never saw a work completion, so their buffers must not be reused
+  // yet. The listener and every callback run on executor_, so a plain bool is
+  // enough here.
+  bool draining_ = false;
 #ifdef YLT_ENABLE_CUDA
   std::unique_ptr<cuda_stream_handler_t> handler_;
 #else
@@ -109,7 +127,6 @@ struct ib_socket_shared_state_t
         soc_(executor->get_asio_executor()),
         recv_buffer_cnt_(recv_buffer_cnt),
         recv_queue_(max_recv_buffer_cnt),
-        send_queue_(send_buffer_cnt + 1),
         recv_result_(max_recv_buffer_cnt),
         send_cb_(send_buffer_cnt + 2),
         max_inline_send_limit_(max_inline_data) {}
@@ -118,9 +135,18 @@ struct ib_socket_shared_state_t
   ib_socket_shared_state_t& operator=(ib_socket_shared_state_t&&) = delete;
 
   void return_send_buffer(ib_buffer_t buffer) {
-    assert(!send_queue_.full());
-    send_queue_.push(std::move(buffer));
+    if (draining_) [[unlikely]] {
+      // This callback was synthesised by the error drain, so no work
+      // completion was ever polled for the send and the QP may still be
+      // reading the buffer. Park it until the QP is destroyed.
+      quarantine_.push_back(std::move(buffer));
+      return;
+    }
+    // A real work completion has been polled, so the NIC is done with the
+    // buffer. Let it destruct here to return it to the shared per-device pool
+    // instead of caching it per-connection.
   }
+
   void wake_up_if_is_waiting(std::error_code ec) {
     if (wait_promise_) {
       auto promise = std::move(wait_promise_);
@@ -220,7 +246,8 @@ struct ib_socket_shared_state_t
                 auto view = buffer.subview(0, sz);
                 post_send_impl(
                     view,
-                    [buffer = std::move(buffer)](auto&&) {
+                    [this, buffer = std::move(buffer)](auto&&) mutable {
+                      return_send_buffer(std::move(buffer));
                     },
                     true);
               }
@@ -239,9 +266,9 @@ struct ib_socket_shared_state_t
   };
 
   ib_buffer_t release_send_buffer() noexcept {
-    assert(send_queue_.size());
+    assert(current_send_buf_);
     send_buffer_data_size_ = 0;
-    return send_queue_.pop();
+    return std::move(current_send_buf_);
   }
 
   std::size_t sent_request_count() const noexcept { return send_cb_.size(); }
@@ -845,7 +872,7 @@ class ib_socket_t {
   }
 
   std::optional<ibv_sge> get_send_buffer_view() noexcept {
-    if (state_->send_queue_.empty()) {
+    if (!state_->current_send_buf_) {
       auto buffer = buffer_pool()->get_buffer(gpu_id_);
       if (!buffer) {
         ELOG_WARN << "buffer out of limit, get send buffer failed, QP:"
@@ -853,9 +880,9 @@ class ib_socket_t {
         close();
         return std::nullopt;
       }
-      state_->send_queue_.push(std::move(buffer));
+      state_->current_send_buf_ = std::move(buffer);
     }
-    return state_->send_queue_.front().subview(state_->send_buffer_data_size_);
+    return state_->current_send_buf_.subview(state_->send_buffer_data_size_);
   }
 
   std::size_t get_free_send_buffer_size() noexcept {
@@ -1114,6 +1141,9 @@ class ib_socket_t {
           self->close();
           detail::ib_socket_shared_state_t::resume(
               std::pair{ec, std::size_t{0}}, std::move(self->recv_cb_));
+          // Nothing below waited for a work completion, so the buffers behind
+          // these callbacks are still owned by the QP.
+          self->draining_ = true;
           while (!self->send_cb_.empty()) {
             detail::ib_socket_shared_state_t::resume(
                 std::pair{ec, std::size_t{0}}, self->send_cb_.pop());
